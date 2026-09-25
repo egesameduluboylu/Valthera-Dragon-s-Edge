@@ -5,7 +5,7 @@
 - **Motor:** Godot 4.x (en güncel kararlı sürüm), **GDScript**
 - **Hedef:** Android (API 24+) önce, sonra iOS
 - **Renderer:** Compatibility (eski telefonlarda en geniş destek)
-- **Test:** GUT (Godot Unit Test) eklentisi, savaş mantığı için birim testler
+- **Test:** `tests/run_tests.gd` içindeki küçük test çalıştırıcı (eklenti gerektirmez), GitHub Actions ile her PR'da çalışır
 - **Sürüm kontrolü:** Git + GitHub, `.gitignore` Godot şablonu (`.godot/` klasörü hariç tutulur)
 
 ## Temel Mimari İlkesi
@@ -58,9 +58,11 @@ valthera-dragons-edge/
 │   ├── scenes/
 │   │   ├── main_menu/  town/  dungeon_map/  battle/  inventory/  reward/
 │   └── ui/                  # Tekrar kullanılan bileşenler (buton, can çubuğu, eşya kartı)
-└── tests/                   # GUT testleri
+└── tests/
+    ├── run_tests.gd         # godot --headless -s res://tests/run_tests.gd
+    ├── test_case.gd         # assert yardımcıları
     ├── test_damage_calc.gd
-    ├── test_combos.gd
+    ├── test_combat_engine.gd
     └── test_enemy_ai.gd
 ```
 
@@ -141,15 +143,15 @@ BATTLE_START
    -> VICTORY / DEFEAT
 ```
 
-`CombatEngine`, her adımda sunuma olay yayınlar; sunum animasyonu bitirince sıradakini ister:
+`CombatEngine` her oyuncu komutunu (`use_skill`, `defend`) oyuncunun yeniden seçim yapması gereken
+ana kadar işletir ve olan her şeyi sıralı bir **olay listesi** olarak döndürür. Savaş sahnesi bu listeyi
+tek tek oynatır (hasar sayısı, titreme, kombo yazısı). Olay tipleri `src/core/combat_engine.gd` başında
+listelenmiştir: `turn_start`, `intents`, `damage`, `status_applied`, `combo`, `battle_end` vb.
 
 ```gdscript
-signal damage_dealt(source, target, amount, is_crit, is_combo)
-signal status_applied(target, status_id, turns)
-signal combo_triggered(count)
-signal intents_updated(enemy_intents)
-signal turn_started(turn_number)
-signal battle_ended(victory: bool, rewards: Dictionary)
+var engine := CombatEngine.from_data(DataDB.data, "warrior", 1, "prototype")
+var events := engine.start()
+events = engine.use_skill("warrior_shield_break", "e0")
 ```
 
 Rastgelelik tek bir `RandomNumberGenerator` üzerinden, tohum (seed) verilebilir. Testlerde sabit tohum kullanılır.

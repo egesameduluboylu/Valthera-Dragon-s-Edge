@@ -3,20 +3,20 @@
 Her kilometre taşının sonunda oynanabilir bir sürüm olur. Sıra önemlidir: önce savaş eğlenceli olmalı.
 
 ## M0: Kurulum
-- [ ] Godot projesi, klasör yapısı (bkz. 10-teknik-tasarim.md), `.gitignore`
-- [ ] Autoload iskeletleri: DataDB, GameState, EventBus
-- [ ] GUT eklentisi ve ilk boş test
+- [x] Godot projesi, klasör yapısı (bkz. 10-teknik-tasarim.md), `.gitignore`
+- [x] Autoload iskeletleri: DataDB, GameState, EventBus
+- [x] Test çalıştırıcı ve GitHub Actions
 - [ ] Android dışa aktarma ayarı, telefonda boş sahne açılıyor
 
 ## M1: Savaş Prototipi (En Önemli)
 Hedef: Savaşçı, 2 fareye karşı, düz renkli kutularla bile eğlenceli mi?
-- [ ] `Stats`, `Combatant`, `Skill`, `StatusEffect` sınıfları
-- [ ] `DamageCalc` ve testleri
-- [ ] `CombatEngine` durum makinesi ve sinyaller
-- [ ] `EnemyAI` desen tipi, niyet üretimi
-- [ ] Savaşçının ilk 4 yeteneği, Zırh Kırık / Sersem / Kanama durumları
-- [ ] Kombo sistemi ve testleri
-- [ ] Basit savaş ekranı: can çubukları, 4 yetenek butonu, niyet ikonları, hasar sayıları
+- [x] `Stats`, `Combatant`, `StatusEffect` sınıfları (yetenekler şimdilik JSON sözlüğü olarak kullanılıyor)
+- [x] `DamageCalc` ve testleri
+- [x] `CombatEngine` tur akışı ve olay listesi
+- [x] `EnemyAI` desen tipi, niyet üretimi
+- [x] Savaşçının yetenekleri (prototipte 4 tanesi takılı), tüm durum etkileri
+- [x] Kombo sistemi ve testleri
+- [x] Basit savaş ekranı: can çubukları, 4 yetenek butonu, niyet ikonları, hasar sayıları
 - **Çıkış ölçütü:** Kombo yapmak, yapmamaktan belirgin şekilde iyi hissettiriyor.
 
 ## M2: Zindan Koşusu
