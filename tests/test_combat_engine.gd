@@ -140,6 +140,27 @@ func test_skeleton_immune_to_bleed() -> void:
 	assert_false(engine.enemies[0].has_status("bleed"))
 
 
+func test_stacking_poison_keeps_remaining_duration() -> void:
+	var engine := make_engine(["cellar_rat"])
+	var rat := engine.enemies[0]
+	engine._apply_status(rat, {"id": "poison", "turns": 4, "stacks": 2}, engine.player)
+	rat.get_status("poison").turns = 1
+	engine._apply_status(rat, {"id": "poison", "turns": 4, "stacks": 2}, engine.player)
+	assert_eq(rat.get_status("poison").stacks, 4)
+	assert_eq(rat.get_status("poison").turns, 1, "reapplying adds stacks, not duration")
+	engine._apply_status(rat, {"id": "poison", "turns": 4, "stacks": 2}, engine.player)
+	assert_eq(rat.get_status("poison").stacks, 5, "capped at max_stacks")
+
+
+func test_three_freeze_stacks_stun() -> void:
+	var engine := make_engine(["cellar_rat"])
+	var rat := engine.enemies[0]
+	for i in 3:
+		engine._apply_status(rat, {"id": "freeze", "turns": 2}, engine.player)
+	assert_false(rat.has_status("freeze"))
+	assert_true(rat.has_status("stun"))
+
+
 func test_rat_gnaw_bleeds_player() -> void:
 	var engine := make_engine(["cellar_rat"])
 	engine.enemies[0].hp = 1000

@@ -134,7 +134,9 @@ func _apply_event(ev: Dictionary) -> float:
 			_float_text(_view_of(ev["target"])["box"], "%s -" % DataDB.t("status." + ev["status"]), Color(0.6, 0.6, 0.6), 40, 22)
 			return 0.15
 		"shield":
-			_float_text(_view_of(ev["target"])["box"], "+%d" % ev["amount"], Color(0.5, 0.75, 1.0))
+			var sv := _view_of(ev["target"])
+			_float_text(sv["box"], "+%d" % ev["amount"], Color(0.5, 0.75, 1.0))
+			sv["status"].text = _status_text(engine.get_combatant(ev["target"]))
 			return 0.2
 		"resource":
 			_player_view["res_bar"].value = ev["value"]
@@ -168,10 +170,7 @@ func _refresh() -> void:
 	_player_view["hp_label"].text = "%d / %d" % [p.hp, p.max_hp()]
 	_player_view["res_bar"].value = p.resource
 	_player_view["res_label"].text = "%s %d / %d" % [DataDB.t("resource." + p.resource_id), p.resource, p.resource_max]
-	var st := _status_text(p)
-	if p.shield > 0:
-		st = ("Kalkan %d  " % p.shield) + st
-	_player_view["status"].text = st
+	_player_view["status"].text = _status_text(p)
 	_refresh_buttons()
 
 
@@ -222,6 +221,8 @@ func _move_label(move_type: String) -> String:
 
 func _status_text(c: Combatant) -> String:
 	var parts: Array[String] = []
+	if c.shield > 0:
+		parts.append("%s %d" % [DataDB.t("ui.shield"), c.shield])
 	for id in c.statuses:
 		var s: StatusEffect = c.statuses[id]
 		var label := DataDB.t("status." + id)

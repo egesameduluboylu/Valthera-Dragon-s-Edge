@@ -388,8 +388,8 @@ func _apply_status(target: Combatant, spec: Dictionary, source: Combatant) -> vo
 	var add_stacks := int(spec.get("stacks", 1))
 	var s := target.get_status(id)
 	if s != null and d.get("stacks", false):
+		# Stackable statuses gain stacks but keep their remaining duration (docs/03).
 		s.stacks = mini(s.stacks + add_stacks, int(d.get("max_stacks", 99)))
-		s.turns = maxi(s.turns, turns)
 	else:
 		s = StatusEffect.new(id, turns, mini(add_stacks, int(d.get("max_stacks", 99))))
 		target.statuses[id] = s
