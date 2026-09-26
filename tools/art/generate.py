@@ -2,7 +2,7 @@
 
     python3 -m pip install pillow
     python3 tools/art/generate.py            # everything
-    python3 tools/art/generate.py sprites    # one group: sprites | backgrounds | icons
+    python3 tools/art/generate.py sprites    # one group: sprites | backgrounds | icons | scenes
 
 The art is original and generated from code, so there are no third-party licences to track.
 """
@@ -16,6 +16,7 @@ ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 import backgrounds  # noqa: E402
 import characters  # noqa: E402
 import icons  # noqa: E402
+import scenes  # noqa: E402
 
 
 def save(img, rel):
@@ -39,7 +40,17 @@ def main(groups):
         for k in icons.STATUS_ICONS:
             save(icons.small_icon(k), f"icons/statuses/{k}.png")
         save(icons.small_icon("target"), "icons/ui/target.png")
+        for k in icons.ROOM_ICONS:
+            save(icons.room_icon(k), f"icons/rooms/{k}.png")
+        for k in icons.ITEM_ICONS:
+            save(icons.item_icon(k), f"icons/items/{k}.png")
+    if "scenes" in groups:
+        save(scenes.cellar_map(), "backgrounds/rotten_cellar_map.png")
+        save(scenes.door(), "ui/door.png")
+        save(scenes.door(boss=True), "ui/door_boss.png")
+        for k in scenes.EVENT_ART:
+            save(scenes.event_art(k), f"events/{k}.png")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:] or ["sprites", "backgrounds", "icons"])
+    main(sys.argv[1:] or ["sprites", "backgrounds", "icons", "scenes"])

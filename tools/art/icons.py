@@ -142,9 +142,109 @@ def small_icon(kind):
         p.shape("poly", [(6, 10), (42, 10), (24, 40)], hexc("#ffd24a"), line=1.6, depth=0.25)
     elif kind == "shield_status":
         _shield(p, (10, 6, 38, 42), hexc("#7fb2ff"))
+    else:
+        return item_icon(kind)
     return p.finish(outline=1)
 
 
+# ------------------------------------------------------------------ rooms (96px) and items (48px)
+
+def _chest(p, x0, y0, x1, y1):
+    wood = hexc("#a0652f")
+    mid = y0 + (y1 - y0) * 0.42
+    p.shape("rect", (x0, mid, x1, y1), wood, radius=4, depth=0.12)
+    p.shape("chord", (x0, y0, x1, 2 * mid - y0), wood, start=180, end=360, depth=0.12)
+    for fx in (0.18, 0.82):
+        x = x0 + (x1 - x0) * fx
+        p.shape("rect", (x - 3, y0 - 2, x + 3, y1), GOLD, radius=1, line=1)
+    cx = (x0 + x1) / 2
+    p.shape("rect", (cx - 6, mid - 5, cx + 6, mid + 9), GOLD, radius=2, line=1)
+
+
+def _campfire(p, cx, cy, s=1.0):
+    for a, b in (((cx - 26 * s, cy + 16 * s), (cx + 22 * s, cy + 4 * s)), ((cx - 22 * s, cy + 4 * s), (cx + 26 * s, cy + 16 * s))):
+        p.shape("line", [a, b], hexc("#7a4a2a"), width=9 * s, line=1.2)
+    p.glow((cx, cy - 6 * s), 34 * s, hexc("#ffb040"), 0.8)
+    _flame(p, cx, cy - 10 * s, 1.05 * s)
+
+
+def _crown(p, cx, cy, s=1.0):
+    pts = [(cx - 30 * s, cy + 14 * s), (cx - 30 * s, cy - 18 * s), (cx - 15 * s, cy - 2 * s), (cx, cy - 24 * s),
+           (cx + 15 * s, cy - 2 * s), (cx + 30 * s, cy - 18 * s), (cx + 30 * s, cy + 14 * s)]
+    p.shape("poly", pts, hexc("#f1c24a"), depth=0.2, light=1.35)
+    p.shape("rect", (cx - 31 * s, cy + 6 * s, cx + 31 * s, cy + 16 * s), hexc("#d49a2a"), radius=2, line=1.2)
+    p.shape("ellipse", (cx - 5 * s, cy + 7 * s, cx + 5 * s, cy + 15 * s), RED, light=1.6, line=1)
+
+
+def _potion(p, cx, cy, s=1.0, color=None):
+    color = color or hexc("#e0303a")
+    p.shape("rect", (cx - 5 * s, cy - 20 * s, cx + 5 * s, cy - 8 * s), hexc("#cfe3ea"), radius=2, line=1.2)
+    p.shape("rect", (cx - 7 * s, cy - 24 * s, cx + 7 * s, cy - 18 * s), hexc("#8a5a34"), radius=2, line=1.2)
+    p.shape("ellipse", (cx - 16 * s, cy - 12 * s, cx + 16 * s, cy + 20 * s), color, light=1.4, depth=0.2)
+    p.flat("ellipse", (cx - 9 * s, cy - 6 * s, cx - 3 * s, cy + 2 * s), hexc("#ffffff", 200))
+
+
+def room_icon(kind):
+    p = Painter(96, 96)
+    colors = {"combat": "#8a3a2e", "elite": "#6a2a7a", "treasure": "#a8702a", "event": "#2e5a8a",
+              "rest": "#2e7a4a", "boss": "#4a1a24"}
+    _frame(p, hexc(colors[kind]))
+    if kind == "combat":
+        _sword(p, 26, 70, 62, 30)
+        _sword(p, 70, 70, 34, 30)
+    elif kind == "elite":
+        p.shape("poly", [(26, 40), (14, 16), (38, 30)], hexc("#ece3c8"), line=1.2)
+        p.shape("poly", [(70, 40), (82, 16), (58, 30)], hexc("#ece3c8"), line=1.2)
+        _skull(p, 48, 50, 1.05)
+        p.glow((42, 49), 8, hexc("#ffcc33"), 0.9)
+        p.glow((54, 49), 8, hexc("#ffcc33"), 0.9)
+    elif kind == "treasure":
+        _chest(p, 22, 34, 74, 72)
+    elif kind == "event":
+        p.shape("rect", (28, 20, 68, 76), hexc("#f1e2c0"), radius=6, line=1.4)
+        p.shape("line", [(40, 38), (44, 30), (54, 30), (57, 38), (48, 46), (48, 54)], hexc("#2e5a8a"), width=6,
+                shadow=0, light=0, line=0)
+        p.flat("ellipse", (44, 60, 52, 68), hexc("#2e5a8a"))
+    elif kind == "rest":
+        _campfire(p, 48, 54)
+    elif kind == "boss":
+        _crown(p, 48, 44, 0.9)
+        _skull(p, 48, 64, 0.62)
+    return p.finish(outline=1)
+
+
+def item_icon(kind):
+    p = Painter(48, 48)
+    if kind == "potion":
+        _potion(p, 24, 26, 0.95)
+    elif kind == "gold":
+        p.shape("ellipse", (6, 12, 34, 40), hexc("#d49a2a"), line=1.4)
+        p.shape("ellipse", (14, 6, 42, 34), hexc("#f1c24a"), light=1.4, line=1.4)
+        p.shape("ellipse", (21, 13, 35, 27), hexc("#d49a2a"), shadow=0, light=0, line=1)
+    elif kind == "heart":
+        p.shape("ellipse", (5, 8, 26, 30), hexc("#e0303a"), line=0, shadow=0)
+        p.shape("ellipse", (22, 8, 43, 30), hexc("#e0303a"), line=0, shadow=0)
+        p.shape("poly", [(6, 22), (42, 22), (24, 43)], hexc("#e0303a"), line=0, shadow=0)
+        p.flat("ellipse", (11, 13, 18, 20), hexc("#ffffff", 200))
+    elif kind == "xp":
+        p.shape("poly", _star(24, 25, 21, 9), hexc("#7fd4ff"), light=1.4, line=1.4)
+    elif kind == "summon":
+        _skull(p, 20, 24, 0.75)
+        p.shape("rect", (32, 12, 38, 34), hexc("#5ad16a"), radius=2, line=1.2)
+        p.shape("rect", (24, 20, 46, 26), hexc("#5ad16a"), radius=2, line=1.2)
+    elif kind == "enraged":
+        _flame(p, 24, 24, 0.85)
+        p.shape("line", [(14, 22), (22, 26)], DARK, width=3, shadow=0, light=0, line=0)
+        p.shape("line", [(34, 22), (26, 26)], DARK, width=3, shadow=0, light=0, line=0)
+    elif kind == "flee":
+        p.shape("poly", [(40, 24), (22, 8), (22, 18), (8, 18), (8, 30), (22, 30), (22, 40)], hexc("#e7e0d0"), line=1.4)
+    return p.finish(outline=1)
+
+
+ROOM_ICONS = ["combat", "elite", "treasure", "event", "rest", "boss"]
+ITEM_ICONS = ["potion", "gold", "heart", "xp", "flee"]
+
 SKILL_ICONS = ["slash", "shield_break", "heavy_strike", "execute", "battle_cry", "rending_cut", "iron_wall", "whirlwind"]
-INTENT_ICONS = ["attack", "shield", "buff", "debuff", "stunned"]
-STATUS_ICONS = ["bleed", "burn", "poison", "freeze", "stun", "armor_break", "strengthened", "shield_status"]
+INTENT_ICONS = ["attack", "shield", "buff", "debuff", "stunned", "summon"]
+STATUS_ICONS = ["bleed", "burn", "poison", "freeze", "stun", "armor_break", "strengthened", "shield_status",
+                "enraged"]
