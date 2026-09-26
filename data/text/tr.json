@@ -513,5 +513,9 @@
   "tut.skip": "Rehberi Atla",
   "town.settings": "Ayarlar",
   "settings.speed": "Savaş Hızı",
-  "settings.language": "Dil"
+  "settings.language": "Dil",
+  "market.err_listed_before": "Bu eşya daha önce ilana konmuş.",
+  "market.err_daily_limit": "Bugünlük ilan sınırına ulaştın. Yarın tekrar dene.",
+  "market.err_buy_limit": "Bugünlük alım sınırına ulaştın. Yarın tekrar dene.",
+  "market.err_bad_request": "Sunucu isteği anlamadı."
 }

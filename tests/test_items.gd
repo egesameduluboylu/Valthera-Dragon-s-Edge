@@ -187,6 +187,71 @@ func test_first_strike_only_boosts_the_first_hit() -> void:
 	assert_true(boosted._first_strike_used)
 
 
+func _area_hit(engine: CombatEngine) -> Array:
+	var before: Array = engine.enemies.map(func(e: Combatant) -> int: return e.hp)
+	engine._perform_skill({"power": 1.0, "target": "all_enemies"}, engine.alive_enemies())
+	var out: Array = []
+	for i in engine.enemies.size():
+		out.append(before[i] - engine.enemies[i].hp)
+	return out
+
+
+func _two_rats(seed_value: int, perks: Dictionary) -> CombatEngine:
+	var engine := make_engine(["cellar_rat", "cellar_rat"], seed_value)
+	engine.player.perks = perks
+	engine.start()
+	for e in engine.enemies:
+		e.hp = 1000
+	return engine
+
+
+func test_first_strike_boosts_one_target_of_an_area_skill() -> void:
+	var plain := _area_hit(_two_rats(12, {}))
+	var boosted := _area_hit(_two_rats(12, {"first_strike": 1.0}))
+	assert_between(float(boosted[0]) / plain[0], 1.8, 2.2)
+	assert_eq(boosted[1], plain[1], "second target got first_strike too")
+
+
+func test_first_strike_is_kept_after_a_full_miss() -> void:
+	var engine := _two_rats(13, {"first_strike": 1.0})
+	for e in engine.enemies:
+		e.stats.dodge = 1.0
+	assert_eq(_area_hit(engine), [0, 0])
+	assert_false(engine._first_strike_used, "a miss used up first_strike")
+	# The first target still dodges, so the second one gets the boost.
+	engine.enemies[1].stats.dodge = 0.0
+	var plain := _two_rats(13, {})
+	plain.enemies[0].stats.dodge = 1.0
+	var boosted := _area_hit(engine)
+	var normal := _area_hit(plain)
+	assert_true(engine._first_strike_used)
+	assert_eq(boosted[0], 0)
+	assert_true(boosted[1] > normal[1], "boosted %s vs %s" % [boosted, normal])
+
+
+func test_thorns_reflect_what_gets_through_a_shield() -> void:
+	var engine := make_engine(["cellar_rat"], 4)
+	engine.player.perks = {"thorns": 0.5}
+	engine.start()
+	var rat: Combatant = engine.enemies[0]
+	rat.hp = 1000
+	engine.player.shield = 4
+	engine._deal_damage(rat, engine.player, 10, false, false, false)
+	assert_eq(rat.hp, 997, "6 got through, half of it comes back")
+
+
+func test_thorns_do_nothing_when_a_shield_takes_the_whole_hit() -> void:
+	var engine := make_engine(["cellar_rat"], 4)
+	engine.player.perks = {"thorns": 0.5}
+	engine.start()
+	var rat: Combatant = engine.enemies[0]
+	rat.hp = 1000
+	engine.player.shield = 20
+	engine._deal_damage(rat, engine.player, 10, false, false, false)
+	assert_eq(rat.hp, 1000)
+	assert_eq(engine.player.shield, 10)
+
+
 func test_bleed_on_hit_applies_bleed() -> void:
 	var engine := make_engine(["cellar_rat"], 5)
 	engine.player.perks = {"bleed_on_hit": 1.0}

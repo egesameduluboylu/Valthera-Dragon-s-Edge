@@ -166,4 +166,5 @@ func _make_market() -> void:
 			market._turn_over_board(rng)
 	else:
 		market = SupabaseMarket.new(profile, cfg["supabase_url"], cfg["supabase_anon_key"])
+		market.save_profile = changed
 		add_child(market)

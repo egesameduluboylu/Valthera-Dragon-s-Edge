@@ -52,12 +52,42 @@ func _run() -> void:
 	_check(b.gold == 200, "b paid, gold %d" % b.gold)
 	_check(b.bag_items().any(func(i: Dictionary) -> bool: return i["base"] == "iron_helm" and i["level"] is int), "b got the helm")
 
-	# token expiry is handled by refreshing
+	# token expiry is handled by refreshing, also for a saved token when the game starts
+	# (market_join is the first call then)
 	await _post(url + "/_test/expire_tokens")
+	mb._joined_as = ""
+	r = await mb.my_listings()
+	_check(r.get("ok", false), "join with an expired saved token %s" % r)
 	r = await ma.mailbox()
 	_check(r.get("ok", false) and r["entries"].size() == 1, "mailbox after refresh %s" % r)
+
+	# a claim whose answer is lost is finished the next time the mailbox is opened
+	var saves := [0]
+	ma.save_profile = func() -> void: saves[0] += 1
+	var mail_id := str(r["entries"][0]["id"])
+	a.online_claims[mail_id] = "lost-answer-op-1"
+	r = await ma._rpc("market_claim", {"p_id": mail_id, "p_op": "lost-answer-op-1"})
+	_check(r.get("ok", false) and a.gold == 85, "server paid, game did not see it: %s, gold %d" % [r, a.gold])
+	r = await ma.mailbox()
+	_check(r.get("ok", false) and r["entries"].is_empty(), "claimed mail gone %s" % r)
+	_check(a.gold == 85 + 270 and a.online_claims.is_empty(), "resumed claim paid once, gold %d" % a.gold)
+	_check(saves[0] == 1, "reward and pending id saved together, saves %d" % saves[0])
+	r = await ma.mailbox()
+	_check(a.gold == 85 + 270, "no second payment, gold %d" % a.gold)
+
+	# a normal claim: the op id is saved before asking and cleared with the reward
+	var ring := {"base": "copper_ring", "rarity": "common", "level": 1, "upgrade": 0, "affixes": []}
+	a.add_item(ring)
+	r = await ma.create_listing(ring["uid"], 50)
+	_check(r.get("ok", false), "list ring %s" % r)
+	r = await ma.cancel_listing(str(r["listing"]["id"]))
+	_check(r.get("ok", false), "cancel ring %s" % r)
+	r = await ma.mailbox()
+	_check(r.get("ok", false) and r["entries"].size() == 1, "ring in mail %s" % r)
+	saves[0] = 0
 	r = await ma.claim(str(r["entries"][0]["id"]))
-	_check(r.get("ok", false) and a.gold == 85 + 270, "claim gold %s, gold %d" % [r, a.gold])
+	_check(r.get("ok", false) and a.online_claims.is_empty() and saves[0] == 2, "claim ring %s, saves %d" % [r, saves[0]])
+	_check(a.bag_items().any(func(i: Dictionary) -> bool: return i["base"] == "copper_ring"), "ring back in the bag")
 
 	# a cheater's item is refused and stays in the bag
 	var fake := {"base": "kingslayer", "rarity": "legendary", "level": 20, "upgrade": 10,

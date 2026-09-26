@@ -513,5 +513,9 @@
   "tut.skip": "Skip Tutorial",
   "town.settings": "Settings",
   "settings.speed": "Battle Speed",
-  "settings.language": "Language"
+  "settings.language": "Language",
+  "market.err_listed_before": "This item was already listed once.",
+  "market.err_daily_limit": "You've hit today's listing limit. Try again tomorrow.",
+  "market.err_buy_limit": "You've hit today's buying limit. Try again tomorrow.",
+  "market.err_bad_request": "The server didn't understand the request."
 }

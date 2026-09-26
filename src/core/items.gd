@@ -10,6 +10,35 @@ const SLOTS := ["weapon", "armor", "helm", "accessory"]
 const INT_STATS := ["hp", "start_shield"]
 
 
+## A saved item made safe to use (docs/10): known base, known rarity (else common),
+## whole-number level and upgrade, and only affixes with a known id and a finite number.
+## Returns {} when the item can't be kept. Keeps `uid` only when it is a non-empty string.
+static func clean(item: Variant, defs: Dictionary) -> Dictionary:
+	if not item is Dictionary or not defs["bases"].has(str(item.get("base", ""))):
+		return {}
+	var out := {"base": str(item["base"]),
+			"rarity": item.get("rarity", "") if defs["rarities"].has(item.get("rarity", "")) else "common",
+			"level": maxi(1, int(as_number(item.get("level"), 1))),
+			"upgrade": clampi(int(as_number(item.get("upgrade"), 0)), 0, int(defs.get("max_upgrade", 10))),
+			"affixes": []}
+	var uid: Variant = item.get("uid")
+	if uid is String and uid != "":
+		out["uid"] = uid
+	var affixes: Variant = item.get("affixes", [])
+	if affixes is Array:
+		for a in affixes:
+			if is_valid_affix(a, defs):
+				out["affixes"].append({"id": str(a["id"]), "value": float(a["value"])})
+	return out
+
+
+## `v` as a float when it is a finite number, else `fallback`.
+static func as_number(v: Variant, fallback: float) -> float:
+	if (v is float or v is int) and is_finite(float(v)):
+		return float(v)
+	return fallback
+
+
 ## Main stats of an item: base * (1 + 0.12 * level) * rarity multiplier * (1 + 0.08 * upgrade).
 ## HP and shields are whole numbers; attack and defence keep decimals so every smith
 ## upgrade shows.
@@ -28,6 +57,8 @@ static func main_stats(item: Dictionary, defs: Dictionary) -> Dictionary:
 static func total_stats(item: Dictionary, defs: Dictionary) -> Dictionary:
 	var out := main_stats(item, defs)
 	for a in item.get("affixes", []):
+		if not is_valid_affix(a, defs):
+			continue
 		if a["id"] in defs["stats"]:
 			out[a["id"]] = _round_stat(a["id"], float(out.get(a["id"], 0)) + float(a["value"]))
 	return out
@@ -37,12 +68,23 @@ static func total_stats(item: Dictionary, defs: Dictionary) -> Dictionary:
 static func perks(item: Dictionary, defs: Dictionary) -> Dictionary:
 	var out := {}
 	for a in item.get("affixes", []):
+		if not is_valid_affix(a, defs):
+			continue
 		if not a["id"] in defs["stats"]:
 			out[a["id"]] = float(out.get(a["id"], 0)) + float(a["value"])
 	var unique: Dictionary = defs["bases"][item["base"]].get("unique", {})
 	for k in unique:
 		out[k] = float(out.get(k, 0)) + float(unique[k])
 	return out
+
+
+## An affix is {id, value} with a known id and a finite number as its value. Edited or
+## broken saves can hold anything else; such affixes are ignored (and dropped on load).
+static func is_valid_affix(a: Variant, defs: Dictionary) -> bool:
+	if not a is Dictionary or not defs["affixes"].has(str(a.get("id", ""))):
+		return false
+	var v: Variant = a.get("value")
+	return (v is float or v is int) and is_finite(float(v))
 
 
 ## Adds worn items to a combatant's stats and perks.

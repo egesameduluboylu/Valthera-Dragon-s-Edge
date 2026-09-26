@@ -270,15 +270,24 @@ func to_dict() -> Dictionary:
 static func from_dict(p_data: Dictionary, d: Dictionary) -> DungeonRun:
 	var id: String = d.get("dungeon_id", "")
 	var cls: String = d.get("class_id", "")
-	if not p_data["dungeons"].has(id) or not p_data["classes"].has(cls) or d.get("choices", []).is_empty():
+	var saved_choices: Variant = d.get("choices", [])
+	if not p_data["dungeons"].has(id) or not p_data["classes"].has(cls) or not saved_choices is Array \
+			or saved_choices.is_empty():
 		return null
+	# every door must be a room with a type and, for fights, a list of enemies
+	for c in saved_choices:
+		if not c is Dictionary or not c.get("type") is String \
+				or (c.has("enemies") and not c["enemies"] is Array):
+			return null
 	var rng_ := RandomNumberGenerator.new()
 	rng_.seed = int(str(d.get("rng_seed", "0")))
 	rng_.state = int(str(d.get("rng_state", "0")))
 	var equipment_: Array = []
-	for item in d.get("equipment", []):
-		if item is Dictionary and p_data["items"]["bases"].has(item.get("base", "")):
-			equipment_.append(item)
+	var saved_eq: Variant = d.get("equipment", [])
+	for item in saved_eq if saved_eq is Array else []:
+		var clean := Items.clean(item, p_data["items"])
+		if not clean.is_empty():
+			equipment_.append(clean)
 	var skills_: Array = []
 	for sid in d.get("skills", []):
 		if p_data["skills"].get(str(sid), {}).get("class", "") == cls:
@@ -290,16 +299,16 @@ static func from_dict(p_data: Dictionary, d: Dictionary) -> DungeonRun:
 	run.player.hp = clampi(int(d.get("hp", run.player.max_hp())), 1, run.player.max_hp())
 	run.potions = int(d.get("potions", 0))
 	run.room_number = int(d.get("room_number", 1))
-	run.choices = d.get("choices", [])
+	run.choices = saved_choices
 	for c in run.choices:
-		c["level"] = int(c.get("level", 1))
+		c["level"] = int(Items.as_number(c.get("level"), 1))
 	for t in d.get("history", []):
 		run.history.append(str(t))
-	run.loot = d.get("loot", []).filter(func(i: Variant) -> bool:
-			return i is Dictionary and p_data["items"]["bases"].has(i.get("base", "")))
-	for item in run.loot + run.equipment:
-		item["level"] = int(item.get("level", 1))
-		item["upgrade"] = int(item.get("upgrade", 0))
+	var saved_loot: Variant = d.get("loot", [])
+	for item in saved_loot if saved_loot is Array else []:
+		var clean := Items.clean(item, p_data["items"])
+		if not clean.is_empty():
+			run.loot.append(clean)
 	run.scales_earned = int(d.get("scales_earned", 0))
 	run.gold_earned = int(d.get("gold_earned", 0))
 	run.xp_earned = int(d.get("xp_earned", 0))

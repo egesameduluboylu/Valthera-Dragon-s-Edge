@@ -27,6 +27,8 @@ var run_state: Dictionary = {}        # DungeonRun.to_dict() between rooms, or {
 var market: Dictionary = {}           # offline marketplace: board, own listings, mailbox (LocalMarket)
 var player_name: String = ""          # shown on the player's market listings
 var story_seen: Array = []            # story.json scene ids already shown
+var save_id: String = ""              # random per new game; the online market keys listed items by it
+var online_claims: Dictionary = {}    # online mailbox id -> claim op id, until the reward is applied
 var next_uid: int = 1
 
 
@@ -53,6 +55,7 @@ static func new_game(p_data: Dictionary, rng: RandomNumberGenerator = null, clas
 	var r := rng if rng != null else RandomNumberGenerator.new()
 	p.restock_shop(r)
 	p.player_name = "Maceracı %04d" % r.randi_range(1, 9999)
+	p.save_id = _new_save_id()
 	LocalMarket.new(p)._turn_over_board(r)
 	return p
 
@@ -449,6 +452,8 @@ func to_dict() -> Dictionary:
 		"market": market.duplicate(true),
 		"player_name": player_name,
 		"story_seen": story_seen.duplicate(),
+		"save_id": save_id,
+		"online_claims": online_claims.duplicate(),
 		"next_uid": next_uid,
 	}
 
@@ -473,11 +478,18 @@ static func from_dict(p_data: Dictionary, d: Dictionary) -> Profile:
 	p.gold = int(d.get("gold", 0))
 	p.scales = int(d.get("dragon_scales", 0))
 	p.potions = int(d.get("potions", FREE_POTIONS))
-	for slot in Items.SLOTS:
-		var uid: Variant = d.get("equipment", {}).get(slot, "")
-		p.equipment[slot] = uid if uid is String else ""
-	p.inventory = _clean_items(d.get("inventory", []), p_data)
+	p.next_uid = maxi(1, int(Items.as_number(d.get("next_uid"), 1)))
+	p.inventory = p._clean_inventory(d.get("inventory", []))
 	p.shop = _clean_items(d.get("shop", []), p_data)
+	# Rebuild what is worn: each slot keeps an item only if it exists, fits that
+	# slot and class, and isn't already worn somewhere else.
+	var saved_eq: Variant = d.get("equipment", {})
+	for slot in Items.SLOTS:
+		var uid: Variant = saved_eq.get(slot, "") if saved_eq is Dictionary else ""
+		var item := p.get_item(uid) if uid is String and uid != "" else {}
+		var ok: bool = not item.is_empty() and p.slot_of(item) == slot and p.can_equip(item) \
+				and not uid in p.equipment.values()
+		p.equipment[slot] = uid if ok else ""
 	var dungeons_: Variant = d.get("dungeons", {})
 	if dungeons_ is Dictionary:
 		for id in dungeons_:
@@ -490,13 +502,24 @@ static func from_dict(p_data: Dictionary, d: Dictionary) -> Profile:
 						"cleared": bool(dungeons_[id].get("cleared", false)), "stars": stars,
 						"hard_cleared": bool(dungeons_[id].get("hard_cleared", false))}
 	p.run_state = d.get("run_state", {}) if d.get("run_state") is Dictionary else {}
-	p.next_uid = int(d.get("next_uid", p.inventory.size() + 1))
 	p.player_name = str(d.get("player_name", "Maceracı"))
 	var seen: Variant = d.get("story_seen", [])
 	if seen is Array:
 		p.story_seen = seen.map(func(x: Variant) -> String: return str(x))
 	p.market = _clean_market(d.get("market", {}), p_data)
+	p.save_id = str(d.get("save_id", ""))
+	if p.save_id == "":
+		p.save_id = _new_save_id()
+	var claims: Variant = d.get("online_claims", {})
+	if claims is Dictionary:
+		for id in claims:
+			p.online_claims[str(id)] = str(claims[id])
 	return p
+
+
+## Its own random source, so seeded game rolls stay the same.
+static func _new_save_id() -> String:
+	return Crypto.new().generate_random_bytes(8).hex_encode()
 
 
 static func _clean_market(m: Variant, p_data: Dictionary) -> Dictionary:
@@ -519,15 +542,30 @@ static func _clean_market(m: Variant, p_data: Dictionary) -> Dictionary:
 	return out
 
 
-## Drops items whose base no longer exists and restores int fields.
-static func _clean_items(items: Array, p_data: Dictionary) -> Array:
+## Drops broken items (Items.clean) and gives every bag item a unique uid: missing or
+## repeated ones get a fresh id, and next_uid moves past every id in use.
+func _clean_inventory(items: Variant) -> Array:
+	var out := _clean_items(items, data)
+	for i in out:
+		var n := String(i.get("uid", "")).trim_prefix("i")
+		if n.is_valid_int():
+			next_uid = maxi(next_uid, int(n) + 1)
+	var seen := {}
+	for i in out:
+		if not i.has("uid") or seen.has(i["uid"]):
+			i["uid"] = "i%d" % next_uid
+			next_uid += 1
+		seen[i["uid"]] = true
+	return out
+
+
+## Drops items that can't be used any more (see Items.clean).
+static func _clean_items(items: Variant, p_data: Dictionary) -> Array:
 	var out: Array = []
+	if not items is Array:
+		return out
 	for i in items:
-		if not i is Dictionary or not p_data["items"]["bases"].has(i.get("base", "")):
-			continue
-		i["level"] = int(i.get("level", 1))
-		i["upgrade"] = int(i.get("upgrade", 0))
-		if not p_data["items"]["rarities"].has(i.get("rarity", "")):
-			i["rarity"] = "common"
-		out.append(i)
+		var item := Items.clean(i, p_data["items"])
+		if not item.is_empty():
+			out.append(item)
 	return out
