@@ -5,6 +5,7 @@ import random
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 import backgrounds
+import gear
 import icons
 import painter
 from painter import Painter, hexc, mix, shade
@@ -260,7 +261,66 @@ def event_art(kind):
         p.shape("poly", [(118, 214), (128, 206), (138, 214), (128, 224)], hexc("#3ad0ff"), line=1.0, gloss=1.0, rim=0)
         p.sparkle((150, 70), 8)
         p.sparkle((226, 58), 6)
+    elif kind == "dragon_egg":
+        _dragon_egg_nest(p)
     return p.finish(outline=2)
+
+
+def _dragon_egg_nest(p):
+    """The last treasure: the dragon egg in a nest of ash and gold coins, glowing warmly (360 x 240)."""
+    rng = random.Random(9)
+    p.glow((180, 130), 170, hexc("#ffa040"), 0.55)
+    p.glow((180, 110), 90, hexc("#fff0b0"), 0.45)
+    ash = hexc("#8a7e80")
+    stick = hexc("#4a3428")
+
+    def sticks(arc0, arc1, n, ry_off, cy, rx, ry, width=(3.5, 5.5)):
+        for _ in range(n):
+            a = rng.uniform(arc0, arc1)
+            x, y = 180 + rx * math.cos(a), cy + ry * math.sin(a) + rng.uniform(-ry_off, ry_off)
+            ln = rng.uniform(28, 50)
+            t = a + math.pi / 2 + rng.uniform(-0.45, 0.45)
+            dx, dy = math.cos(t) * ln / 2, math.sin(t) * ln / 2 * 0.45
+            p.shape("line", [(x - dx, y - dy), (x + dx * 0.1, y + dy * 0.1 - 2), (x + dx, y + dy)],
+                    shade(stick, rng.uniform(0.7, 1.25)), width=rng.uniform(*width), depth=0.3, tex="wood_h", line=1.1,
+                    rim=0)
+            if rng.random() < 0.25:  # embers still smouldering in the sticks
+                p.glow((x, y), 8, hexc("#ff8a2a"), 0.9)
+                p.flat("ellipse", (x - 1.6, y - 1.6, x + 1.6, y + 1.6), hexc("#ffd070"))
+
+    # back half of the nest: a lumpy ring of ash and charred sticks
+    back = p.union([("ellipse", (70, 146, 290, 214))] +
+                   [("ellipse", (180 + 104 * math.cos(a) - 16, 180 + 30 * math.sin(a) - 12,
+                                 180 + 104 * math.cos(a) + 16, 180 + 30 * math.sin(a) + 12))
+                    for a in [math.pi + i * math.pi / 8 for i in range(9)]])
+    p.paint_mask(back, shade(ash, 0.85), depth=0.2, tex="noise", tex_amt=0.9, line=1.8)
+    sticks(math.pi * 1.02, math.pi * 1.98, 14, 4, 176, 104, 28)
+    # the ash hollow, heaped with coins
+    p.shape("ellipse", (96, 162, 264, 204), hexc("#3a3034"), depth=0.3, line=1.2, rim=0, ao=0)
+    for _ in range(30):
+        x, y = rng.uniform(108, 252), rng.uniform(170, 198)
+        r = rng.uniform(4.5, 6.5)
+        p.shape("ellipse", (x - r, y - r * 0.55, x + r, y + r * 0.55), shade(GOLD, rng.uniform(0.85, 1.15)), depth=0.35,
+                light=1.5, line=0.9, spec=0.8, rim=0, ao=0.2)
+    gear._draw_egg(p, 180, 136, 1.75)
+    # front half of the nest overlapping the egg's base
+    front = ImageChops.subtract(p.union([("ellipse", (66, 170, 294, 230))] +
+                                        [("ellipse", (180 + 110 * math.cos(a) - 18, 198 + 22 * math.sin(a) - 12,
+                                                      180 + 110 * math.cos(a) + 18, 198 + 22 * math.sin(a) + 12))
+                                         for a in [i * math.pi / 8 for i in range(9)]]),
+                                p._mask("ellipse", (98, 146, 262, 186)))
+    p.paint_mask(front, ash, depth=0.2, light=1.25, tex="noise", tex_amt=0.9, line=1.8)
+    sticks(math.pi * 0.05, math.pi * 0.95, 20, 5, 204, 108, 20)
+    # coins spilled in front and around
+    for x, y in ((40, 224), (60, 232), (306, 226), (322, 216), (276, 234), (96, 236), (334, 232), (22, 232)):
+        p.shape("ellipse", (x - 7, y - 4, x + 7, y + 4), GOLD, depth=0.35, light=1.5, line=1.0, spec=0.9, rim=0)
+    p.shape("poly", [(290, 222), (297, 215), (304, 222), (297, 231)], hexc("#2ac0b0"), line=1.0, gloss=1.0, rim=0)
+    p.shape("poly", [(70, 220), (76, 214), (82, 220), (76, 228)], hexc("#e0303a"), line=1.0, gloss=1.0, rim=0)
+    for x, y, r in ((120, 60, 2.2), (250, 44, 2.6), (84, 110, 1.8), (284, 110, 2.0), (210, 22, 1.6), (146, 30, 1.6)):
+        p.glow((x, y), r * 4, hexc("#ffb040"), 0.9)
+        p.flat("ellipse", (x - r, y - r, x + r, y + r), hexc("#ffe8a0"))
+    p.sparkle((150, 80), 8)
+    p.sparkle((226, 168), 5)
 
 
 def curve_ellipse(cx, cy, rx, ry, a0=0, a1=360, n=24):
@@ -268,4 +328,4 @@ def curve_ellipse(cx, cy, rx, ry, a0=0, a1=360, n=24):
             for i in range(n + 1)]
 
 
-EVENT_ART = ["fountain", "merchant", "skull", "altar", "campfire", "chest"]
+EVENT_ART = ["fountain", "merchant", "skull", "altar", "campfire", "chest", "dragon_egg"]
