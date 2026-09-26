@@ -22,6 +22,8 @@ var _gold: HBoxContainer
 var _scales: HBoxContainer
 var _potions: HBoxContainer
 var _bag_count: Label
+var _dragon_button: Button
+var _dragon_glow: Tween
 var _overlay: Control
 var _fade: ColorRect
 var _busy: bool = false
@@ -65,6 +67,8 @@ func open_panel(kind: String) -> void:
 			panel = MarketPanel.new()
 		"class_master":
 			panel = ClassMasterPanel.new()
+		"dragon":
+			panel = DragonPanel.new()
 		"settings":
 			var sp := SettingsPanel.new()
 			sp.reload.connect(func() -> void: get_tree().reload_current_scene())
@@ -158,6 +162,28 @@ func _refresh() -> void:
 	UIKit.counter_label(_scales).text = str(p.scales)
 	UIKit.counter_label(_potions).text = str(p.potions)
 	_bag_count.text = DataDB.tf("bag.count", {"n": p.bag_items().size(), "max": p.bag_size()})
+	_refresh_dragon(p)
+
+
+func _refresh_dragon(p: Profile) -> void:
+	var state: Dictionary = p.companion
+	_dragon_button.visible = not state.is_empty() or p.can_nest()
+	if not _dragon_button.visible:
+		return
+	var path := "res://assets/icons/items/gear/dragon_egg.png"
+	if Companion.is_hatched(state):
+		path = Companion.sprite(state["element"], int(state["level"]), DataDB.data["companion"])
+	_dragon_button.icon = load(path) if ResourceLoader.exists(path) else null
+	# something to do at the nest: an egg to put in, or one about to hatch
+	var calling := p.can_nest() or p.egg_ready()
+	if _dragon_glow != null:
+		_dragon_glow.kill()
+		_dragon_glow = null
+		_dragon_button.scale = Vector2.ONE
+	if calling:
+		_dragon_glow = _dragon_button.create_tween().set_loops()
+		_dragon_glow.tween_property(_dragon_button, "scale", Vector2(1.15, 1.15), 0.45).set_trans(Tween.TRANS_SINE)
+		_dragon_glow.tween_property(_dragon_button, "scale", Vector2.ONE, 0.45).set_trans(Tween.TRANS_SINE)
 
 
 func _build() -> void:
@@ -300,6 +326,14 @@ func _build_header() -> void:
 	_xp_bar.custom_minimum_size.y = 14
 	_xp_bar.add_theme_stylebox_override("fill", UITheme.skin_bar_fill("xp"))
 	pv.add_child(_xp_bar)
+	# the companion dragon's nest (docs/15): shows up once the player owns the egg
+	_dragon_button = UIKit.button("", "", func() -> void: open_panel("dragon"))
+	_dragon_button.flat = true
+	_dragon_button.custom_minimum_size = Vector2(72, 72)
+	_dragon_button.expand_icon = true
+	_dragon_button.tooltip_text = DataDB.t("town.dragon")
+	_dragon_button.pivot_offset = Vector2(36, 36)
+	row.add_child(_dragon_button)
 
 
 func _build_bottom() -> void:

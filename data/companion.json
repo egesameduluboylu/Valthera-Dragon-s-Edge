@@ -1,0 +1,22 @@
+{
+  "hatch_runs": 3,
+  "xp_mult": 2.0,
+  "charge_needed": 3,
+  "atk_base": 20,
+  "atk_per_level": 1.5,
+  "crit": 0.05,
+  "egg_base": "dragon_egg",
+  "stages": [
+    {"id": "hatchling", "from": 1,  "power": 0.6, "status_chance": 0.5},
+    {"id": "young",     "from": 8,  "power": 0.8, "status_chance": 0.75},
+    {"id": "adult",     "from": 15, "power": 1.0, "status_chance": 1.0}
+  ],
+  "elements": {
+    "fire":  {"name_key": "dragon.element.fire",  "default_name_key": "dragon.name.fire",
+              "damage_element": "fire",   "status": {"id": "burn", "turns": 2}, "color": "#ff7a2e"},
+    "frost": {"name_key": "dragon.element.frost", "default_name_key": "dragon.name.frost",
+              "damage_element": "ice",    "status": {"id": "freeze", "turns": 2, "stacks": 1}, "color": "#8fd8ff"},
+    "venom": {"name_key": "dragon.element.venom", "default_name_key": "dragon.name.venom",
+              "damage_element": "shadow", "status": {"id": "poison", "turns": 3, "stacks": 2}, "color": "#8ee05a"}
+  }
+}

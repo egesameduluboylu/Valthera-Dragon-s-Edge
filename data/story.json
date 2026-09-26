@@ -20,6 +20,7 @@
     "burnt_keep_intro":       [["nara", 1], ["nara", 2]],
     "burnt_keep_outro":       [["ember_priestess", 1], ["nara", 1], ["nara", 2]],
     "dragon_lair_intro":      [["nara", 1], ["kaan", 1], ["nara", 2]],
-    "dragon_lair_outro":      [["ashwing", 1], ["ashwing", 2], ["ashwing", 3], ["nara", 1], ["nara", 2]]
+    "dragon_lair_outro":      [["ashwing", 1], ["ashwing", 2], ["ashwing", 3], ["nara", 1], ["nara", 2]],
+    "dragon_hatch":           [["nara", 1], ["nara", 2], ["nara", 3]]
   }
 }

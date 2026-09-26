@@ -29,6 +29,7 @@ var player_name: String = ""          # shown on the player's market listings
 var story_seen: Array = []            # story.json scene ids already shown
 var save_id: String = ""              # random per new game; the online market keys listed items by it
 var online_claims: Dictionary = {}    # online mailbox id -> claim op id, until the reward is applied
+var companion: Dictionary = {}        # the companion dragon (docs/15), see Companion
 var next_uid: int = 1
 
 
@@ -387,11 +388,52 @@ func start_run(dungeon_id: String, rng: RandomNumberGenerator = null, hard: bool
 	var run := DungeonRun.new(data, dungeon_id, active_class, level(), class_xp(), rng, gear, loadout())
 	run.potions = potions
 	run.hard = hard and hard_unlocked(dungeon_id)
+	run.companion = Companion.battle_spec(companion)
 	return run
 
 
+# ---------------------------------------------------------------- companion dragon (docs/15)
+
+## uid of a dragon egg the player owns (bag or worn), or "".
+func egg_uid() -> String:
+	for item in inventory:
+		if item.get("base", "") == data["companion"]["egg_base"]:
+			return item["uid"]
+	return ""
+
+
+func can_nest() -> bool:
+	return companion.is_empty() and egg_uid() != ""
+
+
+## Puts the egg in the nest: the item leaves the bag (or the slot it was worn in) for good.
+func nest_egg() -> bool:
+	if not can_nest():
+		return false
+	var item := get_item(egg_uid())
+	for slot in Items.SLOTS:
+		if equipment[slot] == item["uid"]:
+			equipment[slot] = ""
+	inventory.erase(item)
+	companion = {"state": "egg", "warmth": 0}
+	return true
+
+
+func egg_ready() -> bool:
+	return companion.get("state", "") == "egg" \
+			and int(companion["warmth"]) >= int(data["companion"]["hatch_runs"])
+
+
+func hatch(element: String) -> bool:
+	if not egg_ready() or not data["companion"]["elements"].has(element):
+		return false
+	companion = {"state": "hatched", "element": element, "name": "", "level": 1, "xp": 0}
+	return true
+
+
 ## Banks a finished run. Returns what happened to the loot and the stars:
-## {added: [items], salvaged: {gold, scales, count}, new_stars: [indexes], reward: item or {}}.
+## {added: [items], salvaged: {gold, scales, count}, new_stars: [indexes], reward: item or {},
+##  dragon_levels: levels the companion gained, egg_warmed: true when the nested egg warmed up}.
 func apply_run(run: DungeonRun, rng: RandomNumberGenerator = null) -> Dictionary:
 	set_progress(run.level, run.class_xp)
 	gold += run.gold_earned
@@ -430,9 +472,16 @@ func apply_run(run: DungeonRun, rng: RandomNumberGenerator = null) -> Dictionary
 		reward = Items.roll(defs(), int(data["dungeons"][run.dungeon_id].get("level_max", 1)),
 				rng if rng != null else RandomNumberGenerator.new(), {"base": spec["base"]})
 		add_item(reward)
+	# every finished run warms a nested egg; a hatched dragon grows with the run's XP
+	var warmed := false
+	if companion.get("state", "") == "egg" and not egg_ready():
+		companion["warmth"] = int(companion["warmth"]) + 1
+		warmed = true
+	var dragon_levels := Companion.add_xp(data["companion"], companion, run.xp_earned)
 	run_state = {}
 	restock_shop(rng if rng != null else RandomNumberGenerator.new())
-	return {"added": added, "salvaged": salvaged, "new_stars": new_stars, "first_clear": first_clear, "reward": reward}
+	return {"added": added, "salvaged": salvaged, "new_stars": new_stars, "first_clear": first_clear, "reward": reward,
+			"dragon_levels": dragon_levels, "egg_warmed": warmed}
 
 
 # ---------------------------------------------------------------- save format
@@ -454,6 +503,7 @@ func to_dict() -> Dictionary:
 		"story_seen": story_seen.duplicate(),
 		"save_id": save_id,
 		"online_claims": online_claims.duplicate(),
+		"companion": companion.duplicate(),
 		"next_uid": next_uid,
 	}
 
@@ -514,6 +564,7 @@ static func from_dict(p_data: Dictionary, d: Dictionary) -> Profile:
 	if claims is Dictionary:
 		for id in claims:
 			p.online_claims[str(id)] = str(claims[id])
+	p.companion = Companion.clean(p_data["companion"], d.get("companion", {}))
 	return p
 
 

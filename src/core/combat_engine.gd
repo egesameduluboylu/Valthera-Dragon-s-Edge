@@ -28,6 +28,8 @@ extends RefCounted
 ##   phase {source, phase, line_key}
 ##   resist {target, status}           a boss shrugged off a chance-based status
 ##   flurry {}                          Rogue "Seri": the turn goes on for a second skill
+##   companion_charge {charge, max}     the companion dragon's breath meter after a player turn
+##   companion_breath {source, element} the dragon breathes on every enemy (damage events follow)
 ##   battle_end {victory, xp, gold}
 
 const COMBO_CHAIN_BONUS := 0.10
@@ -68,6 +70,10 @@ var _used_this_turn: Array[String] = []
 ## Gear perks (docs/05 "Benzersiz Eşyalar"): the first damaging hit of a battle that
 ## lands (not a miss, one target only) gets first_strike once.
 var _first_strike_used: bool = false
+## The companion dragon (docs/15): attacks every enemy each time its meter fills.
+var companion: Combatant = null
+var companion_def: Dictionary = {}
+var companion_charge: int = 0
 var _acting: Combatant = null
 var _events: Array = []
 var _next_uid: int = 0
@@ -106,6 +112,15 @@ static func xp_for(base_xp: int, player_level: int, enemy_level: int) -> int:
 	if player_level - enemy_level >= LOW_LEVEL_GAP:
 		return roundi(base_xp * LOW_LEVEL_XP_MULT)
 	return base_xp
+
+
+func set_companion(dragon: Combatant, defs: Dictionary) -> void:
+	companion = dragon
+	companion_def = defs
+
+
+func companion_charge_needed() -> int:
+	return int(companion_def.get("charge_needed", 3))
 
 
 func setup(p_player: Combatant, p_enemies: Array[Combatant]) -> void:
@@ -289,10 +304,42 @@ func _end_player_turn() -> void:
 	_decay_statuses(player)
 	if _check_end():
 		return
+	_companion_turn()
+	if _check_end():
+		return
 	_enemy_phase()
 	if _check_end():
 		return
 	_start_round()
+
+
+func _companion_turn() -> void:
+	if companion == null:
+		return
+	companion_charge += 1
+	var need := companion_charge_needed()
+	if companion_charge < need:
+		_emit({"type": "companion_charge", "charge": companion_charge, "max": need})
+		return
+	companion_charge = 0
+	var element_def: Dictionary = companion_def["elements"].get(companion.def_id, {})
+	var stage := Companion.stage(companion_def, companion.level)
+	_acting = companion
+	_emit({"type": "companion_breath", "source": companion.uid, "element": companion.def_id})
+	for t in alive_enemies():
+		if not t.is_alive():
+			continue
+		var r := DamageCalc.roll(companion, t, float(stage["power"]), element_def.get("damage_element", "physical"),
+				status_defs, rng)
+		if r["miss"]:
+			_emit({"type": "miss", "source": companion.uid, "target": t.uid})
+			continue
+		_deal_damage(companion, t, int(r["amount"]), bool(r["crit"]), false, false)
+		var spec: Dictionary = element_def.get("status", {})
+		if t.is_alive() and not spec.is_empty() and rng.randf() < float(stage["status_chance"]):
+			_apply_status(t, spec, companion)
+	_emit({"type": "companion_charge", "charge": 0, "max": need})
+	_acting = player
 
 
 func _enemy_phase() -> void:

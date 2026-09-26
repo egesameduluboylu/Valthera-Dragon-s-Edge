@@ -29,6 +29,14 @@ func status(id: String) -> Dictionary:
 	return data["statuses"].get(id, {})
 
 
+## The companion dragon's name: the one the player gave it, or its element's default name.
+func dragon_name(state: Dictionary) -> String:
+	var n: String = state.get("name", "")
+	if n != "":
+		return n
+	return t(data["companion"]["elements"].get(state.get("element", ""), {}).get("default_name_key", "dragon.title"))
+
+
 ## Player-facing text. Missing keys show up as the key itself so they are easy to spot.
 func t(key: String) -> String:
 	return text.get(key, key)

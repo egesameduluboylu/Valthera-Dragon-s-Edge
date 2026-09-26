@@ -232,6 +232,12 @@ func _show_rest() -> void:
 
 func _show_summary() -> void:
 	var banked := GameState.apply_run(run)
+	var dragon: Dictionary = GameState.profile.companion
+	if banked.get("egg_warmed", false):
+		_toast(DataDB.tf("dragon.egg_warmed", {"n": dragon["warmth"], "max": DataDB.data["companion"]["hatch_runs"]}),
+				Color("ffb46a"))
+	if banked.get("dragon_levels", 0) > 0:
+		_toast(DataDB.tf("dragon.leveled", {"name": DataDB.dragon_name(dragon), "n": dragon["level"]}), UITheme.COMBO)
 	if banked.get("first_clear", false):
 		await _play_story(run.dungeon_id + "_outro")
 		if not banked.get("reward", {}).is_empty():

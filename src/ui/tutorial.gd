@@ -8,7 +8,7 @@ signal finished
 
 ## Every hint id, in the order they usually appear.
 const FLAGS := ["tut_intent", "tut_skills", "tut_class_warrior", "tut_class_mage", "tut_class_rogue",
-		"tut_combo", "tut_defend"]
+		"tut_combo", "tut_defend", "tut_dragon"]
 const PORTRAIT := "res://assets/town/npc_nara.png"
 const PAD := 10.0
 

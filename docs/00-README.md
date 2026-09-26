@@ -24,6 +24,7 @@ tasarım değiştiğinde önce ilgili doküman güncellenir.
 | 12 | [12-yol-haritasi.md](12-yol-haritasi.md) | Kilometre taşları ve görev listesi |
 | 13 | [13-pazar.md](13-pazar.md) | Oyuncular arası pazar, benzersiz eşyalar, sunucu |
 | 14 | [14-yayin.md](14-yayin.md) | Android dışa aktarma, ikon, Google Play adımları |
+| 15 | [15-ejder-yoldas.md](15-ejder-yoldas.md) | Ejder yoldaş: kuluçka, soylar, büyüme, savaşta nefes |
 
 ## Kısa Özet
 

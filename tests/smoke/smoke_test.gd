@@ -43,6 +43,7 @@ var _catcher := Catcher.new()
 var _driver := false
 var _step := ""
 var _rooms := {}
+var _breaths := 0
 
 
 func _ready() -> void:
@@ -73,7 +74,58 @@ func _run() -> void:
 		GameState.save()
 		if not await _play_dungeon(dungeons[i]):
 			break
+	if _catcher.errors.is_empty():
+		await _hatch_and_fight()
 	_finish()
+
+
+## The lair's egg (docs/15): nest it, hatch it through the panel, then take the dragon
+## into a dungeon until it breathes.
+func _hatch_and_fight() -> void:
+	_step = "dragon"
+	print("smoke: ", _step)
+	get_tree().change_scene_to_file(TOWN)
+	var town: Node = await _wait_scene("Town")
+	if town == null:
+		return
+	await _dismiss_dialogs()
+	var p := GameState.profile
+	if not p.can_nest():
+		_fail("no dragon egg after clearing the lair")
+		return
+	town.open_panel("dragon")
+	await _frames(4)
+	var panel := _find(town, "DragonPanel")
+	await _press_text(panel, "dragon.nest.button")
+	await _press_text(panel, "dragon.nest.yes")
+	if p.companion.get("state", "") != "egg":
+		_fail("the egg did not go into the nest")
+		return
+	p.companion["warmth"] = int(DataDB.data["companion"]["hatch_runs"])
+	panel.refresh()
+	await _frames(3)
+	await _press_text(panel, "dragon.hatch.button")
+	await _dismiss_dialogs()
+	await _press_text(panel, "dragon.choose.pick")
+	if not Companion.is_hatched(p.companion):
+		_fail("the dragon did not hatch")
+		return
+	p.companion["level"] = 15
+	town._close_overlay()
+	GameState.save()
+	_breaths = 0
+	await _play_dungeon("rotten_cellar", false)
+	if _breaths == 0:
+		_fail("the dragon never breathed")
+
+
+func _press_text(root: Node, key: String) -> void:
+	for b in _buttons(root):
+		if b.text == DataDB.t(key):
+			b.pressed.emit()
+			await _frames(4)
+			return
+	_fail("no button \"%s\"" % DataDB.t(key))
 
 
 ## A profile standing at `dungeon` with everything before it cleared and every hint seen,
@@ -93,12 +145,12 @@ func _profile(dungeon: String, cls: String) -> Profile:
 	return p
 
 
-func _play_dungeon(dungeon: String) -> bool:
+func _play_dungeon(dungeon: String, panels: bool = true) -> bool:
 	get_tree().change_scene_to_file(TOWN)
 	var town: Node = await _wait_scene("Town")
 	if town == null:
 		return false
-	for kind in PANELS:
+	for kind in PANELS if panels else ["gate"]:
 		await _dismiss_dialogs()
 		town.open_panel(kind)
 		await _frames(4)
@@ -141,6 +193,9 @@ func _battle_turn(battle: Node) -> void:
 		return
 	if engine.finished:
 		if battle._result_layer.visible:
+			# the player only defended, so with a dragon along its breath won the fight
+			if engine.companion != null and engine.victory:
+				_breaths += 1
 			battle._on_result_pressed()
 		await _frames(2)
 		return
@@ -148,6 +203,11 @@ func _battle_turn(battle: Node) -> void:
 	for e in engine.alive_enemies():
 		e.hp = mini(e.hp, 1)
 		e.shield = 0
+	# with a dragon, wait for its breath to finish the fight
+	if engine.companion != null:
+		battle._defend_button.pressed.emit()
+		await _frames(2)
+		return
 	for id in engine.player.skills:
 		var b: Button = battle._skill_buttons.get(id)
 		if b != null and not b.disabled and engine.can_use(id):
