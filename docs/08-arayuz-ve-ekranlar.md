@@ -49,7 +49,7 @@ Savaş -> Yenilgi Ekranı -> Kasaba
 ## Diğer Ekranlar
 
 - **Kasaba:** Tek ekran, binalar dokunulabilir. Altta sabit çubuk: Çanta, Karakter, Ayarlar.
-- **Zindan Haritası:** Dikey, aşağıdan yukarı ilerleyen düğüm yolu. Her adımda iki kapı ikonu.
+- **Zindan Haritası:** Üstte zindan adı ve 5 odalık iz (geçilen odaların ikonları, sonda patron tacı). Altında oyuncu kartı: can, XP, iksir ve altın. Ortada iki kapı kartı: kapı çizimi, oda ikonu, oda adı, kısa ipucu ve savaş odalarında seviye/düşman sayısı. Son odada tek, kırmızı parlayan patron kapısı. Altta "Kaç" butonu (onay ister). Hazine, olay ve dinlenme odaları çizimli bir panelde açılır; koşu sonunda özet paneli çıkar.
 - **Çanta / Karakter:** Solda karakter ve 4 ekipman slotu, altta ızgara envanter. Eşyaya dokununca karşılaştırma kartı (yeşil/kırmızı farklar).
 - **Ödül Ekranı:** Kazanılan XP çubuğu dolar, eşyalar tek tek kart olarak açılır (nadirlik rengiyle).
 

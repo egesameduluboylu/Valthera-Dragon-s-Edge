@@ -20,12 +20,12 @@ Hedef: Savaşçı, 2 fareye karşı, düz renkli kutularla bile eğlenceli mi?
 - **Çıkış ölçütü:** Kombo yapmak, yapmamaktan belirgin şekilde iyi hissettiriyor.
 
 ## M2: Zindan Koşusu
-- [ ] `DungeonGen`: 5 oda, dallanan kapılar
-- [ ] Zindan haritası ekranı
-- [ ] Olay, hazine ve dinlenme odaları
-- [ ] Çürük Mahzen'in tüm düşmanları ve Kemik Kral (2 faz)
-- [ ] Ödül ekranı, XP ve seviye atlama
-- [ ] Koşu içi kaçış ve ölüm kuralları
+- [x] `DungeonRun`: 5 oda, dallanan kapılar (oda üretimi koşu sınıfının içinde)
+- [x] Zindan haritası ekranı
+- [x] Olay, hazine ve dinlenme odaları
+- [x] Çürük Mahzen'in tüm düşmanları ve Kemik Kral (2 faz)
+- [x] Koşu özeti, XP ve seviye atlama (eşyalı ödül ekranı M3'te)
+- [x] Koşu içi kaçış ve ölüm kuralları
 
 ## M3: Kasaba ve Ekipman
 - [ ] Kasaba ekranı ve binalar
@@ -38,6 +38,7 @@ Hedef: Savaşçı, 2 fareye karşı, düz renkli kutularla bile eğlenceli mi?
 ## M4: Görsel ve His (Demo Tamam)
 - [x] Savaş ekranı görselleri: karakterler, düşmanlar, arka plan, ikonlar, arayüz teması
 - [x] Temel animasyonlar: bekleme salınımı, saldırı atılması, vurulma, ölüm
+- [x] Zindan haritası, kapılar, oda ikonları, olay çizimleri, Bekçi / Taklitçi / Kemik Kral
 - [ ] Diğer zindanlar ve ekranlar için görseller
 - [ ] Ses ve müzik
 - [x] Ekran titremesi, kombo efektleri

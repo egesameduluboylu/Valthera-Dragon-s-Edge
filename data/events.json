@@ -1,0 +1,44 @@
+{
+  "suspicious_fountain": {
+    "title_key": "event.fountain.title", "text_key": "event.fountain.text", "art": "fountain",
+    "choices": [
+      {"label_key": "event.fountain.drink", "outcomes": [
+        {"weight": 60, "text_key": "event.fountain.good", "effects": {"heal_percent": 1.0}},
+        {"weight": 40, "text_key": "event.fountain.bad", "effects": {"hp_percent": -0.15}}
+      ]},
+      {"label_key": "event.leave", "outcomes": [{"weight": 1, "text_key": "event.left", "effects": {}}]}
+    ]
+  },
+  "lost_merchant": {
+    "title_key": "event.merchant.title", "text_key": "event.merchant.text", "art": "merchant",
+    "choices": [
+      {"label_key": "event.merchant.buy", "requires": {"gold": 50}, "outcomes": [
+        {"weight": 1, "text_key": "event.merchant.bought", "effects": {"gold": -50, "potions": 1}}
+      ]},
+      {"label_key": "event.leave", "outcomes": [{"weight": 1, "text_key": "event.merchant.bye", "effects": {}}]}
+    ]
+  },
+  "talking_skull": {
+    "title_key": "event.skull.title", "text_key": "event.skull.text", "art": "skull",
+    "choices": [
+      {"label_key": "event.skull.answer_fire", "outcomes": [
+        {"weight": 1, "text_key": "event.skull.wrong", "effects": {"hp_percent": -0.1}}
+      ]},
+      {"label_key": "event.skull.answer_dark", "outcomes": [
+        {"weight": 1, "text_key": "event.skull.right", "effects": {"gold": 60}}
+      ]},
+      {"label_key": "event.skull.answer_silence", "outcomes": [
+        {"weight": 1, "text_key": "event.skull.wrong", "effects": {"hp_percent": -0.1}}
+      ]}
+    ]
+  },
+  "cursed_altar": {
+    "title_key": "event.altar.title", "text_key": "event.altar.text", "art": "altar",
+    "choices": [
+      {"label_key": "event.altar.offer", "outcomes": [
+        {"weight": 1, "text_key": "event.altar.done", "effects": {"hp": -20, "atk_percent": 0.15}}
+      ]},
+      {"label_key": "event.leave", "outcomes": [{"weight": 1, "text_key": "event.left", "effects": {}}]}
+    ]
+  }
+}

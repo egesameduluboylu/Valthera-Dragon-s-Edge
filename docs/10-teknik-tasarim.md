@@ -53,16 +53,20 @@ valthera-dragons-edge/
 │   │   ├── damage_calc.gd
 │   │   ├── combat_engine.gd # Tur yönetimi, durum makinesi
 │   │   ├── enemy_ai.gd      # Niyet seçimi, desenler
-│   │   ├── loot_gen.gd
-│   │   └── dungeon_gen.gd
+│   │   ├── progression.gd   # XP eğrisi, seviye atlama
+│   │   ├── dungeon_run.gd   # Bir zindan koşusu: kapılar, odalar, ödüller
+│   │   └── loot_gen.gd
 │   ├── scenes/
-│   │   ├── main_menu/  town/  dungeon_map/  battle/  inventory/  reward/
+│   │   ├── main_menu/  town/  dungeon/  battle/  inventory/  reward/
 │   └── ui/                  # Tekrar kullanılan bileşenler (buton, can çubuğu, eşya kartı)
 └── tests/
     ├── run_tests.gd         # godot --headless -s res://tests/run_tests.gd
     ├── test_case.gd         # assert yardımcıları
     ├── test_damage_calc.gd
     ├── test_combat_engine.gd
+    ├── test_boss_and_items.gd
+    ├── test_dungeon_run.gd
+    ├── test_data_integrity.gd  # metin anahtarı, görsel yolu, id kontrolü
     └── test_enemy_ai.gd
 ```
 
@@ -155,6 +159,17 @@ events = engine.use_skill("warrior_shield_break", "e0")
 ```
 
 Rastgelelik tek bir `RandomNumberGenerator` üzerinden, tohum (seed) verilebilir. Testlerde sabit tohum kullanılır.
+
+`DungeonRun` da aynı şekilde saf mantıktır. Harita sahnesi (`src/scenes/dungeon`) kapıları ondan alır,
+savaş odalarında `make_battle()` ile motoru kurar ve savaş sahnesini `setup(engine, background)` ile açar.
+Savaş bitince sahne `finished` sinyali verir, harita da sonucu `finish_battle(engine)` ile koşuya işler.
+
+```gdscript
+var run := DungeonRun.new(DataDB.data, "rotten_cellar", "warrior", 1)
+run.start()                 # iki kapı
+var room := run.enter(0)    # savaş, hazine, olay, dinlenme veya patron
+var engine := run.make_battle()
+```
 
 ## Kayıt Sistemi
 

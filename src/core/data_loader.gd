@@ -15,7 +15,7 @@ static func load_json(path: String) -> Dictionary:
 	return parsed
 
 
-## Loads every file the combat engine needs into one dictionary.
+## Loads every game data file into one dictionary.
 static func load_game_data(root: String = "res://data") -> Dictionary:
 	return {
 		"classes": load_json(root + "/classes.json"),
@@ -23,4 +23,6 @@ static func load_game_data(root: String = "res://data") -> Dictionary:
 		"statuses": load_json(root + "/statuses.json"),
 		"enemies": load_json(root + "/enemies.json"),
 		"encounters": load_json(root + "/encounters.json"),
+		"dungeons": load_json(root + "/dungeons.json"),
+		"events": load_json(root + "/events.json"),
 	}

@@ -103,6 +103,12 @@ static func bar_fill(color: Color) -> StyleBoxFlat:
 	return s
 
 
+## Upper-cases Turkish text for Cinzel titles. Cinzel draws lowercase as small caps, which
+## turns "i" into a dotless "I", so titles are upper-cased with the Turkish i -> İ rule.
+static func caps(text: String) -> String:
+	return text.replace("i", "İ").to_upper()
+
+
 ## Outline + size overrides so stage text stays readable over the background.
 static func stage_label(l: Label, font_size: int, color: Color = TEXT) -> Label:
 	l.add_theme_font_size_override("font_size", font_size)

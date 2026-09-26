@@ -49,6 +49,7 @@ static func make_engine(enemy_ids: Array, seed_value: int = 1) -> CombatEngine:
 	var data := game_data()
 	var class_def: Dictionary = data["classes"]["warrior"]
 	var engine := CombatEngine.new(data["skills"], data["statuses"], seeded_rng(seed_value))
+	engine.enemy_defs = data["enemies"]
 	var p := Combatant.make_player("warrior", class_def, 1, class_def["prototype_skills"])
 	p.stats.crit = 0.0
 	p.stats.dodge = 0.0
@@ -64,3 +65,31 @@ static func make_engine(enemy_ids: Array, seed_value: int = 1) -> CombatEngine:
 
 static func events_of(events: Array, type: String) -> Array:
 	return events.filter(func(ev: Dictionary) -> bool: return ev["type"] == type)
+
+
+## Simple combo bot for balance tests: potion when low, otherwise the combo loop on the
+## boss (or the first enemy), cleaning up adds with Slash while setups are on cooldown.
+static func bot_turn(engine: CombatEngine) -> void:
+	if engine.player.hp_ratio() < 0.35 and engine.potions > 0:
+		engine.use_potion()
+		return
+	var alive := engine.alive_enemies()
+	if alive.is_empty():
+		return
+	var target: Combatant = alive[0]
+	var add: Combatant = null
+	for e in alive:
+		if e.def_id == "bone_king":
+			target = e
+		elif e != target and add == null:
+			add = e
+	if engine.can_use("warrior_execute") and engine.combo_ready("warrior_execute", target):
+		engine.use_skill("warrior_execute", target.uid)
+	elif engine.can_use("warrior_heavy_strike") and engine.combo_ready("warrior_heavy_strike", target):
+		engine.use_skill("warrior_heavy_strike", target.uid)
+	elif engine.can_use("warrior_shield_break"):
+		engine.use_skill("warrior_shield_break", target.uid)
+	elif add != null and target.def_id == "bone_king":
+		engine.use_skill("warrior_slash", add.uid)
+	else:
+		engine.use_skill("warrior_slash", target.uid)

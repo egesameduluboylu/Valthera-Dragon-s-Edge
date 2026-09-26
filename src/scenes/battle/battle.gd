@@ -1,6 +1,11 @@
 extends Control
 ## Battle screen. All rules live in CombatEngine; this script draws state and plays
 ## the engine's events back as animations (docs/08, docs/10).
+##
+## Standalone it runs the "prototype" encounter. Inside a dungeon run the map scene
+## calls setup() with a prepared engine and waits for `finished`.
+
+signal finished(engine: CombatEngine)
 
 const STAGE_HEIGHT := 700
 const EVENT_DELAY := 0.35
@@ -11,10 +16,16 @@ const ENEMY_SLOTS := {
 	2: [Rect2(300, 340, 200, 200), Rect2(505, 340, 200, 200)],
 	3: [Rect2(285, 360, 150, 150), Rect2(430, 300, 150, 150), Rect2(565, 360, 150, 150)],
 }
+## With a boss on the field: the boss on the right, up to two adds stacked at the left.
+const BOSS_RECT := Rect2(425, 250, 290, 290)
+const BOSS_ADD_SLOTS := [Rect2(290, 470, 130, 130), Rect2(290, 170, 130, 130)]
 
 var engine: CombatEngine
 var selected_target: String = ""
 var busy: bool = false
+## True when a dungeon run owns this battle (no restart, rewards handled by the run).
+var run_mode: bool = false
+var background: String = ""
 
 var _stage: Control
 var _turn_label: Label
@@ -25,6 +36,11 @@ var _player_view: Dictionary = {}
 var _skill_grid: GridContainer
 var _skill_buttons: Dictionary = {} # skill_id -> Button
 var _defend_button: Button
+var _potion_button: Button
+var _level_label: Label
+var _restart_button: Button
+var _result_button: Button
+var _flash: ColorRect
 var _result_layer: Control
 var _result_title: Label
 var _result_body: Label
@@ -32,15 +48,33 @@ var _log_lines: Array[String] = []
 var _idle_tweens: Array[Tween] = []
 
 
+## Call before adding the scene to the tree to play a battle prepared elsewhere.
+func setup(p_engine: CombatEngine, p_background: String) -> void:
+	engine = p_engine
+	background = p_background
+	run_mode = true
+
+
 func _ready() -> void:
 	theme = UITheme.build()
+	if background == "":
+		background = DataDB.data["encounters"]["prototype"].get("background", "")
 	_build_ui()
-	_new_battle()
+	if run_mode:
+		_start_battle()
+	else:
+		_new_battle()
 
 
 func _new_battle() -> void:
-	engine = CombatEngine.from_data(DataDB.data, GameState.active_class, 1, "prototype")
-	selected_target = engine.enemies[0].uid
+	engine = CombatEngine.from_data(DataDB.data, GameState.active_class, GameState.level(), "prototype")
+	_start_battle()
+
+
+func _start_battle() -> void:
+	selected_target = engine.alive_enemies()[0].uid
+	_restart_button.visible = not run_mode
+	_level_label.text = DataDB.t("ui.level") % engine.player.level
 	_log_lines.clear()
 	_log_label.text = ""
 	_result_layer.visible = false
@@ -63,6 +97,19 @@ func _on_defend_pressed() -> void:
 	if busy:
 		return
 	_play(engine.defend())
+
+
+func _on_potion_pressed() -> void:
+	if busy:
+		return
+	_play(engine.use_potion())
+
+
+func _on_result_pressed() -> void:
+	if run_mode:
+		finished.emit(engine)
+	else:
+		_new_battle()
 
 
 func _on_enemy_input(event: InputEvent, uid: String) -> void:
@@ -108,7 +155,7 @@ func _apply_event(ev: Dictionary) -> float:
 			var view: Dictionary = _enemy_views[ev["source"]]
 			view["intent"].visible = false
 			_log("%s: %s" % [DataDB.t(e.name_key), _move_label(ev["move_type"])])
-			if ev["move_type"] == "attack":
+			if ev["move_type"] in ["attack", "multi_attack"]:
 				_lunge(view["sprite"], -1.0)
 			else:
 				_pulse(view["sprite"])
@@ -168,6 +215,34 @@ func _apply_event(ev: Dictionary) -> float:
 		"combo":
 			_show_combo(ev["count"])
 			return 0.3
+		"heal":
+			var view := _view_of(ev["target"])
+			var c := engine.get_combatant(ev["target"])
+			view["hp_bar"].value = ev["hp"]
+			view["hp_label"].text = "%d / %d" % [ev["hp"], c.max_hp()]
+			if ev["amount"] > 0:
+				_float_text(view, "+%d" % ev["amount"], Color("7dff8a"), 40)
+			return 0.3
+		"item":
+			_log(DataDB.t("item." + ev["item"]))
+			_pulse(_player_view["sprite"])
+			_refresh_buttons()
+			return 0.15
+		"summon":
+			var add := engine.get_combatant(ev["uid"])
+			_enemy_views[add.uid] = _build_enemy_view(add, Rect2())
+			_layout_enemies(true)
+			_pulse(_enemy_views[ev["source"]]["sprite"])
+			_log("%s: %s" % [DataDB.t(engine.get_combatant(ev["source"]).name_key), DataDB.t("intent.summon")])
+			return 0.45
+		"phase":
+			_fill_status_row(_enemy_views[ev["source"]]["statuses"], engine.get_combatant(ev["source"]))
+			_screen_flash(Color(1, 0.1, 0.1, 0.45))
+			_shake()
+			if ev["line_key"] != "":
+				# Body font: Cinzel has no dotted capital İ for Turkish lines.
+				_show_banner(DataDB.t(ev["line_key"]), Color("ff7060"), 40, UITheme.body_font())
+			return 1.1
 		"battle_end":
 			_show_result(ev)
 			return 0.0
@@ -178,6 +253,8 @@ func _apply_event(ev: Dictionary) -> float:
 
 func _refresh() -> void:
 	for e in engine.enemies:
+		if not _enemy_views.has(e.uid):
+			continue
 		var v: Dictionary = _enemy_views[e.uid]
 		v["hp_bar"].value = e.hp
 		v["hp_label"].text = "%d / %d" % [e.hp, e.max_hp()]
@@ -214,21 +291,31 @@ func _refresh_buttons() -> void:
 		b.modulate = Color(1.08, 1.04, 0.92) if ready else Color.WHITE
 		b.get_meta("glow").visible = ready
 	_defend_button.disabled = busy or engine.finished
+	_potion_button.text = "%s x%d" % [DataDB.t("ui.potion"), engine.potions]
+	_potion_button.disabled = busy or engine.finished or engine.potions <= 0 \
+			or engine.player.hp >= engine.player.max_hp()
 
 
 func _set_intent(view: Dictionary, intent: Dictionary) -> void:
 	var type: String = intent.get("type", "")
 	var icon := type
 	var text := ""
+	var color := Color("ffb0a0")
 	match type:
 		"attack":
 			text = str(intent.get("estimate", 0))
+			if int(intent.get("hits", 1)) > 1:
+				text += "x%d" % intent["hits"]
+			if intent.get("heavy", false):
+				text += "!"
+				color = Color("ff5a4a")
 		"shield":
 			text = str(intent.get("estimate", 0))
 		"buff_ally":
 			icon = "buff"
 	view["intent_icon"].texture = load("res://assets/icons/intents/%s.png" % icon)
 	view["intent_label"].text = text
+	view["intent_label"].add_theme_color_override("font_color", color)
 	view["intent_label"].visible = text != ""
 	view["intent_debuff"].visible = intent.get("debuff", false)
 	view["intent"].visible = type != ""
@@ -241,8 +328,12 @@ func _fill_status_row(row: HBoxContainer, c: Combatant) -> void:
 		row.add_child(_status_chip("shield_status", str(c.shield), "ui.shield"))
 	for id in c.statuses:
 		var s: StatusEffect = c.statuses[id]
-		# Stacked effects show both the stacks and the turns left, e.g. "x2·4".
-		var text := "x%d·%d" % [s.stacks, s.turns] if s.stacks > 1 else str(s.turns)
+		# Stacked effects show both the stacks and the turns left, e.g. "x2·4". Boss rage
+		# and similar lasting effects (90+ turns) show no timer.
+		var turns := str(s.turns) if s.turns < 90 else ""
+		var text := turns
+		if s.stacks > 1:
+			text = "x%d·%s" % [s.stacks, turns] if turns != "" else "x%d" % s.stacks
 		row.add_child(_status_chip(id, text, "status." + id))
 
 
@@ -271,6 +362,10 @@ func _move_label(move_type: String) -> String:
 			return DataDB.t("intent.shield")
 		"buff_ally":
 			return DataDB.t("intent.buff")
+		"multi_attack":
+			return DataDB.t("intent.attack")
+		"summon":
+			return DataDB.t("intent.summon")
 	return move_type
 
 
@@ -336,8 +431,9 @@ func _shake() -> void:
 	tw.tween_property(_stage, "position", Vector2.ZERO, 0.03)
 
 
+## Bound to the sprite, so the loop dies with it when a view is rebuilt.
 func _idle_bob(sprite: Control, delay: float) -> void:
-	var tw := create_tween().set_loops()
+	var tw := sprite.create_tween().set_loops()
 	var base_y := sprite.position.y
 	tw.tween_interval(delay)
 	tw.tween_property(sprite, "position:y", base_y - 6, 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
@@ -346,7 +442,15 @@ func _idle_bob(sprite: Control, delay: float) -> void:
 
 
 func _show_combo(count: int) -> void:
-	_combo_label.text = DataDB.t("ui.combo") % count
+	_show_banner(DataDB.t("ui.combo") % count, UITheme.COMBO, 72, UITheme.title_font())
+
+
+func _show_banner(text: String, color: Color, font_size: int, font: Font) -> void:
+	_combo_label.text = text
+	_combo_label.add_theme_font_override("font", font)
+	_combo_label.add_theme_color_override("font_color", color)
+	_combo_label.add_theme_font_size_override("font_size", font_size)
+	_combo_label.size = Vector2.ZERO
 	_combo_label.reset_size()
 	_combo_label.position.x = (_stage.size.x - _combo_label.size.x) * 0.5
 	_combo_label.pivot_offset = _combo_label.size * 0.5
@@ -359,16 +463,26 @@ func _show_combo(count: int) -> void:
 	tw.tween_property(_combo_label, "modulate:a", 0.0, 0.5).set_delay(0.7)
 
 
+func _screen_flash(color: Color) -> void:
+	_flash.color = color
+	_flash.visible = true
+	var tw := create_tween()
+	tw.tween_property(_flash, "color:a", 0.0, 0.6)
+	tw.tween_callback(func() -> void: _flash.visible = false)
+
+
 func _show_result(ev: Dictionary) -> void:
 	if ev["victory"]:
 		_result_title.text = DataDB.t("ui.victory")
 		_result_title.add_theme_color_override("font_color", UITheme.GOLD)
 		_result_body.text = DataDB.t("ui.rewards") % [ev["xp"], ev["gold"]]
-		GameState.add_rewards(ev["xp"], ev["gold"])
+		if not run_mode:
+			GameState.add_rewards(ev["xp"], ev["gold"])
 	else:
 		_result_title.text = DataDB.t("ui.defeat")
 		_result_title.add_theme_color_override("font_color", UITheme.HP)
 		_result_body.text = DataDB.t("ui.defeat_hint")
+	_result_button.text = DataDB.t("ui.continue") if run_mode else DataDB.t("ui.try_again")
 	_result_layer.visible = true
 	_result_layer.modulate.a = 0.0
 	create_tween().tween_property(_result_layer, "modulate:a", 1.0, 0.3)
@@ -394,7 +508,7 @@ func _build_ui() -> void:
 	_stage.clip_contents = true
 	col.add_child(_stage)
 	var bg_tex := TextureRect.new()
-	bg_tex.texture = load(DataDB.data["encounters"]["prototype"].get("background", ""))
+	bg_tex.texture = load(background)
 	bg_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bg_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	bg_tex.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -411,19 +525,25 @@ func _build_ui() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(spacer)
-	var restart := Button.new()
-	restart.text = DataDB.t("ui.restart")
-	restart.add_theme_font_size_override("font_size", 22)
-	restart.pressed.connect(func() -> void:
+	_restart_button = Button.new()
+	_restart_button.text = DataDB.t("ui.restart")
+	_restart_button.add_theme_font_size_override("font_size", 22)
+	_restart_button.pressed.connect(func() -> void:
 		if not busy:
 			_new_battle())
-	top.add_child(restart)
+	top.add_child(_restart_button)
 	_stage.add_child(top)
 
 	_combo_label = UITheme.stage_label(_label(""), 72, UITheme.COMBO)
 	_combo_label.add_theme_font_override("font", UITheme.title_font())
 	_combo_label.position.y = 190
 	_stage.add_child(_combo_label)
+
+	_flash = ColorRect.new()
+	_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_flash.visible = false
+	_stage.add_child(_flash)
 
 	# ---- bottom panel
 	var bottom := PanelContainer.new()
@@ -447,15 +567,15 @@ func _build_ui() -> void:
 	bcol.add_child(info)
 	var name_col := VBoxContainer.new()
 	name_col.custom_minimum_size.x = 170
-	var name_label := _label(DataDB.t("class." + GameState.active_class))
+	var name_label := _label(UITheme.caps(DataDB.t("class." + GameState.active_class)))
 	name_label.add_theme_font_override("font", UITheme.title_font())
 	name_label.add_theme_font_size_override("font_size", 28)
 	name_label.add_theme_color_override("font_color", UITheme.GOLD)
 	name_col.add_child(name_label)
-	var level_label := _label(DataDB.t("ui.level") % 1)
-	level_label.add_theme_color_override("font_color", UITheme.TEXT_MUTED)
-	level_label.add_theme_font_size_override("font_size", 20)
-	name_col.add_child(level_label)
+	_level_label = _label("")
+	_level_label.add_theme_color_override("font_color", UITheme.TEXT_MUTED)
+	_level_label.add_theme_font_size_override("font_size", 20)
+	name_col.add_child(_level_label)
 	info.add_child(name_col)
 	var bars := VBoxContainer.new()
 	bars.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -484,13 +604,25 @@ func _build_ui() -> void:
 	_skill_grid.add_theme_constant_override("v_separation", 14)
 	bcol.add_child(_skill_grid)
 
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 14)
+	bcol.add_child(actions)
 	_defend_button = Button.new()
 	_defend_button.text = DataDB.t("ui.defend")
 	_defend_button.icon = load("res://assets/icons/intents/shield.png")
 	_defend_button.custom_minimum_size.y = 84
+	_defend_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_defend_button.size_flags_stretch_ratio = 1.4
 	_defend_button.add_theme_font_size_override("font_size", 28)
 	_defend_button.pressed.connect(_on_defend_pressed)
-	bcol.add_child(_defend_button)
+	actions.add_child(_defend_button)
+	_potion_button = Button.new()
+	_potion_button.icon = load("res://assets/icons/items/potion.png")
+	_potion_button.custom_minimum_size.y = 84
+	_potion_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_potion_button.add_theme_font_size_override("font_size", 26)
+	_potion_button.pressed.connect(_on_potion_pressed)
+	actions.add_child(_potion_button)
 
 	_build_result_layer()
 
@@ -523,12 +655,11 @@ func _build_result_layer() -> void:
 	_result_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_result_body.add_theme_font_size_override("font_size", 30)
 	v.add_child(_result_body)
-	var again := Button.new()
-	again.text = DataDB.t("ui.try_again")
-	again.custom_minimum_size.y = 84
-	again.add_theme_font_size_override("font_size", 30)
-	again.pressed.connect(_new_battle)
-	v.add_child(again)
+	_result_button = Button.new()
+	_result_button.custom_minimum_size.y = 84
+	_result_button.add_theme_font_size_override("font_size", 30)
+	_result_button.pressed.connect(_on_result_pressed)
+	v.add_child(_result_button)
 	_result_layer.visible = false
 	add_child(_result_layer)
 
@@ -556,12 +687,54 @@ func _build_enemy_views() -> void:
 		v["root"].queue_free()
 	_enemy_views.clear()
 	_idle_bob(_player_view["sprite"], 0.0)
-	var slots: Array = ENEMY_SLOTS[clampi(engine.enemies.size(), 1, 3)]
-	for i in engine.enemies.size():
-		var e := engine.enemies[i]
-		var view := _build_enemy_view(e, slots[i])
-		_enemy_views[e.uid] = view
-		_idle_bob(view["sprite"], 0.25 * (i + 1))
+	for e in engine.enemies:
+		_enemy_views[e.uid] = _build_enemy_view(e, Rect2())
+	_layout_enemies(false)
+
+
+## Places the living enemies' views in their slots. A view is rebuilt when its slot
+## changes, because the sprite, ring and badges are laid out from the rect.
+func _layout_enemies(animate: bool) -> void:
+	var alive := engine.alive_enemies()
+	var boss: Combatant = null
+	for e in alive:
+		if DataDB.enemy(e.def_id).get("boss", false):
+			boss = e
+	var rects := {}
+	if boss != null:
+		rects[boss.uid] = BOSS_RECT
+		var i := 0
+		for e in alive:
+			if e != boss and i < BOSS_ADD_SLOTS.size():
+				rects[e.uid] = BOSS_ADD_SLOTS[i]
+				i += 1
+	else:
+		var slots: Array = ENEMY_SLOTS[clampi(alive.size(), 1, 3)]
+		for i in mini(alive.size(), 3):
+			rects[alive[i].uid] = slots[i]
+	var n := 0
+	for uid in rects:
+		var rect: Rect2 = rects[uid]
+		var old: Dictionary = _enemy_views[uid]
+		if old["rect"] == rect:
+			continue
+		var fresh: bool = old["rect"] == Rect2()
+		old["root"].queue_free()
+		var view := _build_enemy_view(engine.get_combatant(uid), rect)
+		_enemy_views[uid] = view
+		_idle_bob(view["sprite"], 0.25 * (n + 1))
+		n += 1
+		if animate and fresh:
+			var root: Control = view["root"]
+			root.modulate.a = 0.0
+			root.scale = Vector2(0.6, 0.6)
+			root.pivot_offset = rect.size * Vector2(0.5, 1.0)
+			var tw := create_tween().set_parallel()
+			tw.tween_property(root, "modulate:a", 1.0, 0.3)
+			tw.tween_property(root, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		var e := engine.get_combatant(uid)
+		if not e.intent.is_empty():
+			_set_intent(view, e.intent)
 
 
 func _build_enemy_view(e: Combatant, rect: Rect2) -> Dictionary:
@@ -569,6 +742,7 @@ func _build_enemy_view(e: Combatant, rect: Rect2) -> Dictionary:
 	root.position = rect.position
 	root.size = rect.size
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.visible = rect.size != Vector2.ZERO
 	_stage.add_child(root)
 	_stage.move_child(root, 1)
 
@@ -617,7 +791,7 @@ func _build_enemy_view(e: Combatant, rect: Rect2) -> Dictionary:
 	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	arrow.position = Vector2(rect.size.x * 0.5 - 24, -76)
 	root.add_child(arrow)
-	var atw := create_tween().set_loops()
+	var atw := arrow.create_tween().set_loops()
 	atw.tween_property(arrow, "position:y", -66.0, 0.45).set_trans(Tween.TRANS_SINE)
 	atw.tween_property(arrow, "position:y", -76.0, 0.45).set_trans(Tween.TRANS_SINE)
 	_idle_tweens.append(atw)
@@ -639,7 +813,7 @@ func _build_enemy_view(e: Combatant, rect: Rect2) -> Dictionary:
 	statuses.custom_minimum_size.y = 34
 	info.add_child(statuses)
 
-	return {"root": root, "sprite": sprite, "ring": ring, "arrow": arrow, "intent": intent,
+	return {"root": root, "rect": rect, "sprite": sprite, "ring": ring, "arrow": arrow, "intent": intent,
 			"intent_icon": intent_icon, "intent_label": intent_label, "intent_debuff": intent_debuff,
 			"hp_bar": hp[1], "hp_label": hp[2], "statuses": statuses}
 

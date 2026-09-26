@@ -38,5 +38,54 @@
                       "apply_status": [{"id": "poison", "turns": 4, "stacks": 2}]}
     },
     "ai": {"type": "support", "buff_move": "empower", "solo_move": "spore_cloud"}
+  },
+  "cellar_warden": {
+    "name_key": "enemy.cellar_warden",
+    "sprite": "res://assets/sprites/enemies/cellar_warden.png",
+    "elite": true,
+    "base": {"hp": 110, "atk": 15, "def": 25, "spd": 7, "crit": 0.05, "dodge": 0.0},
+    "elements": {"lightning": 1.5, "physical": 0.75},
+    "immune": ["bleed"],
+    "xp": 25, "gold": [20, 30],
+    "moves": {
+      "chain_swing": {"type": "attack", "power": 1.0},
+      "heavy_axe": {"type": "attack", "power": 2.0, "heavy": true, "stun_self_if_defended": true}
+    },
+    "ai": {"type": "pattern", "pattern": ["chain_swing", "chain_swing", "heavy_axe"]}
+  },
+  "mimic": {
+    "name_key": "enemy.mimic",
+    "sprite": "res://assets/sprites/enemies/mimic.png",
+    "base": {"hp": 60, "atk": 14, "def": 15, "spd": 10, "crit": 0.05, "dodge": 0.0},
+    "elements": {"fire": 1.5},
+    "immune": [],
+    "xp": 20, "gold": [40, 60],
+    "moves": {
+      "devour": {"type": "attack", "power": 1.8, "heavy": true},
+      "chomp": {"type": "attack", "power": 1.0}
+    },
+    "ai": {"type": "pattern", "pattern": ["devour", "chomp", "chomp"]}
+  },
+  "bone_king": {
+    "name_key": "enemy.bone_king",
+    "sprite": "res://assets/sprites/enemies/bone_king.png",
+    "boss": true,
+    "base": {"hp": 160, "atk": 11, "def": 16, "spd": 8, "crit": 0.05, "dodge": 0.0},
+    "elements": {"fire": 1.5, "shadow": 0.5},
+    "immune": ["poison", "bleed"],
+    "on_ally_death": {"heal": 20},
+    "xp": 100, "gold": [140, 160],
+    "moves": {
+      "staff_strike": {"type": "attack", "power": 1.0},
+      "summon_bones": {"type": "summon", "enemy": "skeleton_guard", "max_alive": 2},
+      "crown_light": {"type": "shield", "amount": 30},
+      "bone_storm": {"type": "multi_attack", "power": 0.5, "hits": 3, "heavy": true}
+    },
+    "ai": {"type": "phased", "phases": [
+      {"min_hp": 0.5, "pattern": ["staff_strike", "summon_bones", "staff_strike", "crown_light"]},
+      {"min_hp": 0.0, "pattern": ["bone_storm", "staff_strike", "summon_bones", "staff_strike"],
+       "line_key": "boss.bone_king.phase2",
+       "on_enter_status": [{"id": "enraged", "turns": 99}]}
+    ]}
   }
 }
