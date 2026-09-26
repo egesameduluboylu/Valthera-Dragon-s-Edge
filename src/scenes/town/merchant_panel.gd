@@ -55,7 +55,7 @@ func refresh() -> void:
 	# items
 	for i in p.shop.size():
 		var item: Dictionary = p.shop[i]
-		var r := _row(ItemUI.color(item))
+		var r := _row()
 		var h: HBoxContainer = r.get_child(0)
 		h.add_child(ItemUI.tile(item, 104))
 		var d := ItemUI.details(item, p.equipped(p.slot_of(item)) if p.can_equip(item) else null)
@@ -89,10 +89,9 @@ func _buy(index: int) -> void:
 
 
 ## A wooden row card holding an HBoxContainer.
-func _row(border: Color = UITheme.GOLD_DARK) -> PanelContainer:
+func _row() -> PanelContainer:
 	var card := PanelContainer.new()
-	var st := UITheme.panel(UITheme.WOOD_DARK, border.darkened(0.2), 18)
-	st.set_content_margin_all(12)
+	var st := UITheme.skin_panel("dark")
 	card.add_theme_stylebox_override("panel", st)
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 12)

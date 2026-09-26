@@ -9,8 +9,18 @@
     "iron_helm":     {"slot": "helm",   "name_key": "item.iron_helm",     "icon": "res://assets/icons/items/gear/iron_helm.png",     "main": {"def": 3, "crit": 0.02}, "min_level": 2},
     "copper_ring":   {"slot": "accessory", "name_key": "item.copper_ring", "icon": "res://assets/icons/items/gear/copper_ring.png", "main": {"atk": 1, "hp": 5}},
     "bone_amulet":   {"slot": "accessory", "name_key": "item.bone_amulet", "icon": "res://assets/icons/items/gear/bone_amulet.png", "main": {"def": 1, "hp": 8}},
+    "rat_fang":      {"slot": "accessory", "name_key": "item.rat_fang",   "icon": "res://assets/icons/items/gear/rat_fang.png",      "main": {"atk": 1.5, "hp": 6},
+                      "unique": {"bleed_on_hit": 0.25}, "desc_key": "item.rat_fang.desc", "rarity": "epic", "drop_only": true},
+    "spore_cloak":   {"slot": "armor",  "name_key": "item.spore_cloak",   "icon": "res://assets/icons/items/gear/spore_cloak.png",   "main": {"hp": 14, "def": 2},
+                      "unique": {"thorns": 0.2}, "desc_key": "item.spore_cloak.desc", "rarity": "epic", "drop_only": true},
+    "mimic_ring":    {"slot": "accessory", "name_key": "item.mimic_ring", "icon": "res://assets/icons/items/gear/mimic_ring.png",    "main": {"hp": 6, "def": 1},
+                      "unique": {"gold_find": 0.3}, "desc_key": "item.mimic_ring.desc", "rarity": "epic", "drop_only": true},
+    "warden_axe":    {"slot": "weapon", "class": "warrior", "name_key": "item.warden_axe", "icon": "res://assets/icons/items/gear/warden_axe.png", "main": {"atk": 5.5},
+                      "unique": {"first_strike": 0.5}, "desc_key": "item.warden_axe.desc", "rarity": "epic", "drop_only": true},
     "bone_crown":    {"slot": "helm",   "name_key": "item.bone_crown",    "icon": "res://assets/icons/items/gear/bone_crown.png",    "main": {"def": 4, "crit": 0.03},
-                      "unique": {"heal_on_kill": 10}, "desc_key": "item.bone_crown.desc", "drop_only": true}
+                      "unique": {"heal_on_kill": 10}, "desc_key": "item.bone_crown.desc", "rarity": "legendary", "drop_only": true},
+    "kingslayer":    {"slot": "weapon", "class": "warrior", "name_key": "item.kingslayer", "icon": "res://assets/icons/items/gear/kingslayer.png", "main": {"atk": 7},
+                      "unique": {"lifesteal": 0.12, "low_hp_damage": 0.3}, "desc_key": "item.kingslayer.desc", "rarity": "legendary", "drop_only": true}
   },
   "rarities": {
     "common":    {"name_key": "rarity.common",    "color": "b8b0a8", "mult": 1.0,  "affixes": 0, "weight": 60},
@@ -30,6 +40,8 @@
     "combo_damage": {"name_key": "perk.combo_damage", "range": [0.05, 0.10]}
   },
   "stats": ["hp", "atk", "def", "spd", "crit", "dodge"],
+  "percent_perks": ["combo_damage", "bleed_on_hit", "thorns", "gold_find", "first_strike", "lifesteal", "low_hp_damage"],
+  "wear_level_slack": 2,
   "level_growth": 0.12,
   "upgrade_growth": 0.08,
   "max_upgrade": 10,

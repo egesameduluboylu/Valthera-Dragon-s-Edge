@@ -23,8 +23,7 @@ func _ready() -> void:
 	_npc = UIKit.npc_row("res://assets/town/npc_smith.png", DataDB.t("smith.npc"), DataDB.t("smith.line"))
 	_content.add_child(_npc)
 	_card = PanelContainer.new()
-	var st := UITheme.panel(UITheme.WOOD_DARK, UITheme.GOLD_DARK, 18)
-	st.set_content_margin_all(14)
+	var st := UITheme.skin_panel("dark")
 	_card.add_theme_stylebox_override("panel", st)
 	_card.custom_minimum_size.y = 300
 	_content.add_child(_card)

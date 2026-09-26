@@ -137,9 +137,11 @@ func test_boss_and_elite_rooms_drop_loot_and_scales() -> void:
 		run.start()
 		var drop := run._drop("elite")
 		assert_eq(drop["scales"], 1)
-		elite_items += drop["items"].size()
 		for item in drop["items"]:
 			assert_true(item["rarity"] != "common")
+			if not Items.is_unique(item, data["items"]):
+				elite_items += 1
+	# one regular item per elite, uniques come on top
 	assert_eq(elite_items, 20)
 
 
@@ -174,6 +176,28 @@ func test_broken_save_data_is_cleaned() -> void:
 	assert_eq(p.run_state, {})
 
 
+func test_affixes_without_a_value_are_dropped_on_load() -> void:
+	var d := {"inventory": [{"uid": "i1", "base": "iron_helm", "rarity": "epic", "level": 2, "affixes": [
+			{"id": "crit"}, {"id": "hp", "value": "lots"}, "atk", {"id": "nope", "value": 1.0},
+			{"id": "def", "value": 2}]}]}
+	var p := Profile.from_dict(game_data(), d)
+	assert_eq(p.inventory[0]["affixes"], [{"id": "def", "value": 2.0}])
+	# The stat helpers skip such affixes instead of crashing.
+	var raw := {"base": "iron_helm", "rarity": "rare", "level": 2, "affixes": [{"id": "crit"}, null]}
+	assert_eq(Items.total_stats(raw, game_data()["items"]), Items.main_stats(raw, game_data()["items"]))
+	assert_eq(Items.perks(raw, game_data()["items"]), {})
+
+
+func test_online_market_state_survives_save_and_load() -> void:
+	var p := _profile(4)
+	p.online_claims = {"mail-1": "op-1"}
+	var back := Profile.from_dict(game_data(), JSON.parse_string(JSON.stringify(p.to_dict())))
+	assert_eq(back.save_id, p.save_id)
+	assert_eq(back.online_claims, {"mail-1": "op-1"})
+	assert_true(p.save_id.length() == 16 and p.save_id != _profile(4).save_id, "save ids differ per new game")
+	assert_true(Profile.from_dict(game_data(), {}).save_id != "", "old saves get a save id")
+
+
 func test_run_state_resumes_between_rooms() -> void:
 	var p := _profile()
 	var run := p.start_run("rotten_cellar", seeded_rng(9))
@@ -200,6 +224,29 @@ func test_run_state_resumes_between_rooms() -> void:
 	assert_false(back.enter(0).is_empty())
 
 
+func test_high_level_items_wait_for_the_player() -> void:
+	var p := _profile()
+	var big := _give(p, "iron_sword", "rare", 6)
+	assert_eq(p.equip_block_reason(big), "level")
+	assert_false(p.equip(big["uid"]))
+	p.set_progress(4, 0)
+	assert_true(p.equip(big["uid"]))
+
+
+func test_uniques_drop_from_their_sources() -> void:
+	var data := game_data()
+	var seen := {}
+	for s in 400:
+		var run := DungeonRun.new(data, "rotten_cellar", "warrior", 1, 0, seeded_rng(s))
+		run.start()
+		for kind in ["boss", "elite", "mimic"]:
+			for item in run._drop(kind)["items"]:
+				if Items.is_unique(item, data["items"]):
+					seen[item["base"]] = true
+	for id in ["bone_crown", "kingslayer", "warden_axe", "mimic_ring"]:
+		assert_true(seen.has(id), id)
+
+
 ## Qodo review on PR #4: damaged saves must load without crashing or duplicating gear.
 func test_damaged_items_get_uids_and_equipment_is_rebuilt() -> void:
 	var d := {"next_uid": 3, "inventory": [
@@ -223,7 +270,7 @@ func test_damaged_items_get_uids_and_equipment_is_rebuilt() -> void:
 	assert_eq(p.equipment["armor"], "")
 	assert_eq(p.equipped_items().size(), 1)
 	var sword: Dictionary = p.inventory[3]
-	assert_eq(sword["affixes"], [{"id": "hp", "value": 5}], "broken affixes are dropped")
+	assert_eq(sword["affixes"], [{"id": "hp", "value": 5.0}], "broken affixes are dropped")
 	Items.total_stats(sword, game_data()["items"])   # must not crash
 	var fresh := {"base": "iron_helm", "rarity": "common", "level": 1, "upgrade": 0, "affixes": []}
 	p.add_item(fresh)

@@ -548,11 +548,7 @@ func _build_ui() -> void:
 	# ---- bottom panel
 	var bottom := PanelContainer.new()
 	bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var bottom_style := UITheme.panel(UITheme.WOOD, UITheme.GOLD, 0)
-	bottom_style.border_width_left = 0
-	bottom_style.border_width_right = 0
-	bottom_style.border_width_bottom = 0
-	bottom_style.border_width_top = 4
+	var bottom_style := UITheme.skin_panel("footer")
 	bottom_style.set_content_margin_all(22)
 	bottom_style.content_margin_top = 16
 	bottom.add_theme_stylebox_override("panel", bottom_style)
@@ -639,8 +635,7 @@ func _build_result_layer() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_result_layer.add_child(center)
 	var panel := PanelContainer.new()
-	var style := UITheme.panel(UITheme.WOOD, UITheme.GOLD, 22)
-	style.set_content_margin_all(36)
+	var style := UITheme.skin_panel("wood")
 	panel.add_theme_stylebox_override("panel", style)
 	panel.custom_minimum_size = Vector2(540, 0)
 	center.add_child(panel)
@@ -879,7 +874,7 @@ func _labeled_bar(color: Color, height: int) -> Array:
 	var bar := ProgressBar.new()
 	bar.show_percentage = false
 	bar.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bar.add_theme_stylebox_override("fill", UITheme.bar_fill(color))
+	bar.add_theme_stylebox_override("fill", UITheme.skin_bar_fill_tinted(color))
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.add_child(bar)
 	var l := UITheme.stage_label(_label(""), int(height * 0.7))

@@ -421,8 +421,7 @@ func _modal(title: String, art_path: String, text: String) -> VBoxContainer:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_modal_layer.add_child(center)
 	var panel := PanelContainer.new()
-	var style := UITheme.panel(UITheme.WOOD, UITheme.GOLD, 24)
-	style.set_content_margin_all(30)
+	var style := UITheme.skin_panel("wood")
 	panel.add_theme_stylebox_override("panel", style)
 	panel.custom_minimum_size = Vector2(640, 0)
 	center.add_child(panel)
@@ -599,11 +598,7 @@ func _build_ui() -> void:
 
 	# ---- header: dungeon name, room counter and the room trail
 	var header := PanelContainer.new()
-	var hs := UITheme.panel(Color(UITheme.WOOD, 0.94), UITheme.GOLD, 0)
-	hs.border_width_left = 0
-	hs.border_width_right = 0
-	hs.border_width_top = 0
-	hs.border_width_bottom = 4
+	var hs := UITheme.skin_panel("header")
 	hs.content_margin_top = 18
 	hs.content_margin_bottom = 16
 	header.add_theme_stylebox_override("panel", hs)
@@ -630,7 +625,7 @@ func _build_ui() -> void:
 		pc_margin.add_theme_constant_override("margin_" + side, 18)
 	_root.add_child(pc_margin)
 	var pc := PanelContainer.new()
-	pc.add_theme_stylebox_override("panel", UITheme.panel(Color(UITheme.WOOD_DARK, 0.9), UITheme.GOLD_DARK, 18))
+	pc.add_theme_stylebox_override("panel", UITheme.skin_panel("dark"))
 	pc_margin.add_child(pc)
 	var ph := HBoxContainer.new()
 	ph.add_theme_constant_override("separation", 14)
@@ -748,7 +743,7 @@ func _bar(color: Color, height: int) -> Array:
 	var bar := ProgressBar.new()
 	bar.show_percentage = false
 	bar.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bar.add_theme_stylebox_override("fill", UITheme.bar_fill(color))
+	bar.add_theme_stylebox_override("fill", UITheme.skin_bar_fill_tinted(color))
 	holder.add_child(bar)
 	var l := UITheme.stage_label(_label("", int(height * 0.7), UITheme.TEXT), int(height * 0.7))
 	l.set_anchors_preset(Control.PRESET_FULL_RECT)

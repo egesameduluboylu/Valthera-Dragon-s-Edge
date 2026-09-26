@@ -54,8 +54,7 @@ func _build() -> void:
 	_content.add_child(_slots_row)
 
 	_card = PanelContainer.new()
-	var st := UITheme.panel(UITheme.WOOD_DARK, UITheme.GOLD_DARK, 18)
-	st.set_content_margin_all(14)
+	var st := UITheme.skin_panel("dark")
 	_card.add_theme_stylebox_override("panel", st)
 	_card.custom_minimum_size.y = 250
 	_content.add_child(_card)
@@ -172,7 +171,13 @@ func _draw_card() -> void:
 		off.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		buttons.add_child(off)
 	else:
-		var on := UIKit.primary(UIKit.button(DataDB.t("bag.equip") if p.can_equip(item) else DataDB.t("bag.wrong_class"), "",
+		var why := p.equip_block_reason(item)
+		var label := DataDB.t("bag.equip")
+		if why == "class":
+			label = DataDB.t("bag.wrong_class")
+		elif why == "level":
+			label = DataDB.tf("bag.low_level", {"n": Items.wear_level(item, ItemUI.defs())})
+		var on := UIKit.primary(UIKit.button(label, "",
 				func() -> void:
 					if p.equip(_selected):
 						GameState.changed()

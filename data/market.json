@@ -1,0 +1,23 @@
+{
+  "listing_fee_percent": 0.05,
+  "min_listing_fee": 5,
+  "tax_percent": 0.10,
+  "max_listings": 5,
+  "max_listings_per_day": 20,
+  "max_buys_per_day": 30,
+  "max_buy_gold_per_day": 200000,
+  "max_price": 1000000,
+  "unique_value_mult": 2.5,
+  "listing_hours": 48,
+  "offline": {
+    "listing_runs": 3,
+    "board_size": 8,
+    "board_turnover": 3,
+    "unique_chance": 0.12,
+    "rarity_floor": "rare",
+    "price_spread": [0.85, 1.6],
+    "sell_chance": {"base": 1.2, "per_ratio": 0.6, "min": 0.05, "max": 0.9}
+  },
+  "trader_names": ["Kara Ayşe", "Demir Yumruk Ali", "Sessiz Mert", "Kuzgun Elif", "Şapşal Rıza", "Altın Dişli Nuri",
+    "Gezgin Selin", "Paslı Hüsnü", "Yıldız Kız Deniz", "Kemikçi Oğuz", "Fırtına Zeynep", "Tombul Cemil"]
+}

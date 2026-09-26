@@ -33,3 +33,38 @@ jobs:
 
       - name: Run tests
         run: ~/godot/godot --headless -s res://tests/run_tests.gd
+
+  market-server-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the server config matches data/
+        run: |
+          python3 tools/market/seed_catalog.py
+          git diff --exit-code server/supabase/migrations/0002_market_config.sql
+
+      - name: Run marketplace SQL tests on a local PostgreSQL
+        run: |
+          if ! ls -d /usr/lib/postgresql/*/bin >/dev/null 2>&1; then sudo apt-get install -y -q postgresql; fi
+          server/tests/run.sh
+
+      - name: Cache Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-4.5-stable
+
+      - name: Download Godot
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot
+          curl -sSL -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/4.5-stable/Godot_v4.5-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d ~/godot
+          mv ~/godot/Godot_v4.5-stable_linux.x86_64 ~/godot/godot
+
+      - name: Run the game's online market client against the migrations
+        run: |
+          ~/godot/godot --headless --import
+          server/tests/run_client_check.sh ~/godot/godot

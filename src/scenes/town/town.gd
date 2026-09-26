@@ -13,7 +13,7 @@ const BUILDINGS := {
 	"smith": {"rect": Rect2(20, 560, 320, 300), "name": "town.smith"},
 	"merchant": {"rect": Rect2(380, 560, 320, 300), "name": "town.merchant"},
 	"class_master": {"rect": Rect2(20, 880, 320, 240), "name": "town.class_master", "locked": true},
-	"inn": {"rect": Rect2(380, 880, 320, 240), "name": "town.inn", "locked": true},
+	"inn": {"rect": Rect2(380, 880, 320, 240), "name": "town.market"},
 }
 
 var _level_label: Label
@@ -36,6 +36,8 @@ func _ready() -> void:
 	_fade_to(0.0)
 	if GameState.run == null and not GameState.profile.run_state.is_empty():
 		_ask_resume()
+	else:
+		_market_news()
 
 
 # ---------------------------------------------------------------- screens
@@ -55,6 +57,8 @@ func open_panel(kind: String) -> void:
 			panel = MerchantPanel.new()
 		"bag":
 			panel = BagPanel.new()
+		"inn":
+			panel = MarketPanel.new()
 		_:
 			return
 	panel.closed.connect(_close_overlay)
@@ -72,7 +76,7 @@ func _show_gate() -> void:
 	body.add_child(UIKit.npc_row(ART % "npc_keeper", DataDB.t("town.gate.keeper"), DataDB.t("town.gate.line")))
 	# dungeon card
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", UITheme.panel(UITheme.WOOD_DARK, UITheme.GOLD_DARK, 18))
+	card.add_theme_stylebox_override("panel", UITheme.skin_panel("dark"))
 	body.add_child(card)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
@@ -136,6 +140,27 @@ func _ask_resume() -> void:
 	body.add_child(UIKit.button(DataDB.t("resume.abandon"), "", func() -> void:
 		GameState.discard_run()
 		_close_overlay()))
+
+
+## Tells the player what sold on the market while they were in the dungeon.
+func _market_news() -> void:
+	var news: Dictionary = GameState.market_news
+	GameState.market_news = {}
+	var lines: Array = []
+	if news.get("sold", []).size() > 0:
+		lines.append(DataDB.tf("market.news_sold", {"n": news["sold"].size()}))
+	if news.get("expired", []).size() > 0:
+		lines.append(DataDB.tf("market.news_expired", {"n": news["expired"].size()}))
+	if lines.is_empty():
+		return
+	var parts := UIKit.dialog(DataDB.t("market.title"), "\n".join(lines), ART % "npc_innkeeper")
+	_overlay.add_child(parts[0])
+	_overlay.visible = true
+	var body: VBoxContainer = parts[1]
+	body.add_child(UIKit.primary(UIKit.button(DataDB.t("market.tab_mail"), "", func() -> void:
+		_close_overlay()
+		open_panel("inn"))))
+	body.add_child(UIKit.button(DataDB.t("bag.close"), "", _close_overlay))
 
 
 func _close_overlay() -> void:
@@ -254,11 +279,7 @@ func _building(id: String, def: Dictionary) -> Control:
 
 func _build_header() -> void:
 	var header := PanelContainer.new()
-	var hs := UITheme.panel(Color(UITheme.WOOD, 0.94), UITheme.GOLD, 0)
-	hs.border_width_left = 0
-	hs.border_width_right = 0
-	hs.border_width_top = 0
-	hs.border_width_bottom = 4
+	var hs := UITheme.skin_panel("header")
 	hs.content_margin_top = 14
 	hs.content_margin_bottom = 12
 	hs.content_margin_left = 18
@@ -296,17 +317,13 @@ func _build_header() -> void:
 	_xp_bar = ProgressBar.new()
 	_xp_bar.show_percentage = false
 	_xp_bar.custom_minimum_size.y = 14
-	_xp_bar.add_theme_stylebox_override("fill", UITheme.bar_fill(Color("7fd4ff")))
+	_xp_bar.add_theme_stylebox_override("fill", UITheme.skin_bar_fill("xp"))
 	pv.add_child(_xp_bar)
 
 
 func _build_bottom() -> void:
 	var bar := PanelContainer.new()
-	var st := UITheme.panel(Color(UITheme.WOOD, 0.94), UITheme.GOLD, 0)
-	st.border_width_left = 0
-	st.border_width_right = 0
-	st.border_width_bottom = 0
-	st.border_width_top = 4
+	var st := UITheme.skin_panel("footer")
 	st.content_margin_top = 12
 	st.content_margin_bottom = 26
 	st.content_margin_left = 18

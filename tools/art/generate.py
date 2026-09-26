@@ -19,6 +19,7 @@ import gear  # noqa: E402
 import icons  # noqa: E402
 import scenes  # noqa: E402
 import town  # noqa: E402
+import ui_skin  # noqa: E402
 
 
 def save(img, rel):
@@ -57,7 +58,9 @@ def main(groups):
     if "town" in groups:
         for name, fn in town.TOWN.items():
             save(fn(), f"town/{name}.png")
+    if "skin" in groups:
+        ui_skin.write_all(save)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:] or ["sprites", "backgrounds", "icons", "scenes", "town"])
+    main(sys.argv[1:] or ["sprites", "backgrounds", "icons", "scenes", "town", "skin"])

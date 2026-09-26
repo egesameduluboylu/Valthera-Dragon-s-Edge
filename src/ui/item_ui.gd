@@ -48,7 +48,7 @@ static func _num(v: float) -> String:
 
 
 static func perk_text(id: String, value: float) -> String:
-	var shown := str(roundi(value * 100.0)) if id == "combo_damage" else str(roundi(value))
+	var shown := str(roundi(value * 100.0)) if id in defs().get("percent_perks", []) else str(roundi(value))
 	return DataDB.tf("perk." + id, {"v": shown})
 
 
@@ -59,20 +59,8 @@ static func tile(item: Dictionary, px: int, slot: String = "", worn: bool = fals
 	p.custom_minimum_size = Vector2(px, px)
 	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var st := StyleBoxFlat.new()
-	st.set_corner_radius_all(maxi(8, px / 8))
-	st.set_border_width_all(maxi(3, px / 28))
-	st.set_content_margin_all(maxi(4, px / 14))
-	if item.is_empty():
-		st.bg_color = Color("140d0b")
-		st.border_color = Color("4a3a2e")
-	else:
-		var c := color(item)
-		st.bg_color = c.darkened(0.78)
-		st.border_color = c
-		if item["rarity"] in ["epic", "legendary"]:
-			st.shadow_color = Color(c, 0.55)
-			st.shadow_size = maxi(4, px / 12)
+	var st := UITheme.skin_tile("empty" if item.is_empty() else item["rarity"])
+	st.set_content_margin_all(maxi(6, px / 7))
 	p.add_theme_stylebox_override("panel", st)
 	var holder := Control.new()
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -133,7 +121,10 @@ static func details(item: Dictionary, compare: Variant = null) -> VBoxContainer:
 	n.add_theme_color_override("font_outline_color", UITheme.INK)
 	n.add_theme_constant_override("outline_size", 6)
 	v.add_child(n)
-	v.add_child(UIKit.label(subtitle(item), 20, UITheme.TEXT_MUTED))
+	var sub := subtitle(item)
+	if Items.is_unique(item, defs()):
+		sub = DataDB.t("item.unique") + "  ·  " + sub
+	v.add_child(UIKit.label(sub, 20, UITheme.TEXT_MUTED))
 	var mine := Items.total_stats(item, defs())
 	var theirs: Dictionary = {} if compare == null or (compare as Dictionary).is_empty() else Items.total_stats(compare, defs())
 	for stat in defs()["stats"]:
@@ -159,4 +150,11 @@ static func details(item: Dictionary, compare: Variant = null) -> VBoxContainer:
 	for id in perks:
 		var l := UIKit.wrapped("✦ " + perk_text(id, perks[id]), 22, Color("ffcf6a"))
 		v.add_child(l)
+	var desc_key: String = base_of(item).get("desc_key", "")
+	if desc_key != "":
+		var flavor := UIKit.wrapped(DataDB.t(desc_key), 19, Color("c9b79a"))
+		v.add_child(flavor)
+	var need := Items.wear_level(item, defs())
+	if need > 1 and GameState.profile != null and need > GameState.profile.level():
+		v.add_child(UIKit.label(DataDB.tf("item.wear_level", {"n": need}), 20, DOWN))
 	return v

@@ -27,9 +27,8 @@ static func clean(item: Variant, defs: Dictionary) -> Dictionary:
 	var affixes: Variant = item.get("affixes", [])
 	if affixes is Array:
 		for a in affixes:
-			if a is Dictionary and defs["affixes"].has(str(a.get("id", ""))) \
-					and (a.get("value") is float or a.get("value") is int) and is_finite(float(a["value"])):
-				out["affixes"].append({"id": str(a["id"]), "value": a["value"]})
+			if is_valid_affix(a, defs):
+				out["affixes"].append({"id": str(a["id"]), "value": float(a["value"])})
 	return out
 
 
@@ -58,6 +57,8 @@ static func main_stats(item: Dictionary, defs: Dictionary) -> Dictionary:
 static func total_stats(item: Dictionary, defs: Dictionary) -> Dictionary:
 	var out := main_stats(item, defs)
 	for a in item.get("affixes", []):
+		if not is_valid_affix(a, defs):
+			continue
 		if a["id"] in defs["stats"]:
 			out[a["id"]] = _round_stat(a["id"], float(out.get(a["id"], 0)) + float(a["value"]))
 	return out
@@ -67,12 +68,23 @@ static func total_stats(item: Dictionary, defs: Dictionary) -> Dictionary:
 static func perks(item: Dictionary, defs: Dictionary) -> Dictionary:
 	var out := {}
 	for a in item.get("affixes", []):
+		if not is_valid_affix(a, defs):
+			continue
 		if not a["id"] in defs["stats"]:
 			out[a["id"]] = float(out.get(a["id"], 0)) + float(a["value"])
 	var unique: Dictionary = defs["bases"][item["base"]].get("unique", {})
 	for k in unique:
 		out[k] = float(out.get(k, 0)) + float(unique[k])
 	return out
+
+
+## An affix is {id, value} with a known id and a finite number as its value. Edited or
+## broken saves can hold anything else; such affixes are ignored (and dropped on load).
+static func is_valid_affix(a: Variant, defs: Dictionary) -> bool:
+	if not a is Dictionary or not defs["affixes"].has(str(a.get("id", ""))):
+		return false
+	var v: Variant = a.get("value")
+	return (v is float or v is int) and is_finite(float(v))
 
 
 ## Adds worn items to a combatant's stats and perks.
@@ -120,7 +132,7 @@ static func roll(defs: Dictionary, level: int, rng: RandomNumberGenerator, opts:
 				continue
 			pool.append(id)
 		base_id = pool[rng.randi_range(0, pool.size() - 1)]
-	var rarity: String = opts.get("rarity", "")
+	var rarity: String = opts.get("rarity", defs["bases"][base_id].get("rarity", ""))
 	if rarity == "":
 		rarity = _roll_rarity(defs, rng, opts.get("min_rarity", "common"), opts.get("legendary", false))
 	var item := {"base": base_id, "rarity": rarity, "level": level, "upgrade": 0, "affixes": []}
@@ -182,6 +194,16 @@ static func salvage_value(item: Dictionary, defs: Dictionary) -> Dictionary:
 
 static func shop_price(item: Dictionary, defs: Dictionary) -> int:
 	return salvage_value(item, defs)["gold"] * 4
+
+
+## Named items with a fixed rarity and a special effect (docs/05 "Benzersiz Eşyalar").
+static func is_unique(item: Dictionary, defs: Dictionary) -> bool:
+	return defs["bases"][item["base"]].has("unique")
+
+
+## Level needed to wear an item: a little below the item's own level.
+static func wear_level(item: Dictionary, defs: Dictionary) -> int:
+	return maxi(1, int(item["level"]) - int(defs.get("wear_level_slack", 0)))
 
 
 static func rarity_color(item: Dictionary, defs: Dictionary) -> String:

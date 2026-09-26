@@ -47,73 +47,21 @@ NOLINE = dict(shadow=0, light=0, line=0)
 # ------------------------------------------------------------------ painter helpers
 
 class TPainter(Painter):
-    """Painter that does its per-shape work only inside each shape's bounding box.
+    """Soft Painter with the town's finish: glow that reaches the sprite border fades out
+    instead of being cut off, and the silhouette outline skips soft glows.
 
-    Same look as Painter, but the 720 x 1280 background has hundreds of shapes and full-canvas
-    compositing made it very slow. It also tracks which pixels belong to solid shapes, so the
-    silhouette outline in finish() skips soft glows (which would otherwise get a dark ink halo),
-    and glow that reaches the sprite border fades out instead of being cut off.
+    (Bounding-box-limited drawing and solid-pixel tracking now live in Painter itself.)
     """
 
-    def __init__(self, width, height):
-        super().__init__(width, height)
-        self.solid = Image.new("L", self.img.size, 0)
-
-    def _paste(self, layer, x, y):
-        w, h = self.img.size
-        x0, y0 = max(0, x), max(0, y)
-        x1, y1 = min(w, x + layer.size[0]), min(h, y + layer.size[1])
-        if x1 <= x0 or y1 <= y0:
-            return
-        part = layer.crop((x0 - x, y0 - y, x1 - x, y1 - y))
-        self.img.paste(Image.alpha_composite(self.img.crop((x0, y0, x1, y1)), part), (x0, y0))
-
-    def _fill(self, mask, color, origin=(0, 0)):
-        bbox = mask.getbbox()
-        if bbox is None:
-            return
-        m = mask.crop(bbox)
-        solid = Image.new("RGBA", m.size, color)
-        layer = Image.new("RGBA", m.size, (0, 0, 0, 0))
-        layer.paste(solid, (0, 0), m)
-        x, y = bbox[0] + origin[0], bbox[1] + origin[1]
-        self._paste(layer, x, y)
-        if color[3] > 0:
-            box = (x, y, x + m.size[0], y + m.size[1])
-            self.solid.paste(ImageChops.lighter(self.solid.crop(box), m), box[:2])
-
-    def _paint(self, m, color, shadow=0.72, light=1.22, depth=0.14, line=1.6, ink=INK):
-        bbox = m.getbbox()
-        if bbox is None:
-            return
-        S = painter.SS
-        size = min(bbox[2] - bbox[0], bbox[3] - bbox[1])
-        k = max(1, int(size * depth))
-        r = max(1, int(line * S))
-        pad = k + r + 4
-        w, h = self.img.size
-        box = (max(0, bbox[0] - pad), max(0, bbox[1] - pad), min(w, bbox[2] + pad), min(h, bbox[3] + pad))
-        c = m.crop(box)
-        o = box[:2]
-        self._fill(c, color, o)
-        if shadow:
-            self._fill(ImageChops.subtract(c, _shift(c, -k, -k)), shade(color, shadow), o)
-        if light:
-            self._fill(ImageChops.subtract(c, _shift(c, k // 2, k // 2)), shade(color, light), o)
-        if line:
-            self._fill(ImageChops.subtract(c, c.filter(ImageFilter.MinFilter(r * 2 + 1))), ink, o)
-
-    def shape(self, kind, pts, color, shadow=0.72, light=1.22, depth=0.14, line=1.6, ink=INK, clip=None, **kw):
-        m = self._mask(kind, pts, **kw)
-        if clip is not None:
-            m = ImageChops.multiply(m, clip)
-        self._paint(m, color, shadow, light, depth, line, ink)
-        return m
+    def __init__(self, width, height, soft=True):
+        super().__init__(width, height, soft=soft)
 
     def finish(self, outline=2, outline_color=INK, ground_shadow=None, edge_fade=16):
         w, h = self.w, self.h
+        S = painter.SS
         out = self.img.resize((w, h), Image.LANCZOS)
-        solid = self.solid.resize((w, h), Image.LANCZOS)
+        solid_big = ImageChops.darker(self.solid, self.img.getchannel("A"))
+        solid = solid_big.resize((w, h), Image.LANCZOS)
         if edge_fade:
             ramp = Image.new("L", (w, h), 255)
             d = ImageDraw.Draw(ramp)
@@ -124,31 +72,21 @@ class TPainter(Painter):
             a_glow = ImageChops.multiply(ImageChops.subtract(a, a_solid), ramp)
             out.putalpha(ImageChops.add(a_solid, a_glow))
         if outline:
-            grown = solid.point(lambda v: 255 if v > 40 else 0).filter(ImageFilter.MaxFilter(outline * 2 + 1))
+            grown = painter._dilate(solid_big.point(lambda v: 255 if v > 90 else 0), outline * S)
             sil = Image.new("RGBA", out.size, outline_color)
-            sil.putalpha(grown)
+            sil.putalpha(grown.resize((w, h), Image.LANCZOS))
             out = Image.alpha_composite(sil, out)
         if ground_shadow:
             base = Image.new("RGBA", out.size, (0, 0, 0, 0))
-            ImageDraw.Draw(base).ellipse(ground_shadow, fill=(0, 0, 0, 90))
-            out = Image.alpha_composite(base.filter(ImageFilter.GaussianBlur(3)), out)
+            ImageDraw.Draw(base).ellipse(ground_shadow, fill=(12, 6, 18, 80))
+            base = base.filter(ImageFilter.GaussianBlur(4))
+            x0, y0, x1, y1 = ground_shadow
+            core = Image.new("RGBA", out.size, (0, 0, 0, 0))
+            ImageDraw.Draw(core).ellipse((x0 + (x1 - x0) * 0.08, y0 + (y1 - y0) * 0.3, x1 - (x1 - x0) * 0.08,
+                                          y1 - (y1 - y0) * 0.2), fill=(12, 6, 18, 90))
+            base = Image.alpha_composite(base, core.filter(ImageFilter.GaussianBlur(2)))
+            out = Image.alpha_composite(base, out)
         return out
-
-    def glow(self, center, radius, color, strength=0.8):
-        S = painter.SS
-        cx, cy = center[0] * S, center[1] * S
-        blur = radius * S / 8
-        half = int(radius * S + blur * 3 + 2)
-        layer = Image.new("RGBA", (half * 2, half * 2), (0, 0, 0, 0))
-        d = ImageDraw.Draw(layer)
-        steps = 12
-        for i in range(steps, 0, -1):
-            t = i / steps
-            a = int(255 * strength * (1 - t) ** 1.6)
-            rr = radius * t * S
-            d.ellipse((half - rr, half - rr, half + rr, half + rr), fill=color[:3] + (a,))
-        layer = layer.filter(ImageFilter.GaussianBlur(blur))
-        self._paste(layer, int(cx) - half, int(cy) - half)
 
 
 def _S():
@@ -220,6 +158,7 @@ def bricks(p, clip, box, color, rng, bh=14, bw=(22, 34), mortar=None, jitter=0.1
             row += 1
 
     pattern(p, clip, draw)
+    p.tex(clip, "stone", 0.55, color)
 
 
 def shingles(p, clip, box, color, rng, rows=10, tile=16):
@@ -241,6 +180,7 @@ def shingles(p, clip, box, color, rng, rows=10, tile=16):
                 x += tile
 
     pattern(p, clip, draw)
+    p.tex(clip, "stone", 0.4, color)
 
 
 def planks(p, clip, box, color, rng, width=14, vertical=True):
@@ -264,6 +204,7 @@ def planks(p, clip, box, color, rng, width=14, vertical=True):
                 y += width
 
     pattern(p, clip, draw)
+    p.tex(clip, "wood" if vertical else "wood_h", 0.8, color)
 
 
 def line(p, pts, color, width, **kw):
@@ -995,6 +936,58 @@ def class_master():
     return p.finish(outline=2, ground_shadow=(14, 222, 306, 240))
 
 
+def notice_board(p, cx, base):
+    """İlan Panosu: a roofed wooden notice board with pinned notes and a coin-and-scales sign.
+
+    Stands on the ground at `base`, centred on `cx` (the inn hosts the players' market)."""
+    x0, x1 = cx - 23, cx + 23
+    top, bot = base - 48, base - 2
+    for x in (x0 + 5, x1 - 11):  # posts
+        p.shape("rect", (x, top, x + 6, base + 44), WOOD_D, radius=2, depth=0.3, line=1.2, tex="wood")
+    panel = p.shape("rect", (x0, top, x1, bot), WOOD, radius=2, depth=0.1, line=1.5)
+    planks(p, panel, (x0, top, x1, bot), WOOD, random.Random(7), width=9, vertical=False)
+    outline(p, panel, 1.5)
+    p.shape("rect", (x0 - 2, bot - 3, x1 + 2, bot + 3), WOOD_D, radius=2, depth=0.3, line=1.2)
+    # little shingled roof
+    roof = p.shape("poly", [(x0 - 7, top + 2), (x1 + 7, top + 2), (cx, top - 14)], hexc("#a84632"), depth=0.15,
+                   line=1.4)
+    shingles(p, roof, (x0 - 7, top - 14, x1 + 7, top + 2), hexc("#b04c36"), random.Random(8), rows=2, tile=9)
+    outline(p, roof, 1.4)
+    # pinned parchment notes, each a little askew
+    notes = [((x0 + 3, top + 4), 16, 18, -6, "#e0303a"), ((x0 + 22, top + 3), 19, 15, 5, "#3a7ae0"),
+             ((x0 + 4, top + 25), 15, 17, 4, "#3ac07a"), ((x0 + 22, top + 21), 18, 20, -4, "#e0303a")]
+    for (nx, ny), w, h, rot, pin in notes:
+        a = math.radians(rot)
+        ca, sa = math.cos(a), math.sin(a)
+        c = (nx + w / 2, ny + h / 2)
+
+        def rp(x, y):
+            dx, dy = x - c[0], y - c[1]
+            return (c[0] + dx * ca - dy * sa, c[1] + dx * sa + dy * ca)
+        pts = [rp(nx, ny), rp(nx + w, ny), rp(nx + w, ny + h - 2), rp(nx + w - 3, ny + h), rp(nx, ny + h)]
+        p.shape("poly", pts, hexc("#f3e4bf"), depth=0.2, light=1.2, line=1.0, tex="cloth", tex_amt=0.4, rim=0)
+        for i in range(3):
+            yy = ny + 6 + i * 4
+            if yy < ny + h - 3:
+                p.stroke([rp(nx + 3, yy), rp(nx + w - 4 - (i % 2) * 4, yy)], hexc("#8a6a4a"), 1.0)
+        px_, py_ = rp(nx + w / 2, ny + 2)
+        p.shape("ellipse", (px_ - 2.2, py_ - 2.2, px_ + 2.2, py_ + 2.2), hexc(pin), line=0.7, gloss=1.0, rim=0, ao=0.5)
+    # hanging sign above: a gold coin and a balance scale on a wooden plaque
+    sy = top - 30
+    for x in (cx - 9, cx + 9):
+        line(p, [(x, top - 12), (x, sy + 8)], IRON, 1.4)
+    p.shape("rect", (cx - 20, sy - 6, cx + 20, sy + 12), WOOD_L, radius=4, depth=0.2, line=1.3, tex="wood_h")
+    p.shape("ellipse", (cx - 17, sy - 3, cx - 5, sy + 9), hexc("#f0c24a"), line=1.0, spec=0.9, rim=0)
+    p.stroke([(cx - 11, sy + 0.5), (cx - 11, sy + 5.5)], shade(GOLD, 0.7), 1.2)
+    line(p, [(cx + 8, sy - 3), (cx + 8, sy + 9)], hexc("#5a3a22"), 1.6)
+    line(p, [(cx + 1, sy - 1), (cx + 15, sy - 1)], hexc("#5a3a22"), 1.6)
+    for x in (cx + 2, cx + 14):
+        line(p, [(x, sy - 1), (x - 2, sy + 4)], hexc("#5a3a22"), 0.8)
+        line(p, [(x, sy - 1), (x + 2, sy + 4)], hexc("#5a3a22"), 0.8)
+        p.shape("chord", (x - 3.5, sy + 1, x + 3.5, sy + 7), GOLD, start=0, end=180, line=0.8, rim=0, ao=0)
+    line(p, [(cx + 4, sy + 9), (cx + 12, sy + 9)], hexc("#5a3a22"), 1.8)
+
+
 def inn():
     p = TPainter(320, 240)
     rng = random.Random(33)
@@ -1027,7 +1020,7 @@ def inn():
     # glowing windows with flower boxes
     for x0 in (62, 244):
         glowing_window(p, (x0, 142, x0 + 40, 182))
-        p.shape("rect", (x0 - 6, 184, x0 + 46, 196), WOOD, radius=2, depth=0.3, line=1.3)
+        p.shape("rect", (x0 - 6, 184, x0 + 46, 196), WOOD, radius=2, depth=0.3, line=1.3, tex="wood_h")
         for i in range(5):
             fx = x0 - 2 + i * 10
             p.shape("ellipse", (fx, 176, fx + 10, 186), hexc("#e0405a" if i % 2 else "#ffcf3a"), line=0.9)
@@ -1052,14 +1045,13 @@ def inn():
     paint(p, m, WHITE, shadow=0.85, light=0, depth=0.2, line=1.2)
     for x in (20, 30):
         line(p, [(x, 140), (x, 156)], shade(GOLD, 0.75), 2)
-    # barrels and a bench
-    for x0 in (206, 226):
-        p.shape("rect", (x0, 200, x0 + 22, 232), WOOD, radius=6, depth=0.15, line=1.3)
+    # barrels by the left window
+    for x0 in (70, 92):
+        p.shape("rect", (x0, 200, x0 + 22, 232), WOOD, radius=6, depth=0.15, line=1.3, tex="wood")
         line(p, [(x0 + 1, 208), (x0 + 21, 208)], IRON, 2.5)
         line(p, [(x0 + 1, 224), (x0 + 21, 224)], IRON, 2.5)
-    p.shape("rect", (70, 212, 130, 220), WOOD_L, radius=2, depth=0.3, line=1.2)
-    for x in (76, 120):
-        p.shape("rect", (x, 218, x + 6, 232), WOOD, radius=1, line=1.1)
+    p.shape("ellipse", (94, 194, 112, 202), shade(WOOD, 1.1), depth=0.3, line=1.1, tex="wood_h")
+    notice_board(p, 220, 190)
     lantern(p, 134, 144, 0.6)
     for x, s in ((40, 0.8), (304, 0.7), (212, 0.6)):
         tuft(p, x, 238, s)
@@ -1276,6 +1268,100 @@ def npc_keeper():
     return p.finish(outline=2)
 
 
+def npc_innkeeper():
+    """Hancı Bulut: the round, cheerful innkeeper who runs the adventurers' notice board."""
+    p = TPainter(256, 256)
+    skin = hexc("#f2b48c")
+    hair = hexc("#6a3a22")
+    shirt = hexc("#efe4d0")
+    stripe = hexc("#b8483a")
+    apron = hexc("#f4efe4")
+    # ---- striped shirt on a big round body
+    body = p.shape("ellipse", (8, 172, 248, 392), shirt, depth=0.08, line=2, tex="cloth", tex_amt=0.5)
+
+    def stripes(d, S):
+        for x in range(0, 260, 18):
+            d.rectangle((x * S, 160 * S, (x + 7) * S, 260 * S), fill=stripe)
+    pattern(p, body, stripes)
+    outline(p, body, 2)
+    p.shape("rect", (104, 150, 152, 196), skin, radius=12, depth=0.2)
+    p.stroke(_catmull([(108, 186), (128, 194), (148, 186)]), shade(skin, 0.7), 2)  # double chin
+    # apron with straps and a pocket
+    ap = p.shape("poly", [(66, 206), (190, 206), (206, 256), (50, 256)], apron, depth=0.1, line=1.8, tex="cloth",
+                 tex_amt=0.5)
+    line(p, [(72, 208), (98, 182)], apron, 7, line=1.3)
+    line(p, [(184, 208), (158, 182)], apron, 7, line=1.3)
+    p.shape("rect", (104, 222, 152, 250), shade(apron, 0.94), radius=4, depth=0.2, line=1.3)
+    for x, y in ((84, 236), (170, 230)):
+        p.flat("ellipse", (x - 6, y - 4, x + 6, y + 4), hexc("#c8a078", 110))  # ale stains
+    # towel over his shoulder
+    towel = [(160, 176), (198, 170), (222, 190), (224, 256), (200, 256), (196, 200), (170, 190)]
+    p.shape("poly", towel, hexc("#f6f3ee"), depth=0.15, line=1.6, tex="cloth", tex_amt=0.6)
+    for y in (226, 236):
+        line(p, [(200, y), (223, y)], hexc("#3a7ac8"), 3)
+    # ---- ears, head, hair
+    for x0 in (62, 170):
+        p.shape("ellipse", (x0, 96, x0 + 24, 130), skin, depth=0.2)
+        p.shape("ellipse", (x0 + 6, 104, x0 + 18, 122), shade(skin, 0.8), **NOLINE)
+    p.shape("ellipse", (70, 40, 186, 176), skin, depth=0.1)
+    p.flat("ellipse", (100, 50, 134, 70), hexc("#ffffff", 140))  # shiny bald top
+    for side in (-1, 1):  # curly tufts over the ears
+        cx = 128 + side * 56
+        tufts = union(p, [("ellipse", (cx - 16, 70, cx + 6, 92)), ("ellipse", (cx - 12, 84, cx + 10, 106)),
+                          ("ellipse", (cx - 6, 64, cx + 14, 86))])
+        paint(p, tufts, hair, depth=0.25, line=1.4)
+    # ---- happy face: crescent eyes, raised brows, big rosy cheeks
+    for x in (106, 150):
+        line(p, _catmull([(x - 10, 110), (x, 101), (x + 10, 110)]), DARK, 3.4)
+        line(p, [(x + 9, 106), (x + 13, 103)], DARK, 1.6)
+        line(p, _catmull([(x - 11, 88), (x, 82), (x + 11, 88)]), hair, 4)
+    for x in (92, 164):
+        p.glow((x, 130), 18, hexc("#ff6a6a"), 0.55)
+        p.flat("ellipse", (x - 12, 122, x + 12, 138), hexc("#ff6a6a", 120))
+    # open grin with a tongue
+    p.shape("chord", (104, 128, 152, 170), hexc("#6a1a28"), start=0, end=180, depth=0.25, line=1.4)
+    p.shape("ellipse", (116, 150, 140, 168), hexc("#e0606a"), **NOLINE)
+    p.shape("rect", (110, 148, 146, 154), WHITE, radius=2, **NOLINE)
+    # big round nose
+    p.shape("ellipse", (114, 106, 142, 132), shade(skin, 0.96), depth=0.25, line=1.4)
+    p.flat("ellipse", (120, 111, 127, 118), hexc("#ffffff", 150))
+    # curly moustache
+    for side in (-1, 1):
+        pts = [(128, 136), (128 + side * 14, 132), (128 + side * 26, 136), (128 + side * 34, 128),
+               (128 + side * 32, 120), (128 + side * 26, 124)]
+        m = union(p, [("line", _catmull(pts, 5), {"width": 8})])
+        paint(p, m, hair, depth=0.25, line=1.3)
+    # ---- left hand raising a frothy mug
+    p.shape("line", [(60, 256), (48, 196)], shirt, width=30, depth=0.15, line=1.8, tex="cloth", tex_amt=0.5)
+    mug = p.shape("rect", (22, 120, 74, 186), WOOD_L, radius=6, depth=0.14, line=1.8)
+    planks(p, mug, (22, 120, 74, 186), WOOD_L, random.Random(3), width=10)
+    outline(p, mug, 1.8)
+    for y in (130, 174):
+        p.shape("rect", (20, y - 4, 76, y + 4), IRON, radius=2, depth=0.3, spec=0.6, line=1.2)
+    handle = ImageChops.subtract(p._mask("ellipse", (62, 134, 94, 172)), p._mask("ellipse", (70, 142, 86, 164)))
+    paint(p, handle, WOOD_L, depth=0.3, line=1.4)
+    foam = union(p, [("ellipse", (16, 104, 40, 128)), ("ellipse", (32, 96, 58, 124)), ("ellipse", (50, 102, 78, 128)),
+                     ("ellipse", (22, 114, 70, 132)), ("rect", (62, 118, 70, 146), {"radius": 4})])
+    paint(p, foam, hexc("#fffaf0"), shadow=0.86, light=0, depth=0.2, line=1.4)
+    for x, y in ((32, 106), (52, 100), (60, 118)):
+        p.flat("ellipse", (x - 3, y - 3, x + 3, y + 3), hexc("#ffffff"))
+    p.shape("ellipse", (54, 150, 90, 186), skin, depth=0.2)
+    for y in (158, 166, 174):
+        line(p, [(58, y), (72, y - 1)], shade(skin, 0.6), 1.6)
+    # ---- right hand holding up a pinned "ilan" note
+    p.shape("line", [(196, 256), (206, 214)], shirt, width=26, depth=0.15, line=1.8)
+    note = [(182, 142), (236, 150), (230, 214), (178, 206)]
+    p.shape("poly", note, hexc("#f3e4bf"), depth=0.12, line=1.5, tex="cloth", tex_amt=0.5)
+    p.shape("poly", [(226, 206), (230, 214), (220, 212)], hexc("#d8c49a"), line=1.0, rim=0)
+    for i, y in enumerate((162, 172, 182, 192)):
+        w = 38 if i % 2 == 0 else 28
+        line(p, [(188, y + i * 0.6), (188 + w, y + 5 + i * 0.6)], hexc("#8a6a4a"), 1.6)
+    p.shape("ellipse", (202, 142, 214, 154), hexc("#e0303a"), light=1.5, line=1.1, spec=1.0)
+    p.shape("ellipse", (190, 196, 222, 226), skin, depth=0.2)
+    line(p, [(196, 204), (214, 202)], shade(skin, 0.6), 1.6)
+    return p.finish(outline=2)
+
+
 TOWN = {
     "background": background,
     "gate": gate,
@@ -1286,4 +1372,5 @@ TOWN = {
     "npc_smith": npc_smith,
     "npc_merchant": npc_merchant,
     "npc_keeper": npc_keeper,
+    "npc_innkeeper": npc_innkeeper,
 }
