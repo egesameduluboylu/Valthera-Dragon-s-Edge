@@ -212,13 +212,14 @@
   "merchant.bought": "{item} çantaya kondu.",
   "merchant.too_many": "Daha fazla taşıyamazsın",
   "resume.title": "Yarım Kalan Koşu",
-  "resume.text": "{dungeon} içinde {room}. odadaydın. Devam etmek ister misin?",
+  "resume.text": "{dungeon} koşun yarım kaldı ({room}. oda). Kaldığın yerden devam etmek ister misin?",
   "resume.continue": "Devam Et",
-  "resume.abandon": "Kasabaya Dön",
+  "resume.abandon": "Koşuyu Bitir (ganimet kalır)",
   "run.loot": "Ganimet",
   "run.no_loot": "Bu sefer eşya çıkmadı.",
   "run.to_town": "Kasabaya Dön",
   "run.bag_full": "Çanta doluydu, {n} eşya parçalandı (+{gold} altın).",
   "loot.found": "Eşya bulundu!",
-  "loot.scales": "+{n} Ejder Pulu"
+  "loot.scales": "+{n} Ejder Pulu",
+  "ui.cancel": "Vazgeç"
 }

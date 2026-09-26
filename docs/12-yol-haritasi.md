@@ -28,12 +28,13 @@ Hedef: Savaşçı, 2 fareye karşı, düz renkli kutularla bile eğlenceli mi?
 - [x] Koşu içi kaçış ve ölüm kuralları
 
 ## M3: Kasaba ve Ekipman
-- [ ] Kasaba ekranı ve binalar
-- [ ] `LootGen`: nadirlik, ek özellikler
-- [ ] Çanta, ekipman giyme, karşılaştırma kartı
-- [ ] Demirci: güçlendirme ve parçalama
-- [ ] Tüccar: iksir
-- [ ] `SaveManager`: kayıt ve koşu kurtarma
+- [x] Kasaba ekranı ve binalar (Zindan Kapısı, Demirci, Tüccar; Sınıf Ustası ve Han "Yakında")
+- [x] Eşya üretimi (`Items`): 10 temel eşya, nadirlik, ek özellikler, Kemik Kral'ın Tacı
+- [x] Zindandan ganimet: savaş, elit, patron, hazine ve Konuşan Kurukafa
+- [x] Çanta, ekipman giyme, karşılaştırma kartı
+- [x] Demirci: güçlendirme (+6'dan sonra Ejder Pulu) ve parçalama
+- [x] Tüccar: iksir ve her koşudan sonra yenilenen 3 eşya
+- [x] `SaveManager` + `Profile`: otomatik kayıt ve yarım kalan koşuyu kurtarma
 
 ## M4: Görsel ve His (Demo Tamam)
 - [x] Savaş ekranı görselleri: karakterler, düşmanlar, arka plan, ikonlar, arayüz teması

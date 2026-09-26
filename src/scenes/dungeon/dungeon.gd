@@ -1,8 +1,10 @@
 extends Control
 ## Dungeon map: pick one of two doors per room, resolve the room, repeat until the boss
 ## (docs/02, docs/06, docs/08). All rules live in DungeonRun; this script draws them.
+## The run comes from GameState: a fresh one, or one resumed from the save file.
 
 const BATTLE_SCENE := preload("res://src/scenes/battle/battle.tscn")
+const TOWN_SCENE := "res://src/scenes/town/town.tscn"
 const DUNGEON_ID := "rotten_cellar"
 const ROOM_ICON := "res://assets/icons/rooms/%s.png"
 const ITEM_ICON := "res://assets/icons/items/%s.png"
@@ -38,9 +40,10 @@ func _ready() -> void:
 
 
 func _new_run() -> void:
-	run = DungeonRun.new(DataDB.data, DUNGEON_ID, GameState.active_class, GameState.level(), GameState.class_xp())
+	run = GameState.run if GameState.run != null else GameState.start_run(DUNGEON_ID)
 	run.leveled_up.connect(_on_level_up)
-	run.start()
+	if run.room_number == 0:
+		run.start()
 	_close_modal()
 	_refresh()
 	_show_doors()
@@ -95,6 +98,7 @@ func _on_battle_finished(engine: CombatEngine) -> void:
 		_next_room()
 		if result.get("healed", 0) > 0:
 			_toast(DataDB.t("map.breather") % result["healed"], Color("7dff8a"))
+		_loot_toasts(result.get("items", []), result.get("scales", 0))
 	await _fade_to(0.0)
 	_busy = false
 
@@ -112,6 +116,13 @@ func _on_level_up(level: int) -> void:
 
 func _on_escape_pressed() -> void:
 	if _busy or not run.can_escape():
+		return
+	if run.history.is_empty():
+		# Nothing happened yet: just walk back to town.
+		_busy = true
+		GameState.cancel_run()
+		await _fade_to(1.0)
+		get_tree().change_scene_to_file(TOWN_SCENE)
 		return
 	var body := _modal(DataDB.t("map.escape"), "", DataDB.t("map.escape_confirm"))
 	var row := HBoxContainer.new()
@@ -148,7 +159,8 @@ func _show_treasure() -> void:
 			text += "\n" + DataDB.t("treasure.potion")
 		_set_modal_text(text, UITheme.GOLD)
 		_refresh()
-		_continue_button()))
+		_continue_button()
+		_modal_items(r.get("items", []))))
 
 
 func _show_event() -> void:
@@ -174,6 +186,8 @@ func _on_event_choice(index: int) -> void:
 	_set_modal_text(DataDB.t(r["text_key"]), color)
 	_refresh()
 	_continue_button()
+	if changes.has("item"):
+		_modal_items([changes["item"]])
 
 
 func _show_rest() -> void:
@@ -195,7 +209,7 @@ func _show_rest() -> void:
 
 
 func _show_summary() -> void:
-	GameState.apply_run(run)
+	var banked := GameState.apply_run(run)
 	var colors := {"cleared": UITheme.GOLD, "escaped": Color("8fc4ff"), "died": UITheme.HP}
 	var art := "chest" if run.outcome == "cleared" else ("campfire" if run.outcome == "escaped" else "skull")
 	var body := _modal(DataDB.t("run." + run.outcome), EVENT_ART % art, DataDB.t("run.%s_hint" % run.outcome))
@@ -214,6 +228,8 @@ func _show_summary() -> void:
 	]
 	if run.gold_lost > 0:
 		rows.insert(3, ["run.gold_lost", "-%d" % run.gold_lost])
+	if run.scales_earned > 0:
+		rows.append(["ui.scales", "+%d" % run.scales_earned])
 	for row in rows:
 		var k := _label(DataDB.t(row[0]), 26, UITheme.TEXT_MUTED)
 		k.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -221,10 +237,34 @@ func _show_summary() -> void:
 		var v := _label(row[1], 28, UITheme.TEXT)
 		v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		grid.add_child(v)
-	body.add_child(_button(DataDB.t("run.again"), ROOM_ICON % "combat", func() -> void:
+	body.add_child(UIKit.label(UITheme.caps(DataDB.t("run.loot")), 24, UITheme.GOLD))
+	if run.loot.is_empty():
+		body.add_child(_label(DataDB.t("run.no_loot"), 22, UITheme.TEXT_MUTED))
+	else:
+		var tiles := HFlowContainer.new()
+		tiles.add_theme_constant_override("h_separation", 10)
+		tiles.add_theme_constant_override("v_separation", 10)
+		body.add_child(tiles)
+		for item in run.loot.slice(0, 10):
+			tiles.add_child(ItemUI.tile(item, 88))
+	var salvaged: Dictionary = banked.get("salvaged", {})
+	if salvaged.get("count", 0) > 0:
+		var note := UIKit.wrapped(DataDB.tf("run.bag_full", {"n": salvaged["count"], "gold": salvaged["gold"]}), 21, UITheme.TEXT_MUTED)
+		body.add_child(note)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	body.add_child(row)
+	var town := UIKit.primary(_button(DataDB.t("run.to_town"), "", func() -> void:
+		await _fade_to(1.0)
+		get_tree().change_scene_to_file(TOWN_SCENE)))
+	town.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(town)
+	var again := _button(DataDB.t("run.again"), ROOM_ICON % "combat", func() -> void:
 		await _fade_to(1.0)
 		_new_run()
-		await _fade_to(0.0)))
+		await _fade_to(0.0))
+	again.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(again)
 
 
 # ---------------------------------------------------------------- map drawing
@@ -240,7 +280,8 @@ func _refresh() -> void:
 	_level_label.text = "%s  ·  %s" % [DataDB.t("class." + run.class_id), DataDB.t("ui.level") % run.level]
 	_potion_label.text = "x%d" % run.potions
 	_gold_label.text = str(run.gold_earned)
-	_escape_button.disabled = not run.can_escape() or run.room_number <= 1 and run.history.is_empty()
+	_escape_button.disabled = not run.can_escape()
+	_escape_button.text = DataDB.t("run.to_town") if run.history.is_empty() else DataDB.t("map.escape")
 	_draw_trail()
 
 
@@ -287,6 +328,7 @@ func _draw_trail() -> void:
 
 
 func _show_doors() -> void:
+	GameState.save_run()
 	for c in _doors.get_children():
 		c.queue_free()
 	var boss := run.is_boss_room()
@@ -477,6 +519,60 @@ func _toast(text: String, color: Color, font_size: int = 32) -> void:
 	tw.tween_callback(l.queue_free)
 
 
+## Slides found items in under the header, one row per item.
+func _loot_toasts(items: Array, scales: int) -> void:
+	if scales > 0:
+		_toast(DataDB.tf("loot.scales", {"n": scales}), Color("7fd4ff"))
+	for i in items.size():
+		var card := PanelContainer.new()
+		var st := UITheme.badge(Color(0.08, 0.05, 0.07, 0.9))
+		st.border_color = ItemUI.color(items[i])
+		st.set_border_width_all(3)
+		st.set_content_margin_all(8)
+		st.content_margin_right = 20
+		card.add_theme_stylebox_override("panel", st)
+		card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(row)
+		row.add_child(ItemUI.tile(items[i], 72))
+		var v := VBoxContainer.new()
+		v.alignment = BoxContainer.ALIGNMENT_CENTER
+		v.add_theme_constant_override("separation", 0)
+		v.add_child(UITheme.stage_label(_label(DataDB.t("loot.found"), 20, UITheme.TEXT_MUTED), 20, UITheme.TEXT_MUTED))
+		v.add_child(UITheme.stage_label(_label(ItemUI.item_name(items[i]), 30, ItemUI.color(items[i])), 30, ItemUI.color(items[i])))
+		row.add_child(v)
+		_toast_box.add_child(card)
+		card.modulate.a = 0.0
+		var tw := create_tween()
+		tw.tween_interval(0.35 * i + 0.2)
+		tw.tween_property(card, "modulate:a", 1.0, 0.25)
+		tw.tween_interval(2.6)
+		tw.tween_property(card, "modulate:a", 0.0, 0.5)
+		tw.tween_callback(card.queue_free)
+
+
+## Shows items found in a room inside the open modal, above its buttons.
+func _modal_items(items: Array) -> void:
+	if items.is_empty():
+		return
+	var body: VBoxContainer = _modal_layer.get_meta("body")
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	body.add_child(box)
+	body.move_child(box, 0)
+	for item in items:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 14)
+		row.add_child(ItemUI.tile(item, 84))
+		var d := ItemUI.details(item)
+		d.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(d)
+		box.add_child(row)
+
+
 func _fade_to(alpha: float) -> void:
 	_fade.visible = true
 	var tw := create_tween()
@@ -601,6 +697,7 @@ func _build_ui() -> void:
 	bottom.add_child(_escape_button)
 
 	_toast_box = VBoxContainer.new()
+	_toast_box.add_theme_constant_override("separation", 8)
 	_toast_box.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	_toast_box.position.y = 380
 	_toast_box.mouse_filter = Control.MOUSE_FILTER_IGNORE

@@ -48,9 +48,11 @@ Savaş -> Yenilgi Ekranı -> Kasaba
 
 ## Diğer Ekranlar
 
-- **Kasaba:** Tek ekran, binalar dokunulabilir. Altta sabit çubuk: Çanta, Karakter, Ayarlar.
+- **Kasaba:** Tek ekran, binalar dokunulabilir (dokununca hafifçe esner). Üstte kasaba adı, altın, Ejder Pulu, iksir, sınıf/seviye ve XP çubuğu. Altta sabit çubuk: Çanta ve "Zindana Gir". Açılmamış binalar (Sınıf Ustası, Han) soluk ve "Yakında" yazılı. Zindan Kapısı'nda Bekçi Tozlu zindan kartını gösterir (seviye aralığı, koşu sayısı, temizlendi yıldızı, yanına alınacak iksir). Yarım kalan koşu varsa açılışta "Devam Et / Kasabaya Dön" sorulur.
+- **Demirci / Tüccar:** Üstte NPC portresi ve konuşma balonu. Demircide seçilen eşyanın bir sonraki kademesi mevcut hâline göre yeşil oklarla gösterilir, altında altın/pul maliyeti ve "Güçlendir". Tüccarda iksir satırı ve 3 eşya kartı; her kart kuşanılı eşyaya göre karşılaştırmalı, fiyat butonu sağda.
 - **Zindan Haritası:** Üstte zindan adı ve 5 odalık iz (geçilen odaların ikonları, sonda patron tacı). Altında oyuncu kartı: can, XP, iksir ve altın. Ortada iki kapı kartı: kapı çizimi, oda ikonu, oda adı, kısa ipucu ve savaş odalarında seviye/düşman sayısı. Son odada tek, kırmızı parlayan patron kapısı. Altta "Kaç" butonu (onay ister). Hazine, olay ve dinlenme odaları çizimli bir panelde açılır; koşu sonunda özet paneli çıkar.
-- **Çanta / Karakter:** Solda karakter ve 4 ekipman slotu, altta ızgara envanter. Eşyaya dokununca karşılaştırma kartı (yeşil/kırmızı farklar).
+- **Çanta / Karakter:** Üstte karakter ve ekipmanla birlikte istatistikleri, altında 4 ekipman slotu (boş slotta soluk siluet), ortada seçilen eşyanın kartı, altta 5 sütunlu çanta ızgarası (yeni ganimet en üstte). Eşyaya dokununca karşılaştırma kartı (yeşil ▲ / kırmızı ▼ farklar), "Kuşan" ve "Parçala" (onay ister). Eşya çerçevesi nadirlik renginde; epik ve efsanevi hafifçe parlar, güçlendirme "+N" rozetiyle gösterilir.
+- **Ganimet:** Savaştan sonra bulunan eşya, nadirlik renginde çerçeveli bir kartla haritanın üstünde belirir. Hazine ve Kurukafa eşyayı kendi panelinde gösterir. Koşu özetinde bulunan eşyalar sıralanır; çanta doluysa kaç eşyanın parçalandığı yazılır.
 - **Ödül Ekranı:** Kazanılan XP çubuğu dolar, eşyalar tek tek kart olarak açılır (nadirlik rengiyle).
 
 ## Geri Bildirim (Oyun Hissi)

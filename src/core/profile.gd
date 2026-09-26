@@ -170,6 +170,15 @@ func upgrade(uid: String) -> bool:
 	return true
 
 
+## The active class at its level wearing its gear, for the character sheet.
+func player() -> Combatant:
+	var class_def: Dictionary = data["classes"][active_class]
+	var c := Combatant.make_player(active_class, class_def, level(), [])
+	Items.apply_equipment(c, equipped_items(), defs())
+	c.hp = c.max_hp()
+	return c
+
+
 ## Summed stats of the worn gear, optionally with `swap` worn instead of its slot's item.
 func gear_stats(swap: Dictionary = {}) -> Dictionary:
 	var worn := equipped_items()

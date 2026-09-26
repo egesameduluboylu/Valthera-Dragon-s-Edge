@@ -18,6 +18,7 @@ import characters  # noqa: E402
 import gear  # noqa: E402
 import icons  # noqa: E402
 import scenes  # noqa: E402
+import town  # noqa: E402
 
 
 def save(img, rel):
@@ -53,7 +54,10 @@ def main(groups):
         save(scenes.door(boss=True), "ui/door_boss.png")
         for k in scenes.EVENT_ART:
             save(scenes.event_art(k), f"events/{k}.png")
+    if "town" in groups:
+        for name, fn in town.TOWN.items():
+            save(fn(), f"town/{name}.png")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:] or ["sprites", "backgrounds", "icons", "scenes"])
+    main(sys.argv[1:] or ["sprites", "backgrounds", "icons", "scenes", "town"])

@@ -34,6 +34,7 @@ valthera-dragons-edge/
 │   ├── dungeons.json
 │   ├── items.json           # taban eşyalar ve ek özellik havuzu
 │   ├── events.json          # olay odaları
+│   ├── items.json           # eşya tabanları, nadirlik, ek özellikler, demirci sayıları
 │   └── text/tr.json
 ├── assets/
 │   ├── sprites/  ui/  icons/  vfx/  fonts/  audio/
@@ -41,7 +42,7 @@ valthera-dragons-edge/
 ├── src/
 │   ├── autoload/            # Tekil servisler
 │   │   ├── data_db.gd       # JSON'ları yükler, id ile erişim
-│   │   ├── game_state.gd    # Oyuncu profili, aktif sınıf, çanta, altın
+│   │   ├── game_state.gd    # Profile'ı tutar, her değişiklikten sonra kaydeder
 │   │   ├── save_manager.gd  # Kaydet/yükle
 │   │   ├── event_bus.gd     # Global sinyaller
 │   │   └── audio_manager.gd
@@ -54,11 +55,13 @@ valthera-dragons-edge/
 │   │   ├── combat_engine.gd # Tur yönetimi, durum makinesi
 │   │   ├── enemy_ai.gd      # Niyet seçimi, desenler
 │   │   ├── progression.gd   # XP eğrisi, seviye atlama
-│   │   ├── dungeon_run.gd   # Bir zindan koşusu: kapılar, odalar, ödüller
-│   │   └── loot_gen.gd
+│   │   ├── dungeon_run.gd   # Bir zindan koşusu: kapılar, odalar, ganimet, kayıt/devam
+│   │   ├── items.gd         # Eşya istatistikleri, ganimet zarı, demirci ve tüccar fiyatları
+│   │   └── profile.gd       # Kaydedilen her şey: çanta, ekipman, para, tüccar, koşu durumu
 │   ├── scenes/
-│   │   ├── main_menu/  town/  dungeon/  battle/  inventory/  reward/
-│   └── ui/                  # Tekrar kullanılan bileşenler (buton, can çubuğu, eşya kartı)
+│   │   ├── town/            # kasaba + çanta, demirci, tüccar panelleri
+│   │   ├── dungeon/  battle/
+│   └── ui/                  # ui_theme, ui_kit (panel/buton), item_ui (eşya kartı)
 └── tests/
     ├── run_tests.gd         # godot --headless -s res://tests/run_tests.gd
     ├── test_case.gd         # assert yardımcıları
@@ -66,6 +69,8 @@ valthera-dragons-edge/
     ├── test_combat_engine.gd
     ├── test_boss_and_items.gd
     ├── test_dungeon_run.gd
+    ├── test_items.gd        # eşya formülleri, ganimet zarı, ek özellik etkileri
+    ├── test_profile.gd      # çanta, demirci, tüccar, kayıt ve koşu kurtarma
     ├── test_data_integrity.gd  # metin anahtarı, görsel yolu, id kontrolü
     └── test_enemy_ai.gd
 ```
@@ -75,8 +80,8 @@ valthera-dragons-edge/
 | Ad | Sorumluluk |
 |----|-----------|
 | `DataDB` | Açılışta `data/*.json` dosyalarını okur; `DataDB.skill("warrior_heavy_strike")` gibi erişim |
-| `GameState` | Oturum boyunca oyuncu verisi. Değiştiğinde `EventBus` üzerinden sinyal |
-| `SaveManager` | `user://save.json` dosyasına yazar/okur, sürüm alanı ile göç (migration) |
+| `GameState` | Oturumun `Profile` nesnesini ve süren koşuyu tutar; her değişiklikte kaydeder ve `EventBus` üzerinden sinyal verir |
+| `SaveManager` | `user://save.json` dosyasına önce geçici dosyaya yazıp yeniden adlandırarak kaydeder; bozuk kayıtta yeni oyun başlar |
 | `EventBus` | `gold_changed`, `item_added`, `level_up` vb. global sinyaller |
 | `AudioManager` | Müzik geçişleri, efekt havuzu |
 
@@ -174,22 +179,28 @@ var engine := run.make_battle()
 ## Kayıt Sistemi
 
 - Dosya: `user://save.json`, her önemli olaydan sonra otomatik kayıt (savaş bitişi, eşya alımı, kasabaya dönüş).
-- Koşu ortasında uygulama kapanırsa: koşu durumu (`run_state`) ayrıca kaydedilir, açılışta "Koşuya devam et?" sorulur.
+- Koşu ortasında uygulama kapanırsa: koşu durumu (`run_state`) kapı seçim ekranında her seferinde kaydedilir (oda içinde kaydedilmez, böylece devam eden koşu hep iki kapının önünden sürer). Kasabaya açılışta "Yarım Kalan Koşu" sorulur; "Kasabaya Dön" koşuyu kaçış gibi kapatır (ganimet ve altın kalır).
+- Rastgele sayı üretecinin durumu da kaydedilir, yani yüklenen koşu aynı kapıları ve ganimeti üretir.
+- Kayıt okunurken artık var olmayan eşya tabanları atılır, sayılar tam sayıya çevrilir.
 - Şema:
 
 ```json
 {
   "version": 1,
   "active_class": "warrior",
-  "classes": {"warrior": {"level": 3, "xp": 120, "equipped_skills": ["..."]}},
-  "gold": 250, "dragon_scales": 2, "crystals": 0,
-  "equipment": {"weapon": "item_uid_1", "armor": null, "helm": null, "accessory": null},
-  "inventory": [{"uid": "item_uid_1", "base": "rusty_sword", "rarity": "rare", "level": 2, "upgrade": 1, "affixes": []}],
-  "dungeons": {"rotten_cellar": {"cleared": true, "stars": 2}},
-  "settings": {"music": 0.8, "sfx": 1.0, "vibration": true, "battle_speed": 1.5},
-  "run_state": null
+  "classes": {"warrior": {"level": 3, "xp": 120}},
+  "gold": 250, "dragon_scales": 2, "potions": 3,
+  "equipment": {"weapon": "i1", "armor": "", "helm": "", "accessory": ""},
+  "inventory": [{"uid": "i1", "base": "rusty_sword", "rarity": "rare", "level": 2, "upgrade": 1,
+                 "affixes": [{"id": "crit", "value": 0.02}]}],
+  "shop": [{"base": "iron_helm", "rarity": "common", "level": 1, "upgrade": 0, "affixes": []}],
+  "dungeons": {"rotten_cellar": {"runs": 4, "cleared": true}},
+  "run_state": {},
+  "next_uid": 2
 }
 ```
+
+Ayarlar, kristaller ve yıldızlar ilgili kilometre taşında şemaya eklenir.
 
 ## Performans Hedefleri
 

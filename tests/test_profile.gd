@@ -104,7 +104,7 @@ func test_runs_use_the_worn_gear_and_potion_stock() -> void:
 	var run := p.start_run("rotten_cellar", seeded_rng(1))
 	var bare := DungeonRun.new(game_data(), "rotten_cellar", "warrior", 1, 0, seeded_rng(1))
 	assert_eq(run.potions, 5)
-	assert_eq(run.player.stats.atk, bare.player.stats.atk + 1)
+	assert_between(run.player.stats.atk, bare.player.stats.atk + 1.11, bare.player.stats.atk + 1.13)
 
 
 func test_banking_a_run_keeps_loot_gold_and_progress() -> void:

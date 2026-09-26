@@ -14,8 +14,8 @@ func test_main_stat_formula_matches_docs() -> void:
 	var defs := _defs()
 	# 12 hp * (1 + 0.12 * 5) * 1.3 = 24.96 -> 25
 	assert_eq(Items.main_stats(_item("leather_armor", "epic", 5), defs)["hp"], 25.0)
-	# 4 atk * (1 + 0.12 * 2) * 1.0 * (1 + 0.08 * 5) = 6.94 -> 7
-	assert_eq(Items.main_stats(_item("iron_sword", "common", 2, 5), defs)["atk"], 7.0)
+	# 4 atk * (1 + 0.12 * 2) * 1.0 * (1 + 0.08 * 5) = 6.944; attack keeps its decimals
+	assert_between(Items.main_stats(_item("iron_sword", "common", 2, 5), defs)["atk"], 6.94, 6.95)
 	# Fractional stats are not rounded to ints.
 	assert_between(Items.main_stats(_item("iron_helm", "rare", 1), defs)["crit"], 0.0255, 0.0265)
 
@@ -85,9 +85,10 @@ func test_equipment_raises_player_stats() -> void:
 	var geared := Combatant.make_player("warrior", class_def, 1, [])
 	Items.apply_equipment(geared, [_item("rusty_sword"), _item("leather_armor"),
 			_item("copper_ring", "rare", 1, 0, [{"id": "combo_damage", "value": 0.1}])], data["items"])
-	assert_eq(geared.stats.atk, bare.stats.atk + 1 + 1)
+	# sword 1 * 1.12 + ring 1 * 1.12 * 1.15; hp 12 * 1.12 -> 13 and 5 * 1.12 * 1.15 -> 6
+	assert_between(geared.stats.atk, bare.stats.atk + 2.40, bare.stats.atk + 2.42)
 	assert_eq(geared.max_hp(), bare.max_hp() + 13 + 6)
-	assert_eq(geared.stats.def, bare.stats.def + 2)
+	assert_between(geared.stats.def, bare.stats.def + 2.23, bare.stats.def + 2.25)
 	assert_eq(geared.perks, {"combo_damage": 0.1})
 
 

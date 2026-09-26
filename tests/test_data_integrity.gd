@@ -51,3 +51,29 @@ func _walk(value: Variant, where: String, text: Dictionary) -> void:
 	elif value is Array:
 		for v in value:
 			_walk(v, where, text)
+
+
+func test_item_data_is_consistent() -> void:
+	var items: Dictionary = game_data()["items"]
+	for id in items["bases"]:
+		assert_true(items["bases"][id]["slot"] in Items.SLOTS, id)
+	for id in items["rarity_order"]:
+		assert_true(items["rarities"].has(id), id)
+	for spec in items["starter"]:
+		assert_true(items["bases"].has(spec["base"]), spec["base"])
+	for id in items["affixes"]:
+		var perk: bool = not id in items["stats"]
+		var key: String = ("perk." if perk else "stat.") + id
+		assert_eq(items["affixes"][id]["name_key"], key)
+	var loot: Dictionary = game_data()["dungeons"]["rotten_cellar"]["loot"]
+	for kind in loot:
+		var unique: Dictionary = loot[kind].get("unique", {})
+		if not unique.is_empty():
+			assert_true(items["bases"].has(unique["base"]), unique["base"])
+
+
+func test_town_art_exists() -> void:
+	for id in ["background", "gate", "smith", "merchant", "class_master", "inn", "npc_smith", "npc_merchant", "npc_keeper"]:
+		assert_true(ResourceLoader.exists("res://assets/town/%s.png" % id), id)
+	for id in ["bag", "scale"]:
+		assert_true(ResourceLoader.exists("res://assets/icons/items/%s.png" % id), id)

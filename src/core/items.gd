@@ -7,10 +7,12 @@ extends RefCounted
 ## `defs` is items.json.
 
 const SLOTS := ["weapon", "armor", "helm", "accessory"]
-const INT_STATS := ["hp", "atk", "def", "start_shield"]
+const INT_STATS := ["hp", "start_shield"]
 
 
 ## Main stats of an item: base * (1 + 0.12 * level) * rarity multiplier * (1 + 0.08 * upgrade).
+## HP and shields are whole numbers; attack and defence keep decimals so every smith
+## upgrade shows.
 static func main_stats(item: Dictionary, defs: Dictionary) -> Dictionary:
 	var base: Dictionary = defs["bases"][item["base"]]
 	var rarity: Dictionary = defs["rarities"][item["rarity"]]

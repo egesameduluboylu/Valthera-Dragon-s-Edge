@@ -95,6 +95,13 @@ func discard_run() -> void:
 		save()
 
 
+## Drops a run that never entered a room (back to town from the first doors).
+func cancel_run() -> void:
+	run = null
+	profile.run_state = {}
+	save()
+
+
 ## Saves the run between rooms so it survives the app closing.
 func save_run() -> void:
 	if run == null:
