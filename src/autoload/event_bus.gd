@@ -4,3 +4,5 @@ extends Node
 signal gold_changed(total: int)
 signal xp_gained(class_id: String, amount: int)
 signal level_up(class_id: String, new_level: int)
+## Gear, bag, potions or the merchant changed.
+signal profile_changed

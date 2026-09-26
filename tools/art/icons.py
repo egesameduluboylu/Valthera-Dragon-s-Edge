@@ -236,13 +236,29 @@ def item_icon(kind):
         _flame(p, 24, 24, 0.85)
         p.shape("line", [(14, 22), (22, 26)], DARK, width=3, shadow=0, light=0, line=0)
         p.shape("line", [(34, 22), (26, 26)], DARK, width=3, shadow=0, light=0, line=0)
+    elif kind == "scale":
+        # a dragon scale: rounded shield shape with ridges
+        pts = [(24, 4), (40, 14), (40, 28), (24, 44), (8, 28), (8, 14)]
+        p.shape("poly", pts, hexc("#4fb8e8"), depth=0.22, light=1.45, line=1.4)
+        p.shape("line", [(24, 10), (24, 36)], hexc("#2a7aa8"), width=2.5, shadow=0, light=0, line=0)
+        p.shape("line", [(14, 18), (24, 26), (34, 18)], hexc("#2a7aa8"), width=2, shadow=0, light=0, line=0)
+        p.flat("ellipse", (13, 11, 19, 17), hexc("#ffffff", 200))
+    elif kind == "bag":
+        leather = hexc("#a0652f")
+        p.shape("ellipse", (6, 16, 42, 46), leather, depth=0.16)
+        p.shape("poly", [(20, 19), (28, 19), (35, 5), (13, 5)], shade(leather, 0.9), line=1.2)
+        for x in (15, 21, 27, 33):
+            p.shape("ellipse", (x - 3, 3, x + 3, 9), shade(leather, 0.9), line=1)
+        p.shape("line", [(18, 19), (30, 19)], hexc("#e7b440"), width=3, line=0.8)
+        p.shape("line", [(30, 19), (36, 26)], hexc("#e7b440"), width=2, line=0.6)
+        p.shape("ellipse", (19, 27, 29, 37), GOLD, light=1.4, line=1)
     elif kind == "flee":
         p.shape("poly", [(40, 24), (22, 8), (22, 18), (8, 18), (8, 30), (22, 30), (22, 40)], hexc("#e7e0d0"), line=1.4)
     return p.finish(outline=1)
 
 
 ROOM_ICONS = ["combat", "elite", "treasure", "event", "rest", "boss"]
-ITEM_ICONS = ["potion", "gold", "heart", "xp", "flee"]
+ITEM_ICONS = ["potion", "gold", "heart", "xp", "flee", "scale", "bag"]
 
 SKILL_ICONS = ["slash", "shield_break", "heavy_strike", "execute", "battle_cry", "rending_cut", "iron_wall", "whirlwind"]
 INTENT_ICONS = ["attack", "shield", "buff", "debuff", "stunned", "summon"]

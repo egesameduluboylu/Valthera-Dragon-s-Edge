@@ -25,3 +25,8 @@ func status(id: String) -> Dictionary:
 ## Player-facing text. Missing keys show up as the key itself so they are easy to spot.
 func t(key: String) -> String:
 	return text.get(key, key)
+
+
+## Text with {name} placeholders filled from `args`.
+func tf(key: String, args: Dictionary) -> String:
+	return t(key).format(args)

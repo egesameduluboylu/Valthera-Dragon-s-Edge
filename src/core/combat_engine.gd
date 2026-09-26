@@ -200,6 +200,8 @@ func _start_round() -> void:
 	_acting = player
 	player.shield = 0
 	player.defending = false
+	if turn == 1 and player.perks.get("start_shield", 0) > 0:
+		_add_shield(player, int(player.perks["start_shield"]))
 	_tick_dots(player)
 	if _check_end():
 		return
@@ -310,6 +312,7 @@ func _perform_skill(def: Dictionary, targets: Array[Combatant]) -> void:
 			if combo.has("low_hp_threshold") and t.hp_ratio() < float(combo["low_hp_threshold"]):
 				mult = float(combo.get("low_hp_multiplier", mult))
 			mult *= 1.0 + COMBO_CHAIN_BONUS * combo_count
+			mult *= 1.0 + float(player.perks.get("combo_damage", 0))
 
 		var hit := true
 		if power > 0.0:
@@ -478,6 +481,9 @@ func _deal_damage(source: Combatant, target: Combatant, amount: int, crit: bool,
 		_emit({"type": "death", "target": target.uid})
 		if not target.is_player:
 			_on_enemy_death(target)
+			var heal := int(player.perks.get("heal_on_kill", 0))
+			if source == player and heal > 0 and player.is_alive():
+				_heal(player, heal)
 	elif not target.is_player:
 		_check_phase(target)
 

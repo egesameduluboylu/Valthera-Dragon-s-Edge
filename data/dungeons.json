@@ -20,6 +20,14 @@
     "boss": ["bone_king"],
     "events": ["suspicious_fountain", "lost_merchant", "talking_skull", "cursed_altar"],
     "treasure": {"gold": [15, 30], "potion_chance": 0.3, "mimic_chance": 0.2, "mimic": ["mimic"]},
-    "rest": {"heal_percent": 0.3, "potions": 1}
+    "rest": {"heal_percent": 0.3, "potions": 1},
+    "loot": {
+      "combat":   {"chance": 0.35},
+      "mimic":    {"chance": 1.0, "min_rarity": "rare"},
+      "elite":    {"chance": 1.0, "min_rarity": "rare", "scales": 1},
+      "boss":     {"chance": 1.0, "min_rarity": "rare", "scales": 2, "legendary": true,
+                   "unique": {"base": "bone_crown", "rarity": "legendary", "chance": 0.05}},
+      "treasure": {"chance": 1.0}
+    }
   }
 }

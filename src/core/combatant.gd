@@ -19,6 +19,8 @@ var resource_max: int = 0
 var resource_rules: Dictionary = {}
 
 var skills: Array[String] = []
+## Equipment effects (docs/05): start_shield, combo_damage, heal_on_kill.
+var perks: Dictionary = {}
 var cooldowns: Dictionary = {}          # skill_id -> turns left
 var statuses: Dictionary = {}           # status_id -> StatusEffect
 var elements: Dictionary = {}           # element -> damage multiplier taken

@@ -51,13 +51,16 @@ Efsanevi örnekleri:
 - Eşyanın seviyesi, düştüğü zindanın seviyesidir.
 - Ana istatistik: `taban * (1 + 0.12 * eşya_seviyesi) * nadirlik_çarpanı`
   (Sıradan 1.0, Nadir 1.15, Epik 1.3, Efsanevi 1.5)
+- CAN ve Kalkan tam sayıya yuvarlanır; SAL ve SAV ondalıklı kalır ki her güçlendirme görünsün.
 
 ## Demirci: Güçlendirme
 
 - Eşyalar +1'den +10'a kadar güçlendirilir. Her kademe ana istatistiğe +%8.
 - Maliyet: `altın = 20 * eşya_seviyesi * (kademe + 1)` ve +6'dan sonra "Ejder Pulu" malzemesi.
 - Başarısızlık yok (oyuncuyu üzmemek için). Kademe 10 bir eşyayı üst nadirliğe yükseltmez.
-- **Parçala:** İstenmeyen eşyalar altın ve malzemeye dönüştürülür.
+- **Parçala:** İstenmeyen eşyalar altın ve malzemeye dönüştürülür:
+  `altın = 6 * eşya_seviyesi * (nadirlik_sırası + 1) + 10 * kademe`, Epik 1, Efsanevi 2 Ejder Pulu.
+  Kuşanılı eşya parçalanamaz.
 
 ## Para Birimleri
 
@@ -80,3 +83,44 @@ Her zindan için 3 yıldız:
 3. Canın %50'sinin üstünde bitir.
 
 3 yıldız alınan zindan "Zor" modunu açar (düşmanlar +3 seviye, daha iyi ganimet).
+
+## Çürük Mahzen Eşyaları (M3)
+
+Tüm sayılar `data/items.json` içinde.
+
+| Eşya | Slot | Ana istatistik | En düşük seviye |
+|------|------|----------------|-----------------|
+| Paslı Kılıç (başlangıç) | Silah (Savaşçı) | SAL 1 | 1 |
+| Demir Kılıç | Silah (Savaşçı) | SAL 4 | 2 |
+| Kemik Satır | Silah (Savaşçı) | SAL 5 | 3 |
+| Deri Zırh | Zırh | CAN 12, SAV 2 | 1 |
+| Zincir Zırh | Zırh | CAN 16, SAV 4 | 2 |
+| Deri Başlık | Kask | SAV 2, KRT %1 | 1 |
+| Demir Miğfer | Kask | SAV 3, KRT %2 | 2 |
+| Bakır Yüzük | Aksesuar | SAL 1, CAN 5 | 1 |
+| Kemik Muska | Aksesuar | SAV 1, CAN 8 | 1 |
+| Kemik Kral'ın Tacı | Kask (efsanevi) | SAV 4, KRT %3, öldürünce 10 CAN | sadece Kemik Kral |
+
+Paslı Kılıç bilerek zayıf: yeni bir Savaşçı ilk koşuların yaklaşık yarısını bitirir (bot testi),
+ilk birkaç ganimetle bu oran belirgin şekilde artar.
+
+Ek özellik aralıkları (seviye ile büyüyenler `*`): CAN 4-8*, SAL 1-2*, SAV 1-3*, HIZ 0.5-1, KRT %1-3,
+KAÇ %1-2, Savaş başında 5-10* Kalkan, Kombo hasarı +%5-10. Bir eşyada aynı ek özellik iki kez çıkmaz.
+
+### Ganimet Tablosu
+
+| Kaynak | Eşya şansı | En düşük nadirlik | Ejder Pulu |
+|--------|-----------|-------------------|------------|
+| Sıradan savaş | %35 | Sıradan | - |
+| Hazine sandığı | %100 | Sıradan | - |
+| Taklitçi | %100 | Nadir | - |
+| Elit (Bekçi) | %100 | Nadir | 1 |
+| Kemik Kral | %100 (efsanevi mümkün) + %5 Tacı | Nadir | 2 |
+| Konuşan Kurukafa (doğru cevap) | %100 | Nadir | - |
+
+Silahlar sadece aktif sınıfın silahlarından çıkar. Ölünce ganimet kalır, altının yarısı gider.
+
+### Tüccar (Madam Pırıl)
+
+- Can İksiri 25 altın; en fazla 6 iksir taşınır. Kasabaya dönünce stok ücretsiz olarak 3'e tamamlanır.
+- Her koşudan sonra 3 yeni eşya gelir (seviye: bitirilen zindanların en yükseği). Fiyat = parçalama değeri x 4.

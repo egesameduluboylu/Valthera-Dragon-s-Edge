@@ -1,43 +1,124 @@
 extends Node
-## Player profile for the current session. Saving comes in M3 (docs/12).
+## The player's profile for this session. The rules live in Profile (src/core); this
+## autoload loads it at startup, saves it after every change and tells screens through
+## EventBus.
 
-var active_class: String = "warrior"
-var class_levels: Dictionary = {"warrior": 1}
-## XP collected inside the current level, per class.
-var xp: Dictionary = {"warrior": 0}
-var gold: int = 0
-var runs_cleared: int = 0
+var profile: Profile
+var rng := RandomNumberGenerator.new()
+## The run in progress, if any. Saved between rooms as profile.run_state.
+var run: DungeonRun = null
+
+
+func _ready() -> void:
+	rng.randomize()
+	load_game()
+
+
+var active_class: String:
+	get:
+		return profile.active_class
 
 
 func level() -> int:
-	return int(class_levels.get(active_class, 1))
+	return profile.level()
 
 
 func class_xp() -> int:
-	return int(xp.get(active_class, 0))
+	return profile.class_xp()
 
 
+func load_game() -> void:
+	var d := SaveManager.load_save()
+	profile = Profile.from_dict(DataDB.data, d) if not d.is_empty() else Profile.new_game(DataDB.data, rng)
+	if d.is_empty():
+		save()
+
+
+func new_game() -> void:
+	profile = Profile.new_game(DataDB.data, rng)
+	run = null
+	save()
+	EventBus.gold_changed.emit(profile.gold)
+
+
+func save() -> void:
+	SaveManager.write_save(profile.to_dict())
+
+
+## Called after a profile change made through `profile` directly (equip, upgrade, buy...).
+func changed() -> void:
+	save()
+	EventBus.gold_changed.emit(profile.gold)
+	EventBus.profile_changed.emit()
+
+
+## Rewards from a single battle outside a run (the prototype battle scene).
 func add_rewards(xp_amount: int, gold_amount: int) -> void:
-	var r := Progression.add_xp(level(), class_xp(), xp_amount)
-	_set_progress(r["level"], r["xp"])
-	gold += gold_amount
-	EventBus.xp_gained.emit(active_class, xp_amount)
-	EventBus.gold_changed.emit(gold)
-
-
-## Stores what a finished dungeon run earned: its class level, XP and the gold kept.
-func apply_run(run: DungeonRun) -> void:
-	_set_progress(run.level, run.class_xp)
-	gold += run.gold_earned
-	if run.outcome == "cleared":
-		runs_cleared += 1
-	EventBus.xp_gained.emit(active_class, run.xp_earned)
-	EventBus.gold_changed.emit(gold)
-
-
-func _set_progress(new_level: int, new_xp: int) -> void:
 	var old := level()
-	class_levels[active_class] = new_level
-	xp[active_class] = new_xp
-	if new_level > old:
-		EventBus.level_up.emit(active_class, new_level)
+	profile.add_xp(xp_amount)
+	profile.gold += gold_amount
+	EventBus.xp_gained.emit(active_class, xp_amount)
+	if level() > old:
+		EventBus.level_up.emit(active_class, level())
+	changed()
+
+
+# ---------------------------------------------------------------- dungeon runs
+
+func start_run(dungeon_id: String) -> DungeonRun:
+	run = profile.start_run(dungeon_id, rng)
+	return run
+
+
+## A saved unfinished run, or null.
+func saved_run() -> DungeonRun:
+	if profile.run_state.is_empty():
+		return null
+	return DungeonRun.from_dict(DataDB.data, profile.run_state)
+
+
+func resume_run() -> DungeonRun:
+	run = saved_run()
+	if run == null:
+		discard_run()
+	return run
+
+
+## Gives up a saved run as if the player had escaped: loot and gold are kept.
+func discard_run() -> void:
+	var saved := saved_run()
+	profile.run_state = {}
+	if saved != null:
+		saved.escape()
+		apply_run(saved)
+	else:
+		save()
+
+
+## Drops a run that never entered a room (back to town from the first doors).
+func cancel_run() -> void:
+	run = null
+	profile.run_state = {}
+	save()
+
+
+## Saves the run between rooms so it survives the app closing.
+func save_run() -> void:
+	if run == null:
+		return
+	var d := run.to_dict()
+	if not d.is_empty():
+		profile.run_state = d
+		save()
+
+
+## Banks a finished run. Returns Profile.apply_run's result (loot added or salvaged).
+func apply_run(finished: DungeonRun) -> Dictionary:
+	var old := level()
+	var result := profile.apply_run(finished, rng)
+	run = null
+	EventBus.xp_gained.emit(active_class, finished.xp_earned)
+	if level() > old:
+		EventBus.level_up.emit(active_class, level())
+	changed()
+	return result

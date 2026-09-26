@@ -11,13 +11,14 @@ config_version=5
 [application]
 
 config/name="Valthera: Dragon's Edge"
-run/main_scene="res://src/scenes/dungeon/dungeon.tscn"
+run/main_scene="res://src/scenes/town/town.tscn"
 config/features=PackedStringArray("4.5", "GL Compatibility")
 
 [autoload]
 
 EventBus="*res://src/autoload/event_bus.gd"
 DataDB="*res://src/autoload/data_db.gd"
+SaveManager="*res://src/autoload/save_manager.gd"
 GameState="*res://src/autoload/game_state.gd"
 
 [display]
