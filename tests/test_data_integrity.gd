@@ -116,3 +116,26 @@ func test_translations_match_turkish() -> void:
 			a.sort()
 			b.sort()
 			assert_eq(b, a, "%s %s placeholders" % [lang, key])
+
+
+## Every sound the code asks for exists (src/autoload/audio.gd skips missing files quietly).
+func test_every_played_sound_exists() -> void:
+	var re := RegEx.create_from_string("Audio\\.play\\(\"([a-z_]*[a-z])\"")
+	var names := {}
+	for dir in ["res://src/scenes/battle", "res://src/scenes/dungeon", "res://src/scenes/town", "res://src/ui",
+			"res://src/autoload"]:
+		for f in DirAccess.get_files_at(dir):
+			if f.ends_with(".gd"):
+				for m in re.search_all(FileAccess.get_file_as_string(dir + "/" + f)):
+					names[m.get_string(1)] = true
+	for id in game_data()["skills"]:
+		var element: String = game_data()["skills"][id].get("element", "physical")
+		if element != "physical":
+			names["magic_" + element] = true
+	for n in ["level_up", "stab", "slash", "smoke", "shield"]:
+		names[n] = true
+	assert_true(names.size() > 20, "found the sounds")
+	for n in names:
+		assert_true(ResourceLoader.exists("res://assets/audio/sfx/%s.wav" % n), n)
+	for track in ["town", "dungeon", "battle", "boss", "ending"]:
+		assert_true(ResourceLoader.exists("res://assets/audio/music/%s.wav" % track), track)

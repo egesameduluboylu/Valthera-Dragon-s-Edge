@@ -6,7 +6,7 @@ Her kilometre taşının sonunda oynanabilir bir sürüm olur. Sıra önemlidir:
 - [x] Godot projesi, klasör yapısı (bkz. 10-teknik-tasarim.md), `.gitignore`
 - [x] Autoload iskeletleri: DataDB, GameState, EventBus
 - [x] Test çalıştırıcı ve GitHub Actions
-- [ ] Android dışa aktarma ayarı, telefonda boş sahne açılıyor
+- [x] Android dışa aktarma ayarı (bkz. 14-yayin.md)
 
 ## M1: Savaş Prototipi (En Önemli)
 Hedef: Savaşçı, 2 fareye karşı, düz renkli kutularla bile eğlenceli mi?
@@ -48,10 +48,10 @@ Hedef: Savaşçı, 2 fareye karşı, düz renkli kutularla bile eğlenceli mi?
 - [x] Temel animasyonlar: bekleme salınımı, saldırı atılması, vurulma, ölüm
 - [x] Zindan haritası, kapılar, oda ikonları, olay çizimleri, Bekçi / Taklitçi / Kemik Kral
 - [x] Diğer zindanlar ve ekranlar için görseller
-- [ ] Ses ve müzik
+- [x] Ses ve müzik (kodla üretilen efektler ve müzik, `tools/audio`)
 - [x] Ekran titremesi, kombo efektleri
-- [ ] Titreşim
-- [ ] Yönlendirmeli ilk savaş (tutorial)
+- [x] Titreşim
+- [x] Yönlendirmeli ilk savaş (Nara ipuçları)
 - [x] Giriş ve Kemik Kral diyalogları (tüm zindanların giriş ve bitiş sahneleri)
 - **DEMO:** 1 sınıf, 1 zindan, 3 düşman + elit + patron. 5-10 kişiye test ettir.
 
@@ -64,7 +64,8 @@ Hedef: Savaşçı, 2 fareye karşı, düz renkli kutularla bile eğlenceli mi?
 
 ## M6: Yayın
 - [x] Zindan 4 ve 5, hikâyenin sonu
-- [ ] Ayarlar, dil altyapısı, erişilebilirlik (yazı boyutu)
+- [x] Ayarlar: ses, titreşim, savaş hızı, dil (Türkçe ve İngilizce)
+- [ ] Erişilebilirlik (yazı boyutu)
 - [ ] Google Play kapalı test, geri bildirim
 - [ ] Gelir modeli (bkz. 11-gelir-modeli.md)
 - [ ] Google Play yayını, ardından iOS

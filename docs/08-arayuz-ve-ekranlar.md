@@ -64,12 +64,24 @@ Savaş -> Yenilgi Ekranı -> Kasaba
 
 ## Eğitim (Tutorial)
 
-Ayrı bir eğitim bölümü yok. İlk savaş yönlendirmeli:
-1. Tur 1: Sadece Kalkan Kır aktif, ok ile gösterilir.
-2. Tur 2: Ağır Vuruş parlar, "Zırhı kırılmış düşmana Ağır Vuruş çok daha fazla hasar verir!"
-3. Tur 3'ten sonra serbest.
-İlk karşılaşmalarda niyet ikonları için tek satırlık açıklama balonu çıkar.
+Ayrı bir eğitim bölümü yok. İlk savaşlarda Nara ipuçları verir (`src/ui/tutorial.gd`). Ekran kararır, anlatılan öğe altın bir çerçeveyle aydınlık kalır, Nara küçük bir balonda açıklar; dokununca kapanır. Her ipucu bir kez çıkar, uyduğu an geldiğinde:
+
+| İpucu | Ne zaman | Gösterilen |
+|---|---|---|
+| Niyet | İlk savaşın ilk turu | Düşmanın niyet rozeti |
+| Yetenekler | Hemen ardından | Yetenek butonları: hazırlık, sonra bitirici |
+| Sınıf kaynağı | Her sınıfın ilk savaşı | Öfke / Mana / Enerji çubuğu (Haydut için Seri) |
+| Kombo | Bir yetenek ilk kez kombo için parladığında | O yetenek |
+| Savun ve İksir | Can ilk kez yarının altına indiğinde | Savun ve İksir butonları |
+
+"Rehberi Atla" hepsini kapatır; Ayarlar'daki "Rehberi Tekrar Göster" yeniden açar. Görülen ipuçları kayıtta `story_seen` listesinde tutulur.
 
 ## Ayarlar
 
-Müzik ve efekt ses seviyesi, titreşim, savaş hızı (1x / 1.5x / 2x), dil.
+Kasaba başlığındaki dişli butonuyla açılır:
+- Müzik ve efekt ses seviyesi (kaydırıcı), titreşim (açık / kapalı).
+- Savaş hızı: 1x / 1.5x / 2x (savaş açıkken `Engine.time_scale`).
+- Dil: Türkçe / English. Eksik İngilizce metinler Türkçeye düşer.
+- Rehberi tekrar göster, oyunu sıfırla (onay ister).
+
+Ayarlar kayıttan ayrı bir dosyada (`user://settings.json`) durur; oyunu sıfırlamak onları silmez.
