@@ -313,11 +313,18 @@ static func from_dict(p_data: Dictionary, d: Dictionary) -> Profile:
 	p.gold = int(d.get("gold", 0))
 	p.scales = int(d.get("dragon_scales", 0))
 	p.potions = int(d.get("potions", FREE_POTIONS))
-	for slot in Items.SLOTS:
-		var uid: Variant = d.get("equipment", {}).get(slot, "")
-		p.equipment[slot] = uid if uid is String else ""
-	p.inventory = _clean_items(d.get("inventory", []), p_data)
+	p.next_uid = maxi(1, int(Items.as_number(d.get("next_uid"), 1)))
+	p.inventory = p._clean_inventory(d.get("inventory", []))
 	p.shop = _clean_items(d.get("shop", []), p_data)
+	# Rebuild what is worn: each slot keeps an item only if it exists, fits that
+	# slot and class, and isn't already worn somewhere else.
+	var saved_eq: Variant = d.get("equipment", {})
+	for slot in Items.SLOTS:
+		var uid: Variant = saved_eq.get(slot, "") if saved_eq is Dictionary else ""
+		var item := p.get_item(uid) if uid is String and uid != "" else {}
+		var ok: bool = not item.is_empty() and p.slot_of(item) == slot and p.can_equip(item) \
+				and not uid in p.equipment.values()
+		p.equipment[slot] = uid if ok else ""
 	var dungeons_: Variant = d.get("dungeons", {})
 	if dungeons_ is Dictionary:
 		for id in dungeons_:
@@ -325,7 +332,6 @@ static func from_dict(p_data: Dictionary, d: Dictionary) -> Profile:
 				p.dungeons[id] = {"runs": int(dungeons_[id].get("runs", 0)),
 						"cleared": bool(dungeons_[id].get("cleared", false))}
 	p.run_state = d.get("run_state", {}) if d.get("run_state") is Dictionary else {}
-	p.next_uid = int(d.get("next_uid", p.inventory.size() + 1))
 	p.player_name = str(d.get("player_name", "Maceracı"))
 	p.market = _clean_market(d.get("market", {}), p_data)
 	p.save_id = str(d.get("save_id", ""))
@@ -363,21 +369,30 @@ static func _clean_market(m: Variant, p_data: Dictionary) -> Dictionary:
 	return out
 
 
-## Drops items whose base no longer exists and affixes without a proper value, and
-## restores int fields.
-static func _clean_items(items: Array, p_data: Dictionary) -> Array:
+## Drops broken items (Items.clean) and gives every bag item a unique uid: missing or
+## repeated ones get a fresh id, and next_uid moves past every id in use.
+func _clean_inventory(items: Variant) -> Array:
+	var out := _clean_items(items, data)
+	for i in out:
+		var n := String(i.get("uid", "")).trim_prefix("i")
+		if n.is_valid_int():
+			next_uid = maxi(next_uid, int(n) + 1)
+	var seen := {}
+	for i in out:
+		if not i.has("uid") or seen.has(i["uid"]):
+			i["uid"] = "i%d" % next_uid
+			next_uid += 1
+		seen[i["uid"]] = true
+	return out
+
+
+## Drops items that can't be used any more (see Items.clean).
+static func _clean_items(items: Variant, p_data: Dictionary) -> Array:
 	var out: Array = []
+	if not items is Array:
+		return out
 	for i in items:
-		if not i is Dictionary or not p_data["items"]["bases"].has(i.get("base", "")):
-			continue
-		i["level"] = int(i.get("level", 1))
-		i["upgrade"] = int(i.get("upgrade", 0))
-		if not p_data["items"]["rarities"].has(i.get("rarity", "")):
-			i["rarity"] = "common"
-		var affixes: Variant = i.get("affixes", [])
-		i["affixes"] = (affixes as Array).filter(func(a: Variant) -> bool:
-				return Items.is_valid_affix(a, p_data["items"])) if affixes is Array else []
-		for a in i["affixes"]:
-			a["value"] = float(a["value"])
-		out.append(i)
+		var item := Items.clean(i, p_data["items"])
+		if not item.is_empty():
+			out.append(item)
 	return out

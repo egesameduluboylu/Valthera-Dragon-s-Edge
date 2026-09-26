@@ -245,3 +245,55 @@ func test_uniques_drop_from_their_sources() -> void:
 					seen[item["base"]] = true
 	for id in ["bone_crown", "kingslayer", "warden_axe", "mimic_ring"]:
 		assert_true(seen.has(id), id)
+
+
+## Qodo review on PR #4: damaged saves must load without crashing or duplicating gear.
+func test_damaged_items_get_uids_and_equipment_is_rebuilt() -> void:
+	var d := {"next_uid": 3, "inventory": [
+			{"base": "copper_ring", "rarity": "rare", "uid": "i7"},
+			{"base": "copper_ring", "rarity": "rare"},                     # no uid
+			{"base": "iron_helm", "rarity": "rare", "uid": "i7"},          # duplicate uid
+			{"base": "iron_sword", "affixes": [{"id": "atk"}, {"id": "nope", "value": 1}, {"id": "hp", "value": 5}]}],
+			"equipment": {"accessory": "i7", "helm": "i7", "weapon": "i7", "armor": 5}}
+	var p := Profile.from_dict(game_data(), d)
+	assert_eq(p.inventory.size(), 4)
+	var uids := {}
+	for i in p.inventory:
+		assert_true(i["uid"] is String and i["uid"] != "", "every item has a uid")
+		uids[i["uid"]] = true
+	assert_eq(uids.size(), 4, "uids are unique")
+	assert_true(p.next_uid >= 8, "next_uid moves past i7")
+	# i7 is the ring: it may be worn as an accessory, but not also as a helm or weapon
+	assert_eq(p.equipment["accessory"], "i7")
+	assert_eq(p.equipment["helm"], "")
+	assert_eq(p.equipment["weapon"], "")
+	assert_eq(p.equipment["armor"], "")
+	assert_eq(p.equipped_items().size(), 1)
+	var sword: Dictionary = p.inventory[3]
+	assert_eq(sword["affixes"], [{"id": "hp", "value": 5.0}], "broken affixes are dropped")
+	Items.total_stats(sword, game_data()["items"])   # must not crash
+	var fresh := {"base": "iron_helm", "rarity": "common", "level": 1, "upgrade": 0, "affixes": []}
+	p.add_item(fresh)
+	assert_false(fresh["uid"] in uids, "new items don't collide")
+
+
+func test_damaged_run_state_is_rejected_or_cleaned() -> void:
+	var p := _profile()
+	var run := p.start_run("rotten_cellar", seeded_rng(9))
+	run.start()
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(run.to_dict()))
+	var bad_choice := saved.duplicate(true)
+	bad_choice["choices"] = ["junk"]
+	assert_eq(DungeonRun.from_dict(game_data(), bad_choice), null, "choices that aren't rooms")
+	var bad_enemies := saved.duplicate(true)
+	bad_enemies["choices"][0]["enemies"] = "rat"
+	assert_eq(DungeonRun.from_dict(game_data(), bad_enemies), null, "enemies that aren't a list")
+	var bad_items := saved.duplicate(true)
+	bad_items["equipment"] = [{"base": "iron_sword"}, "junk", {"base": "gone"}]
+	bad_items["loot"] = [{"base": "iron_helm", "level": "x"}, 4]
+	var back := DungeonRun.from_dict(game_data(), bad_items)
+	assert_true(back != null, "broken items are cleaned, not fatal")
+	assert_eq(back.loot.size(), 1)
+	assert_eq(back.loot[0]["rarity"], "common")
+	assert_eq(back.loot[0]["level"], 1)
+	assert_true(back.player.max_hp() > 0)

@@ -10,6 +10,35 @@ const SLOTS := ["weapon", "armor", "helm", "accessory"]
 const INT_STATS := ["hp", "start_shield"]
 
 
+## A saved item made safe to use (docs/10): known base, known rarity (else common),
+## whole-number level and upgrade, and only affixes with a known id and a finite number.
+## Returns {} when the item can't be kept. Keeps `uid` only when it is a non-empty string.
+static func clean(item: Variant, defs: Dictionary) -> Dictionary:
+	if not item is Dictionary or not defs["bases"].has(str(item.get("base", ""))):
+		return {}
+	var out := {"base": str(item["base"]),
+			"rarity": item.get("rarity", "") if defs["rarities"].has(item.get("rarity", "")) else "common",
+			"level": maxi(1, int(as_number(item.get("level"), 1))),
+			"upgrade": clampi(int(as_number(item.get("upgrade"), 0)), 0, int(defs.get("max_upgrade", 10))),
+			"affixes": []}
+	var uid: Variant = item.get("uid")
+	if uid is String and uid != "":
+		out["uid"] = uid
+	var affixes: Variant = item.get("affixes", [])
+	if affixes is Array:
+		for a in affixes:
+			if is_valid_affix(a, defs):
+				out["affixes"].append({"id": str(a["id"]), "value": float(a["value"])})
+	return out
+
+
+## `v` as a float when it is a finite number, else `fallback`.
+static func as_number(v: Variant, fallback: float) -> float:
+	if (v is float or v is int) and is_finite(float(v)):
+		return float(v)
+	return fallback
+
+
 ## Main stats of an item: base * (1 + 0.12 * level) * rarity multiplier * (1 + 0.08 * upgrade).
 ## HP and shields are whole numbers; attack and defence keep decimals so every smith
 ## upgrade shows.
