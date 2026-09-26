@@ -28,6 +28,7 @@ var _busy: bool = false
 
 
 func _ready() -> void:
+	Audio.music("town")
 	theme = UITheme.build()
 	_build()
 	_refresh()
@@ -64,6 +65,10 @@ func open_panel(kind: String) -> void:
 			panel = MarketPanel.new()
 		"class_master":
 			panel = ClassMasterPanel.new()
+		"settings":
+			var sp := SettingsPanel.new()
+			sp.reset_done.connect(func() -> void: get_tree().reload_current_scene())
+			panel = sp
 		_:
 			return
 	panel.closed.connect(_close_overlay)
@@ -275,6 +280,10 @@ func _build_header() -> void:
 	top.add_child(UIKit.spacer(12, false))
 	_potions = UIKit.counter(ITEM_ICON % "potion", "0", UITheme.TEXT, 34)
 	top.add_child(_potions)
+	top.add_child(UIKit.spacer(12, false))
+	var gear := UITheme.close_button(UIKit.button("", "", func() -> void: open_panel("settings")), 56, "gear")
+	gear.tooltip_text = DataDB.t("town.settings")
+	top.add_child(gear)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	v.add_child(row)

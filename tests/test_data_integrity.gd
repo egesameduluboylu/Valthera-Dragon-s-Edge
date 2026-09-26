@@ -78,3 +78,24 @@ func test_town_art_exists() -> void:
 		assert_true(ResourceLoader.exists("res://assets/town/%s.png" % id), id)
 	for id in ["bag", "scale"]:
 		assert_true(ResourceLoader.exists("res://assets/icons/items/%s.png" % id), id)
+
+
+## Tutorial hints (src/ui/tutorial.gd) build their text key from the flag id, and there is
+## one class hint per class. Read from the source, since the script needs autoloads.
+func test_every_tutorial_hint_has_text() -> void:
+	var text := DataLoader.load_json("res://data/text/tr.json")
+	var src := FileAccess.get_file_as_string("res://src/ui/tutorial.gd")
+	var re := RegEx.create_from_string("\"(tut_[a-z_]+)\"")
+	var flags: Array = []
+	for m in re.search_all(src):
+		if not flags.has(m.get_string(1)):
+			flags.append(m.get_string(1))
+	assert_true(flags.size() >= 5, "found the FLAGS list")
+	for id in game_data()["classes"]:
+		assert_true(flags.has("tut_class_" + id), "class hint for " + id)
+	for id in flags:
+		assert_true(text.has("tut." + id.trim_prefix("tut_")), id)
+	for key in ["tut.next", "tut.skip", "npc.nara"]:
+		assert_true(text.has(key), key)
+	assert_true(ResourceLoader.exists("res://assets/ui/skin/gear_normal.png"), "gear button")
+	assert_true(ResourceLoader.exists("res://assets/ui/skin/knob.png"), "slider knob")

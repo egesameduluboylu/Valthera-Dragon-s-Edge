@@ -368,7 +368,8 @@ def disabled(img):
 
 
 # ------------------------------------------------------------------ close medallion
-def close_button(state="normal"):
+def close_button(state="normal", glyph="x"):
+    """Round gold button with an X (close) or a cog (settings)."""
     s = 80
     c = Canvas(s, s)
     cx, cy, r = 40, 39, 34
@@ -389,18 +390,46 @@ def close_button(state="normal"):
         disc_top, disc_bot = hexc("4e1a14"), hexc("1e0808")
     c.paint(inner, vgrad(c.size, [(0, disc_top), (0.35, disc_top), (1, disc_bot)]))
     c.paint(ImageChops.subtract(inner, shifted(inner, 0, 3 * SS)).filter(ImageFilter.GaussianBlur(SS)), (0, 0, 0, 150))
-    # the X
     off = 1 if state == "pressed" else 0
-    d = 11
-    arms = [[(cx - d, cy - d + off), (cx + d, cy + d + off)], [(cx + d, cy - d + off), (cx - d, cy + d + off)]]
-    c.paint(c.lines(arms, 6.5, 1.6), INK)
-    x = c.lines(arms, 6.5)
+    if glyph == "gear":
+        # a cog: 8 teeth around a ring with a hole
+        pts = []
+        for i in range(16):
+            a0 = TAU * i / 16 - TAU / 64
+            a1 = TAU * i / 16 + TAU / 64
+            rr_ = 17 if i % 2 == 0 else 12.5
+            pts += [(cx + math.cos(a0) * rr_, cy + off + math.sin(a0) * rr_),
+                    (cx + math.cos(a1) * rr_, cy + off + math.sin(a1) * rr_)]
+        cog = ImageChops.subtract(c.poly(pts), c.ellipse(cx, cy + off, 5.5))
+        c.paint(grow(cog, 1.6), INK)
+        x = cog
+    else:
+        # the X
+        d = 11
+        arms = [[(cx - d, cy - d + off), (cx + d, cy + d + off)], [(cx + d, cy - d + off), (cx - d, cy + d + off)]]
+        c.paint(c.lines(arms, 6.5, 1.6), INK)
+        x = c.lines(arms, 6.5)
     c.paint(x, hexc("f6ead2"))
     c.paint(ImageChops.subtract(x, shifted(x, 0, -2 * SS)), hexc("c9b48f"))
     c.paint(ImageChops.subtract(x, shifted(x, 0, 2 * SS)), (255, 255, 255, 255))
     # glossy dome highlight
     hl = ImageChops.multiply(c.ellipse(cx - 4, cy - 12, r - 14, r - 22), inner)
     c.paint(hl.filter(ImageFilter.GaussianBlur(2 * SS)), (255, 255, 255, 45))
+    return c.finish()
+
+
+def knob():
+    """Slider grabber: a small gold stud with a ruby dome."""
+    s = 48
+    c = Canvas(s, s)
+    cx, cy = 24, 23
+    c.soft(c.ellipse(cx, cy, 19), 2.0, (0, 0, 0, 150), 0, 2)
+    c.metal(c.ellipse(cx, cy, 19), GOLD_PAL, outline=1.6, k=1.4)
+    gem = c.ellipse(cx, cy, 11)
+    c.paint(grow(gem, 1.2), GOLD_INK)
+    c.paint(gem, vgrad(c.size, [(0, hexc("e0564a")), (0.5, hexc("a8261e")), (1, hexc("4a0c0a"))]))
+    hl = ImageChops.multiply(c.ellipse(cx - 3, cy - 5, 6, 4), gem)
+    c.paint(hl.filter(ImageFilter.GaussianBlur(SS)), (255, 255, 255, 150))
     return c.finish()
 
 
@@ -743,6 +772,8 @@ def all_textures():
     out["button_disabled"] = disabled(button("normal"))
     for st in ("normal", "hover", "pressed"):
         out[f"close_{st}"] = close_button(st)
+        out[f"gear_{st}"] = close_button(st, "gear")
+    out["knob"] = knob()
     out["panel_wood"] = panel_wood()
     out["panel_parchment"] = panel_parchment()
     out["panel_dark"] = panel_dark()

@@ -44,6 +44,7 @@ func refresh() -> void:
 	pv.add_child(UIKit.wrapped(DataDB.tf("merchant.potion_desc", {"max": Profile.MAX_POTIONS}), 20, UITheme.TEXT_MUTED))
 	var buy_pot := _price_button(Profile.POTION_PRICE, func() -> void:
 		if p.buy_potion():
+			Audio.play("buy")
 			GameState.changed()
 			refresh())
 	buy_pot.disabled = p.gold < Profile.POTION_PRICE or p.potions >= Profile.MAX_POTIONS
@@ -83,6 +84,7 @@ func _buy(index: int) -> void:
 	var item: Dictionary = p.shop[index]
 	if not p.buy_shop_item(index):
 		return
+	Audio.play("buy")
 	_npc_line = DataDB.tf("merchant.bought", {"item": ItemUI.item_name(item)})
 	GameState.changed()
 	refresh()

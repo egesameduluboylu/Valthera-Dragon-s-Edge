@@ -48,6 +48,16 @@ func new_game() -> void:
 	EventBus.gold_changed.emit(profile.gold)
 
 
+## Wipes the save and starts over (settings > reset). Sound settings are kept.
+func reset_game() -> void:
+	SaveManager.delete_save()
+	market_news = {}
+	next_dungeon = "rotten_cellar"
+	next_hard = false
+	new_game()
+	EventBus.profile_changed.emit()
+
+
 func save() -> void:
 	SaveManager.write_save(profile.to_dict())
 

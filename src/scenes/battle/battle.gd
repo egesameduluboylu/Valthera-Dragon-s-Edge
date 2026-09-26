@@ -72,6 +72,8 @@ func _new_battle() -> void:
 
 
 func _start_battle() -> void:
+	var boss := engine.enemies.any(func(e: Combatant) -> bool: return e.is_boss)
+	Audio.music("boss" if boss else "battle")
 	selected_target = engine.alive_enemies()[0].uid
 	_restart_button.visible = not run_mode
 	_level_label.text = DataDB.t("ui.level") % engine.player.level
@@ -132,12 +134,110 @@ func _play(events: Array) -> void:
 	if current == null or not current.is_alive():
 		var alive := engine.alive_enemies()
 		selected_target = alive[0].uid if not alive.is_empty() else ""
+	_refresh()
+	await _coach()
 	busy = false
 	_refresh()
 
 
+# ---------------------------------------------------------------- tutorial
+
+## Shows the first-battle hints that fit this moment, one after another (docs/09).
+func _coach() -> void:
+	if engine.finished or GameState.profile == null:
+		return
+	var hint := _next_hint()
+	while not hint.is_empty():
+		GameState.profile.take_story(hint[0])
+		GameState.save()
+		var t := Tutorial.new(hint[0], hint[1])
+		add_child(t)
+		await t.finished
+		hint = _next_hint()
+
+
+## [hint id, control to frame] for the next unseen hint that applies now, or [].
+func _next_hint() -> Array:
+	var seen: Array = GameState.profile.story_seen
+	var want := func(id: String) -> bool: return not seen.has(id)
+	if want.call("tut_intent"):
+		for e in engine.alive_enemies():
+			var view: Dictionary = _enemy_views.get(e.uid, {})
+			if not view.is_empty() and view["intent"].visible:
+				return ["tut_intent", view["intent"]]
+	if want.call("tut_skills"):
+		return ["tut_skills", _skill_grid]
+	var class_hint := "tut_class_" + engine.player.def_id
+	if want.call(class_hint) and Tutorial.FLAGS.has(class_hint):
+		return [class_hint, _player_view["res_bar"]]
+	if want.call("tut_combo"):
+		# buttons are still disabled here (busy), so ask the engine instead of the glow
+		var target := engine.get_combatant(selected_target)
+		for id in _skill_buttons:
+			if engine.skill_block_reason(id) == "" and engine.combo_ready(id, target):
+				return ["tut_combo", _skill_buttons[id]]
+	if want.call("tut_defend") and engine.player.hp * 2 < engine.player.max_hp():
+		return ["tut_defend", _defend_button.get_parent()]
+	return []
+
+
+## Sound and vibration for one event (docs/09).
+func _sfx(ev: Dictionary) -> void:
+	match ev["type"]:
+		"skill":
+			var def := DataDB.skill(ev["skill"])
+			var element: String = def.get("element", "physical")
+			if def.get("target", "") == "self":
+				Audio.play("smoke" if ev["skill"] == "rogue_smoke_bomb" else "shield")
+			elif element == "physical":
+				Audio.play("stab" if engine.player.def_id == "rogue" else "slash")
+			else:
+				Audio.play("magic_" + element)
+		"enemy_move":
+			if ev["move_type"] in ["attack", "multi_attack"]:
+				Audio.play("enemy_attack")
+		"damage":
+			if ev["dot"]:
+				return
+			if ev["target"] == "p":
+				Audio.play("player_hurt")
+				Audio.vibrate(60 if ev["crit"] else 35)
+			else:
+				Audio.play("crit" if ev["crit"] else "hit")
+		"miss":
+			Audio.play("miss")
+		"death":
+			if ev["target"] != "p":
+				Audio.play("enemy_death")
+		"status_applied":
+			if ev["status"] == "stun":
+				Audio.play("stun")
+			elif ev["status"] == "poison":
+				Audio.play("poison")
+			elif ev["target"] == "p":
+				Audio.play("status_bad")
+		"heal":
+			if ev["amount"] > 0:
+				Audio.play("heal")
+		"item":
+			Audio.play("potion")
+		"summon":
+			Audio.play("summon")
+		"phase":
+			Audio.play("boss_phase", 0.0)
+			Audio.vibrate(250)
+		"combo":
+			Audio.play("combo", 0.0)
+			Audio.vibrate(50)
+		"flurry":
+			Audio.play("star")
+		"battle_end":
+			Audio.play("victory" if ev["victory"] else "defeat", 0.0)
+
+
 ## Draws one event and returns how long to pause after it.
 func _apply_event(ev: Dictionary) -> float:
+	_sfx(ev)
 	match ev["type"]:
 		"turn_start":
 			_turn_label.text = DataDB.t("ui.turn") % ev["turn"]

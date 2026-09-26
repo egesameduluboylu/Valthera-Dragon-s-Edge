@@ -193,6 +193,7 @@ func _buy(id: String, price: int, item: Dictionary) -> void:
 	if not r.get("ok", false):
 		_error(r)
 	else:
+		Audio.play("buy")
 		_say(DataDB.tf("market.bought", {"item": ItemUI.item_name(item)}))
 		_changed()
 	await _draw_buy()

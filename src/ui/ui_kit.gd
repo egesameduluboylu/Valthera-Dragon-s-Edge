@@ -37,6 +37,7 @@ static func button(text: String, icon_path: String, on_press: Callable, font_siz
 	if icon_path != "":
 		b.icon = load(icon_path)
 		b.add_theme_constant_override("icon_max_width", 42)
+	b.pressed.connect(func() -> void: Audio.play("ui_click"))
 	b.pressed.connect(on_press)
 	return b
 
@@ -137,7 +138,10 @@ static func sheet(title_text: String, on_close: Callable) -> Array:
 	var t := title(title_text, 42)
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.add_child(t)
-	var close := UITheme.close_button(button("", "", on_close), 72)
+	Audio.play("ui_open")
+	var close := UITheme.close_button(button("", "", func() -> void:
+		Audio.play("ui_close")
+		on_close.call()), 72)
 	bar.add_child(close)
 	v.add_child(UITheme.divider())
 	var content := VBoxContainer.new()

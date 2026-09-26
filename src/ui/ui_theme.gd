@@ -208,22 +208,23 @@ static func skin_tile(rarity: String) -> StyleBoxTexture:
 
 ## Round brass medallion with an X. state: "normal", "hover" or "pressed". The texture is
 ## stretched whole, so keep the button square (close_button() does).
-static func skin_close(state: String = "normal") -> StyleBoxTexture:
+static func skin_close(state: String = "normal", glyph: String = "close") -> StyleBoxTexture:
 	if not state in ["normal", "hover", "pressed"]:
 		state = "normal"
-	return _skin("close_" + state, "close")
+	return _skin(glyph + "_" + state, "close")
 
 
 ## Makes `b` the round brass close button (the X is painted, so the text is cleared).
-static func close_button(b: Button, px: int = 72) -> Button:
+## `glyph` "gear" gives the same button with a cog, for settings.
+static func close_button(b: Button, px: int = 72, glyph: String = "close") -> Button:
 	b.text = ""
 	b.icon = null
 	b.custom_minimum_size = Vector2(px, px)
 	b.size_flags_horizontal = Control.SIZE_SHRINK_END
 	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	for state in ["normal", "hover", "pressed"]:
-		b.add_theme_stylebox_override(state, skin_close(state))
-	b.add_theme_stylebox_override("hover_pressed", skin_close("pressed"))
+		b.add_theme_stylebox_override(state, skin_close(state, glyph))
+	b.add_theme_stylebox_override("hover_pressed", skin_close("pressed", glyph))
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	return b
 

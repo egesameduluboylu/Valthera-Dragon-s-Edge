@@ -33,6 +33,7 @@ var _busy: bool = false
 
 
 func _ready() -> void:
+	Audio.music("dungeon")
 	theme = UITheme.build()
 	_build_ui()
 	_new_run()
@@ -66,6 +67,7 @@ func _on_door_pressed(index: int, card: Control) -> void:
 	if _busy:
 		return
 	_busy = true
+	Audio.play("door_open")
 	var tw := create_tween().set_parallel()
 	card.pivot_offset = card.size * 0.5
 	tw.tween_property(card, "scale", Vector2(1.12, 1.12), 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -101,6 +103,7 @@ func _on_battle_finished(engine: CombatEngine) -> void:
 	await _fade_to(1.0)
 	_battle.queue_free()
 	_battle = null
+	Audio.music("dungeon")
 	var result := run.finish_battle(engine)
 	_refresh()
 	if run.outcome != "":
@@ -155,6 +158,7 @@ func _show_treasure() -> void:
 	var body := _modal(DataDB.t("treasure.title"), EVENT_ART % ROOM_ART["treasure"], DataDB.t("treasure.text"))
 	body.add_child(_button(DataDB.t("treasure.open"), ROOM_ICON % "treasure", func() -> void:
 		var r := run.open_treasure()
+		Audio.play("chest_open")
 		if r.get("mimic", false):
 			_set_modal_text(DataDB.t("treasure.mimic"), Color("ff6a5a"))
 			_clear_modal_buttons()
@@ -794,6 +798,7 @@ func _stars_line(stars: Array, new_stars: Array) -> HBoxContainer:
 				UITheme.GOLD if stars[i] else UITheme.TEXT_MUTED)
 		h.add_child(star)
 		if new_stars.has(i):
+			Audio.play("star")
 			star.pivot_offset = Vector2(16, 22)
 			var tw := star.create_tween().set_loops(3)
 			tw.tween_property(star, "scale", Vector2(1.25, 1.25), 0.25)
@@ -805,6 +810,7 @@ func _stars_line(stars: Array, new_stars: Array) -> HBoxContainer:
 
 ## The end of the story (docs/07): the dragon egg, then the usual summary.
 func _show_ending(reward: Dictionary) -> void:
+	Audio.music("ending")
 	var body := _modal(DataDB.t("ending.title"), EVENT_ART % "dragon_egg", DataDB.t("ending.text"))
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
