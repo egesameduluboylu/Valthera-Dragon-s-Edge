@@ -65,7 +65,8 @@ Hedef: Savaşçı, 2 fareye karşı, düz renkli kutularla bile eğlenceli mi?
 ## M6: Yayın
 - [x] Zindan 4 ve 5, hikâyenin sonu
 - [x] Ayarlar: ses, titreşim, savaş hızı, dil (Türkçe ve İngilizce)
-- [ ] Erişilebilirlik (yazı boyutu)
+- [x] Erişilebilirlik (yazı boyutu)
+- [x] Duman testi: her ekranı gerçek dokunuşlarla baştan sona oynayan CI testi (`tests/smoke`)
 - [ ] Google Play kapalı test, geri bildirim
 - [ ] Gelir modeli (bkz. 11-gelir-modeli.md)
 - [ ] Google Play yayını, ardından iOS

@@ -1,10 +1,10 @@
 class_name SettingsPanel
 extends Control
-## Settings (docs/08): music and sound volume, vibration, battle speed, language,
+## Settings (docs/08): music and sound volume, vibration, battle speed, language, text size,
 ## replaying the tutorial and wiping the save. Values live in the Settings autoload.
 
 signal closed
-## Emitted after the save was wiped or the language changed; the town rebuilds itself.
+## Emitted after the save was wiped or the language or text size changed; the town rebuilds itself.
 signal reload
 
 ## Language names are shown in their own language.
@@ -33,6 +33,13 @@ func _ready() -> void:
 		speeds.append([sp, ("%.1fx" % sp).replace(".0x", "x")])
 	v.add_child(_choice_row("settings.speed", speeds, Settings.battle_speed, func(x: Variant) -> void:
 		Settings.set_value("battle_speed", x)))
+	var sizes: Array = []
+	for i in Settings.TEXT_SCALES.size():
+		sizes.append([Settings.TEXT_SCALES[i], DataDB.t("settings.text_size.%d" % i)])
+	v.add_child(_choice_row("settings.text_size", sizes, Settings.text_scale, func(x: Variant) -> void:
+		if x != Settings.text_scale:
+			Settings.set_value("text_scale", x)
+			reload.emit()))
 	var langs: Array = []
 	for id in Settings.LANGUAGES:
 		langs.append([id, LANGUAGE_NAMES.get(id, id)])

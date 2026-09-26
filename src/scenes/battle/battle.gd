@@ -564,7 +564,7 @@ func _show_banner(text: String, color: Color, font_size: int, font: Font) -> voi
 	_combo_label.text = text
 	_combo_label.add_theme_font_override("font", font)
 	_combo_label.add_theme_color_override("font_color", color)
-	_combo_label.add_theme_font_size_override("font_size", font_size)
+	_combo_label.add_theme_font_size_override("font_size", UITheme.fs(font_size))
 	_combo_label.size = Vector2.ZERO
 	_combo_label.reset_size()
 	_combo_label.position.x = (_stage.size.x - _combo_label.size.x) * 0.5
@@ -642,7 +642,7 @@ func _build_ui() -> void:
 	top.add_child(spacer)
 	_restart_button = Button.new()
 	_restart_button.text = DataDB.t("ui.restart")
-	_restart_button.add_theme_font_size_override("font_size", 22)
+	_restart_button.add_theme_font_size_override("font_size", UITheme.fs(22))
 	_restart_button.pressed.connect(func() -> void:
 		if not busy:
 			_new_battle())
@@ -680,12 +680,12 @@ func _build_ui() -> void:
 	name_col.custom_minimum_size.x = 170
 	var name_label := _label(UITheme.caps(DataDB.t("class." + GameState.active_class)))
 	name_label.add_theme_font_override("font", UITheme.title_font())
-	name_label.add_theme_font_size_override("font_size", 28)
+	name_label.add_theme_font_size_override("font_size", UITheme.fs(28))
 	name_label.add_theme_color_override("font_color", UITheme.GOLD)
 	name_col.add_child(name_label)
 	_level_label = _label("")
 	_level_label.add_theme_color_override("font_color", UITheme.TEXT_MUTED)
-	_level_label.add_theme_font_size_override("font_size", 20)
+	_level_label.add_theme_font_size_override("font_size", UITheme.fs(20))
 	name_col.add_child(_level_label)
 	info.add_child(name_col)
 	var bars := VBoxContainer.new()
@@ -705,7 +705,7 @@ func _build_ui() -> void:
 
 	_log_label = _label("")
 	_log_label.add_theme_color_override("font_color", UITheme.TEXT_MUTED)
-	_log_label.add_theme_font_size_override("font_size", 20)
+	_log_label.add_theme_font_size_override("font_size", UITheme.fs(20))
 	_log_label.clip_text = true
 	bcol.add_child(_log_label)
 
@@ -724,14 +724,14 @@ func _build_ui() -> void:
 	_defend_button.custom_minimum_size.y = 84
 	_defend_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_defend_button.size_flags_stretch_ratio = 1.4
-	_defend_button.add_theme_font_size_override("font_size", 28)
+	_defend_button.add_theme_font_size_override("font_size", UITheme.fs(28))
 	_defend_button.pressed.connect(_on_defend_pressed)
 	actions.add_child(_defend_button)
 	_potion_button = Button.new()
 	_potion_button.icon = load("res://assets/icons/items/potion.png")
 	_potion_button.custom_minimum_size.y = 84
 	_potion_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_potion_button.add_theme_font_size_override("font_size", 26)
+	_potion_button.add_theme_font_size_override("font_size", UITheme.fs(26))
 	_potion_button.pressed.connect(_on_potion_pressed)
 	actions.add_child(_potion_button)
 
@@ -763,11 +763,11 @@ func _build_result_layer() -> void:
 	v.add_child(_result_title)
 	_result_body = _label("")
 	_result_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_result_body.add_theme_font_size_override("font_size", 30)
+	_result_body.add_theme_font_size_override("font_size", UITheme.fs(30))
 	v.add_child(_result_body)
 	_result_button = Button.new()
 	_result_button.custom_minimum_size.y = 84
-	_result_button.add_theme_font_size_override("font_size", 30)
+	_result_button.add_theme_font_size_override("font_size", UITheme.fs(30))
 	_result_button.pressed.connect(_on_result_pressed)
 	v.add_child(_result_button)
 	_result_layer.visible = false
@@ -939,7 +939,7 @@ func _build_skill_buttons() -> void:
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(0, 116)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.add_theme_font_size_override("font_size", 24)
+		b.add_theme_font_size_override("font_size", UITheme.fs(24))
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.icon = load(def.get("icon", "res://assets/icons/skills/slash.png"))
 		b.expand_icon = false

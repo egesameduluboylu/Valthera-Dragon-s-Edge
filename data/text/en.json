@@ -517,5 +517,9 @@
   "market.err_listed_before": "This item was already listed once.",
   "market.err_daily_limit": "You've hit today's listing limit. Try again tomorrow.",
   "market.err_buy_limit": "You've hit today's buying limit. Try again tomorrow.",
-  "market.err_bad_request": "The server didn't understand the request."
+  "market.err_bad_request": "The server didn't understand the request.",
+  "settings.text_size": "Text size",
+  "settings.text_size.0": "Normal",
+  "settings.text_size.1": "Large",
+  "settings.text_size.2": "Larger"
 }

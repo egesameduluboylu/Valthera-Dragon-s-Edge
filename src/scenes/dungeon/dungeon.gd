@@ -751,7 +751,7 @@ func _button(text: String, icon_path: String, on_press: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.custom_minimum_size.y = 84
-	b.add_theme_font_size_override("font_size", 28)
+	b.add_theme_font_size_override("font_size", UITheme.fs(28))
 	if icon_path != "":
 		b.icon = load(icon_path)
 		b.add_theme_constant_override("icon_max_width", 44)
@@ -788,7 +788,7 @@ func _bar(color: Color, height: int) -> Array:
 func _label(text: String, font_size: int, color: Color) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", font_size)
+	l.add_theme_font_size_override("font_size", UITheme.fs(font_size))
 	l.add_theme_color_override("font_color", color)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
