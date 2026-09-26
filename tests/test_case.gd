@@ -50,7 +50,7 @@ static func make_engine(enemy_ids: Array, seed_value: int = 1) -> CombatEngine:
 	var class_def: Dictionary = data["classes"]["warrior"]
 	var engine := CombatEngine.new(data["skills"], data["statuses"], seeded_rng(seed_value))
 	engine.enemy_defs = data["enemies"]
-	var p := Combatant.make_player("warrior", class_def, 1, class_def["prototype_skills"])
+	var p := Combatant.make_player("warrior", class_def, 1, class_def["starter_skills"])
 	p.stats.crit = 0.0
 	p.stats.dodge = 0.0
 	var foes: Array[Combatant] = []
@@ -65,6 +65,76 @@ static func make_engine(enemy_ids: Array, seed_value: int = 1) -> CombatEngine:
 
 static func events_of(events: Array, type: String) -> Array:
 	return events.filter(func(ev: Dictionary) -> bool: return ev["type"] == type)
+
+
+## Combo bot for any class: the warrior loop below, or the Mage's burn/freeze loop, or
+## the Rogue's poison loop using both Flurry actions.
+static func class_bot_turn(engine: CombatEngine) -> void:
+	match engine.player.def_id:
+		"mage":
+			_mage_bot_turn(engine)
+		"rogue":
+			_rogue_bot_turn(engine)
+			if engine.in_flurry():
+				_rogue_bot_turn(engine)
+				if engine.in_flurry():
+					engine.end_turn()
+		_:
+			bot_turn(engine)
+
+
+static func _bot_target(engine: CombatEngine) -> Combatant:
+	var alive := engine.alive_enemies()
+	for e in alive:
+		if e.is_boss:
+			return e
+	return alive[0]
+
+
+static func _mage_bot_turn(engine: CombatEngine) -> void:
+	if engine.player.hp_ratio() < 0.35 and engine.potions > 0:
+		engine.use_potion()
+		return
+	if engine.alive_enemies().is_empty():
+		return
+	var t := _bot_target(engine)
+	for s in ["mage_flame_burst", "mage_shatter"]:
+		if engine.can_use(s) and engine.combo_ready(s, t):
+			engine.use_skill(s, t.uid)
+			return
+	if engine.can_use("mage_mana_shield") and engine.player.hp_ratio() < 0.6:
+		engine.use_skill("mage_mana_shield")
+	elif not t.has_status("burn") and engine.can_use("mage_fireball"):
+		engine.use_skill("mage_fireball", t.uid)
+	elif engine.player.resource >= 50 and engine.can_use("mage_ice_lance"):
+		engine.use_skill("mage_ice_lance", t.uid)
+	else:
+		engine.use_skill("mage_arcane_bolt", t.uid)
+
+
+static func _rogue_bot_turn(engine: CombatEngine) -> void:
+	if not engine.in_flurry() and engine.player.hp_ratio() < 0.35 and engine.potions > 0:
+		engine.use_potion()
+		return
+	if engine.alive_enemies().is_empty():
+		return
+	var t := _bot_target(engine)
+	var heavy := false
+	for e in engine.alive_enemies():
+		heavy = heavy or e.intent.get("heavy", false)
+	var poisonable := not t.immune.has("poison")
+	if heavy and engine.can_use("rogue_smoke_bomb"):
+		engine.use_skill("rogue_smoke_bomb")
+	elif engine.can_use("rogue_backstab") and engine.combo_ready("rogue_backstab", t):
+		engine.use_skill("rogue_backstab", t.uid)
+	elif poisonable and (not t.has_status("poison") or t.get_status("poison").stacks < 4) and engine.can_use("rogue_poison_blade"):
+		engine.use_skill("rogue_poison_blade", t.uid)
+	elif not poisonable and not t.has_status("stun") and engine.can_use("rogue_blind"):
+		engine.use_skill("rogue_blind", t.uid)
+	elif engine.can_use("rogue_stab"):
+		engine.use_skill("rogue_stab", t.uid)
+	elif not engine.in_flurry():
+		engine.defend()
 
 
 ## Simple combo bot for balance tests: potion when low, otherwise the combo loop on the

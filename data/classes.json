@@ -11,6 +11,43 @@
     "resource_on_defend": 20,
     "base": {"hp": 120, "atk": 12, "def": 15, "spd": 8, "crit": 0.05, "dodge": 0.0},
     "per_level": {"hp": 12, "atk": 2, "def": 2, "spd": 0.5, "crit": 0.0, "dodge": 0.0},
-    "prototype_skills": ["warrior_slash", "warrior_shield_break", "warrior_heavy_strike", "warrior_execute"]
+    "starter_skills": ["warrior_slash", "warrior_shield_break", "warrior_heavy_strike", "warrior_execute"],
+    "starter_weapon": "rusty_sword",
+    "resource_color": "#c8412f"
+  },
+  "mage": {
+    "name_key": "class.mage",
+    "sprite": "res://assets/sprites/player/mage.png",
+    "resource": "mana",
+    "resource_color": "#3f7fd8",
+    "resource_start": 100,
+    "resource_max": 100,
+    "resource_per_turn": 15,
+    "resource_on_hit": 0,
+    "resource_on_damaged": 0,
+    "resource_on_defend": 30,
+    "base": {"hp": 80, "atk": 15, "def": 6, "spd": 10, "crit": 0.08, "dodge": 0.0},
+    "per_level": {"hp": 8, "atk": 2.5, "def": 1, "spd": 0.5, "crit": 0.0, "dodge": 0.0},
+    "starter_skills": ["mage_arcane_bolt", "mage_fireball", "mage_flame_burst", "mage_ice_lance"],
+    "starter_weapon": "apprentice_staff",
+    "unlock_after": "rotten_cellar"
+  },
+  "rogue": {
+    "name_key": "class.rogue",
+    "sprite": "res://assets/sprites/player/rogue.png",
+    "resource": "energy",
+    "resource_color": "#e0b53a",
+    "resource_start": 60,
+    "resource_max": 100,
+    "resource_per_turn": 30,
+    "resource_on_hit": 0,
+    "resource_on_damaged": 0,
+    "resource_on_defend": 40,
+    "flurry": {"extra_cost": 10},
+    "base": {"hp": 100, "atk": 13, "def": 9, "spd": 14, "crit": 0.15, "dodge": 0.0},
+    "per_level": {"hp": 9, "atk": 2, "def": 1.5, "spd": 1, "crit": 0.0, "dodge": 0.0},
+    "starter_skills": ["rogue_stab", "rogue_poison_blade", "rogue_backstab", "rogue_blind"],
+    "starter_weapon": "rusty_dagger",
+    "unlock_after": "rotten_cellar"
   }
 }

@@ -48,7 +48,8 @@ var kills: int = 0
 
 
 func _init(p_data: Dictionary, p_dungeon_id: String, p_class_id: String, p_level: int,
-		p_class_xp: int = 0, p_rng: RandomNumberGenerator = null, p_equipment: Array = []) -> void:
+		p_class_xp: int = 0, p_rng: RandomNumberGenerator = null, p_equipment: Array = [],
+		p_skills: Array = []) -> void:
 	data = p_data
 	dungeon_id = p_dungeon_id
 	def = data["dungeons"][dungeon_id]
@@ -58,7 +59,8 @@ func _init(p_data: Dictionary, p_dungeon_id: String, p_class_id: String, p_level
 	class_xp = p_class_xp
 	potions = int(def.get("potions", 3))
 	var class_def: Dictionary = data["classes"][class_id]
-	player = Combatant.make_player(class_id, class_def, level, class_def.get("prototype_skills", []))
+	player = Combatant.make_player(class_id, class_def, level,
+			p_skills if not p_skills.is_empty() else class_def.get("starter_skills", []))
 	equipment = p_equipment
 	_rebuild_stats()
 	player.hp = player.max_hp()
@@ -237,6 +239,7 @@ func to_dict() -> Dictionary:
 		return {}
 	return {
 		"dungeon_id": dungeon_id, "class_id": class_id, "level": level, "class_xp": class_xp,
+		"skills": Array(player.skills),
 		"hp": player.hp, "potions": potions, "atk_percent": atk_percent,
 		"room_number": room_number, "choices": choices.duplicate(true), "history": history.duplicate(),
 		"equipment": equipment.duplicate(true), "loot": loot.duplicate(true),
@@ -260,7 +263,12 @@ static func from_dict(p_data: Dictionary, d: Dictionary) -> DungeonRun:
 	for item in d.get("equipment", []):
 		if item is Dictionary and p_data["items"]["bases"].has(item.get("base", "")):
 			equipment_.append(item)
-	var run := DungeonRun.new(p_data, id, cls, int(d.get("level", 1)), int(d.get("class_xp", 0)), rng_, equipment_)
+	var skills_: Array = []
+	for sid in d.get("skills", []):
+		if p_data["skills"].get(str(sid), {}).get("class", "") == cls:
+			skills_.append(str(sid))
+	var run := DungeonRun.new(p_data, id, cls, int(d.get("level", 1)), int(d.get("class_xp", 0)), rng_, equipment_,
+			skills_)
 	run.atk_percent = float(d.get("atk_percent", 0.0))
 	run._rebuild_stats()
 	run.player.hp = clampi(int(d.get("hp", run.player.max_hp())), 1, run.player.max_hp())

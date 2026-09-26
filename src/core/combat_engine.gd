@@ -26,6 +26,8 @@ extends RefCounted
 ##   item {source, item}
 ##   summon {source, uid, enemy_id}
 ##   phase {source, phase, line_key}
+##   resist {target, status}           a boss shrugged off a chance-based status
+##   flurry {}                          Rogue "Seri": the turn goes on for a second skill
 ##   battle_end {victory, xp, gold}
 
 const COMBO_CHAIN_BONUS := 0.10
@@ -51,6 +53,10 @@ var finished: bool = false
 var victory: bool = false
 var reward_xp: int = 0
 var reward_gold: int = 0
+## Skills used in the player's current turn. Only a class with "flurry" (Rogue) gets
+## a second one, for flurry.extra_cost more resource (docs/04 "Seri").
+var actions_this_turn: int = 0
+var _used_this_turn: Array[String] = []
 
 ## Gear perks (docs/05 "Benzersiz Eşyalar"): the first damaging hit of a battle gets
 ## first_strike once.
@@ -71,7 +77,7 @@ static func from_data(data: Dictionary, class_id: String, level: int, encounter_
 		p_rng: RandomNumberGenerator = null) -> CombatEngine:
 	var class_def: Dictionary = data["classes"][class_id]
 	var engine := CombatEngine.new(data["skills"], data["statuses"], p_rng)
-	var p := Combatant.make_player(class_id, class_def, level, class_def.get("prototype_skills", []))
+	var p := Combatant.make_player(class_id, class_def, level, class_def.get("starter_skills", []))
 	var enc: Dictionary = data["encounters"][encounter_id]
 	return CombatEngine.for_enemies(data, p, enc["enemies"], int(enc.get("level", 1)), p_rng)
 
@@ -132,12 +138,24 @@ func skill_block_reason(skill_id: String) -> String:
 		return "finished"
 	if not player.skills.has(skill_id):
 		return "not_equipped"
-	var def: Dictionary = skill_defs.get(skill_id, {})
 	if int(player.cooldowns.get(skill_id, 0)) > 0:
 		return "cooldown"
-	if player.resource < int(def.get("cost", 0)):
+	if player.resource < skill_cost(skill_id):
 		return "resource"
 	return ""
+
+
+## Resource cost right now: the listed cost, plus the flurry surcharge on a second action.
+func skill_cost(skill_id: String) -> int:
+	var cost := int(skill_defs.get(skill_id, {}).get("cost", 0))
+	if actions_this_turn > 0:
+		cost += int(player.resource_rules.get("flurry", {}).get("extra_cost", 0))
+	return cost
+
+
+## True between a Rogue's first and second skill of a turn.
+func in_flurry() -> bool:
+	return actions_this_turn > 0 and not finished
 
 
 func can_use(skill_id: String) -> bool:
@@ -147,7 +165,17 @@ func can_use(skill_id: String) -> bool:
 ## True when the skill is a finisher and the target carries the status it looks for.
 func combo_ready(skill_id: String, target: Combatant) -> bool:
 	var combo: Dictionary = skill_defs.get(skill_id, {}).get("combo", {})
-	return not combo.is_empty() and target != null and target.has_status(combo.get("requires_status", ""))
+	return target != null and CombatEngine.combo_status(combo, target) != ""
+
+
+## The status on `target` that sets up this finisher, or "". requires_status is one id
+## or a list of ids, any of which works (Backstab: poison, or stun on the undead).
+static func combo_status(combo: Dictionary, target: Combatant) -> String:
+	var req: Variant = combo.get("requires_status", [])
+	for id in (req if req is Array else [req]):
+		if target.has_status(id):
+			return id
+	return ""
 
 
 func use_skill(skill_id: String, target_uid: String = "") -> Array:
@@ -160,13 +188,31 @@ func use_skill(skill_id: String, target_uid: String = "") -> Array:
 		return []
 
 	_acting = player
-	_spend_resource(int(def.get("cost", 0)))
+	var cost := skill_cost(skill_id)
+	_spend_resource(cost)
 	var cd := int(def.get("cooldown", 0))
 	if cd > 0:
 		player.cooldowns[skill_id] = cd
 	_emit({"type": "skill", "source": player.uid, "skill": skill_id})
-	_perform_skill(def, targets)
-	_end_player_turn(skill_id)
+	_perform_skill(def, targets, cost)
+	actions_this_turn += 1
+	_used_this_turn.append(skill_id)
+	if _check_end():
+		return _flush()
+	if _can_flurry():
+		_emit({"type": "flurry"})
+		return _flush()
+	_end_player_turn()
+	return _flush()
+
+
+## Ends a Rogue's turn after one skill without a second one (no defend bonus).
+func end_turn() -> Array:
+	_events = []
+	if not in_flurry():
+		return []
+	_acting = player
+	_end_player_turn()
 	return _flush()
 
 
@@ -180,7 +226,7 @@ func use_potion() -> Array:
 	combo_count = 0
 	_emit({"type": "item", "source": player.uid, "item": "potion"})
 	_heal(player, roundi(player.max_hp() * POTION_HEAL_PERCENT))
-	_end_player_turn("")
+	_end_player_turn()
 	return _flush()
 
 
@@ -188,12 +234,14 @@ func defend() -> Array:
 	_events = []
 	if finished:
 		return []
+	if in_flurry():
+		return end_turn()
 	_acting = player
 	player.defending = true
 	combo_count = 0
 	_emit({"type": "defend", "target": player.uid})
 	_gain_resource(int(player.resource_rules.get("resource_on_defend", 0)))
-	_end_player_turn("")
+	_end_player_turn()
 	return _flush()
 
 
@@ -201,6 +249,8 @@ func defend() -> Array:
 
 func _start_round() -> void:
 	turn += 1
+	actions_this_turn = 0
+	_used_this_turn.clear()
 	_emit({"type": "turn_start", "turn": turn})
 	_acting = player
 	player.shield = 0
@@ -210,14 +260,25 @@ func _start_round() -> void:
 	_tick_dots(player)
 	if _check_end():
 		return
-	_gain_resource(int(player.resource_rules.get("resource_per_turn", 0)))
+	if turn > 1:
+		_gain_resource(int(player.resource_rules.get("resource_per_turn", 0)))
 	_update_intents()
 
 
-func _end_player_turn(used_skill: String) -> void:
+func _can_flurry() -> bool:
+	if not player.resource_rules.has("flurry") or actions_this_turn != 1:
+		return false
+	for id in player.skills:
+		if can_use(id):
+			return true
+	return false
+
+
+func _end_player_turn() -> void:
 	for id in player.cooldowns.keys():
-		if id != used_skill and player.cooldowns[id] > 0:
+		if not _used_this_turn.has(id) and player.cooldowns[id] > 0:
 			player.cooldowns[id] -= 1
+	actions_this_turn = 0
 	_decay_statuses(player)
 	if _check_end():
 		return
@@ -284,6 +345,12 @@ func _resolve_targets(def: Dictionary, target_uid: String) -> Array[Combatant]:
 			out.append(player)
 		"all_enemies":
 			out = alive_enemies()
+		"random_enemies":
+			# Blade Rain: each hit picks a target; a target that dies is re-picked later.
+			var alive := alive_enemies()
+			for i in int(def.get("hits", 1)):
+				if not alive.is_empty():
+					out.append(alive[rng.randi_range(0, alive.size() - 1)])
 		_:
 			var t := get_combatant(target_uid)
 			if t == null or t.is_player or not t.is_alive():
@@ -295,7 +362,7 @@ func _resolve_targets(def: Dictionary, target_uid: String) -> Array[Combatant]:
 	return out
 
 
-func _perform_skill(def: Dictionary, targets: Array[Combatant]) -> void:
+func _perform_skill(def: Dictionary, targets: Array[Combatant], cost_paid: int = 0) -> void:
 	var power := float(def.get("power", 0.0))
 	var element: String = def.get("element", "physical")
 	var combo: Dictionary = def.get("combo", {})
@@ -307,16 +374,28 @@ func _perform_skill(def: Dictionary, targets: Array[Combatant]) -> void:
 			for spec in def.get("apply_status", []):
 				_apply_status(player, spec, player)
 			var pct := float(def.get("shield_max_hp_percent", 0.0))
-			if pct > 0.0:
-				_add_shield(player, roundi(player.max_hp() * pct))
+			var flat := float(def.get("shield_flat", 0.0)) + float(def.get("shield_atk", 0.0)) * player.effective_atk(status_defs)
+			if pct > 0.0 or flat > 0.0:
+				_add_shield(player, roundi(player.max_hp() * pct + flat))
 			continue
+		if not t.is_alive():
+			var alive := alive_enemies()
+			if alive.is_empty():
+				break
+			t = alive[rng.randi_range(0, alive.size() - 1)]
 
-		var is_combo := not combo.is_empty() and t.has_status(combo.get("requires_status", ""))
+		var req_id := CombatEngine.combo_status(combo, t)
+		var is_combo := req_id != ""
 		var mult := 1.0
+		var burst := 0
 		if is_combo:
 			mult = float(combo.get("multiplier", 1.0))
 			if combo.has("low_hp_threshold") and t.hp_ratio() < float(combo["low_hp_threshold"]):
 				mult = float(combo.get("low_hp_multiplier", mult))
+			var req := t.get_status(req_id)
+			mult += float(combo.get("per_stack", 0.0)) * req.stacks
+			if combo.get("detonate", false):
+				burst = _dot_amount(t, req_id) * req.turns
 			mult *= 1.0 + COMBO_CHAIN_BONUS * combo_count
 			mult *= 1.0 + float(player.perks.get("combo_damage", 0))
 		if power > 0.0 and not _first_strike_used:
@@ -326,7 +405,8 @@ func _perform_skill(def: Dictionary, targets: Array[Combatant]) -> void:
 
 		var hit := true
 		if power > 0.0:
-			var r := DamageCalc.roll(player, t, power, element, status_defs, rng, mult)
+			var r := DamageCalc.roll(player, t, power, element, status_defs, rng, mult,
+					is_combo and combo.get("force_crit", false))
 			if r["miss"]:
 				hit = false
 				_emit({"type": "miss", "source": player.uid, "target": t.uid})
@@ -337,8 +417,11 @@ func _perform_skill(def: Dictionary, targets: Array[Combatant]) -> void:
 		any_hit = true
 		if is_combo:
 			any_combo = true
+			if burst > 0 and t.is_alive():
+				# Poison Burst: all the poison still to come lands at once.
+				_deal_damage(player, t, roundi(burst * (1.0 + COMBO_CHAIN_BONUS * combo_count)), false, true, true)
 			if combo.get("consume", false):
-				_remove_status(t, combo["requires_status"])
+				_remove_status(t, req_id)
 		if not t.is_alive():
 			continue
 		if is_combo:
@@ -353,7 +436,10 @@ func _perform_skill(def: Dictionary, targets: Array[Combatant]) -> void:
 		_first_strike_used = true
 	if power > 0.0 and any_hit:
 		_gain_resource(int(player.resource_rules.get("resource_on_hit", 0)))
+	_gain_resource(int(def.get("resource_gain", 0)))
 	if any_combo:
+		if combo.get("refund", false):
+			_gain_resource(cost_paid)
 		combo_count += 1
 		_emit({"type": "combo", "count": combo_count})
 	else:
@@ -519,6 +605,9 @@ func _apply_status(target: Combatant, spec: Dictionary, source: Combatant) -> vo
 	if target.immune.has(id):
 		_emit({"type": "immune", "target": target.uid, "status": id})
 		return
+	if target.is_boss and spec.has("boss_chance") and rng.randf() >= float(spec["boss_chance"]):
+		_emit({"type": "resist", "target": target.uid, "status": id})
+		return
 	var turns := int(spec.get("turns", 1))
 	var add_stacks := int(spec.get("stacks", 1))
 	var s := target.get_status(id)
@@ -531,6 +620,10 @@ func _apply_status(target: Combatant, spec: Dictionary, source: Combatant) -> vo
 	s.fresh = target == _acting
 	if d.get("dot", "") == "atk_percent" and source != null:
 		s.dot_amount = maxi(1, roundi(source.effective_atk(status_defs) * float(d.get("dot_value", 0))))
+	elif d.get("dot", "") == "per_stack" and source != null:
+		# Per-stack damage grows with the poisoner's attack; the strongest source counts.
+		s.dot_amount = maxi(s.dot_amount, maxi(int(d.get("dot_value", 0)),
+				roundi(source.effective_atk(status_defs) * float(d.get("dot_atk_scale", 0.0)))))
 	_emit({"type": "status_applied", "target": target.uid, "status": id, "turns": s.turns, "stacks": s.stacks})
 
 	var stun_at := int(d.get("stun_at_stacks", 0))
@@ -553,18 +646,23 @@ func _tick_dots(c: Combatant) -> void:
 	for id in c.statuses.keys():
 		if not c.is_alive():
 			return
-		var s: StatusEffect = c.statuses[id]
-		var d: Dictionary = status_defs.get(id, {})
-		var amount := 0
-		match d.get("dot", ""):
-			"atk_percent":
-				amount = s.dot_amount
-			"max_hp_percent":
-				amount = maxi(1, roundi(c.max_hp() * float(d.get("dot_value", 0))))
-			"per_stack":
-				amount = int(d.get("dot_value", 0)) * s.stacks
+		var amount := _dot_amount(c, id)
 		if amount > 0:
 			_deal_damage(null, c, amount, false, false, true)
+
+
+## Damage one tick of a status does to its carrier (0 for statuses without a dot).
+func _dot_amount(c: Combatant, id: String) -> int:
+	var s: StatusEffect = c.statuses[id]
+	var d: Dictionary = status_defs.get(id, {})
+	match d.get("dot", ""):
+		"atk_percent":
+			return s.dot_amount
+		"max_hp_percent":
+			return maxi(1, roundi(c.max_hp() * float(d.get("dot_value", 0))))
+		"per_stack":
+			return (s.dot_amount if s.dot_amount > 0 else int(d.get("dot_value", 0))) * s.stacks
+	return 0
 
 
 ## Called at the end of the owner's turn. A status applied during the owner's own turn

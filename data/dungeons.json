@@ -24,9 +24,10 @@
     "loot": {
       "combat":   {"chance": 0.35, "uniques": [{"base": "rat_fang", "chance": 0.02}, {"base": "spore_cloak", "chance": 0.02}]},
       "mimic":    {"chance": 1.0, "min_rarity": "rare", "uniques": [{"base": "mimic_ring", "chance": 0.15}]},
-      "elite":    {"chance": 1.0, "min_rarity": "rare", "scales": 1, "uniques": [{"base": "warden_axe", "chance": 0.12}]},
+      "elite":    {"chance": 1.0, "min_rarity": "rare", "scales": 1, "uniques": [{"base": "warden_axe", "chance": 0.12}, {"base": "ember_rod", "chance": 0.12}, {"base": "wardens_key", "chance": 0.12}]},
       "boss":     {"chance": 1.0, "min_rarity": "rare", "scales": 2, "legendary": true,
-                   "uniques": [{"base": "bone_crown", "chance": 0.06}, {"base": "kingslayer", "chance": 0.04}]},
+                   "uniques": [{"base": "bone_crown", "chance": 0.06}, {"base": "kingslayer", "chance": 0.04},
+                               {"base": "grave_scepter", "chance": 0.04}, {"base": "nightfang", "chance": 0.04}]},
       "treasure": {"chance": 1.0}
     }
   }

@@ -153,7 +153,7 @@ func test_boss_is_beatable_with_combos() -> void:
 	for s in 40:
 		var data := game_data()
 		var p := Combatant.make_player("warrior", data["classes"]["warrior"], 2,
-				data["classes"]["warrior"]["prototype_skills"])
+				data["classes"]["warrior"]["starter_skills"])
 		var engine := CombatEngine.for_enemies(data, p, ["bone_king"], 3, seeded_rng(s))
 		engine.potions = 3
 		engine.start()
