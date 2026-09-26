@@ -22,6 +22,8 @@ var equipment: Dictionary = {}        # slot -> item uid or ""
 var shop: Array = []                  # items for sale at the merchant
 var dungeons: Dictionary = {}         # dungeon_id -> {runs, cleared}
 var run_state: Dictionary = {}        # DungeonRun.to_dict() between rooms, or {}
+var market: Dictionary = {}           # offline marketplace: board, own listings, mailbox (LocalMarket)
+var player_name: String = ""          # shown on the player's market listings
 var next_uid: int = 1
 
 
@@ -40,7 +42,10 @@ static func new_game(p_data: Dictionary, rng: RandomNumberGenerator = null) -> P
 				"upgrade": 0, "affixes": []}
 		p.add_item(item)
 		p.equip(item["uid"])
-	p.restock_shop(rng if rng != null else RandomNumberGenerator.new())
+	var r := rng if rng != null else RandomNumberGenerator.new()
+	p.restock_shop(r)
+	p.player_name = "Maceracı %04d" % r.randi_range(1, 9999)
+	LocalMarket.new(p)._turn_over_board(r)
 	return p
 
 
@@ -104,8 +109,17 @@ func slot_of(item: Dictionary) -> String:
 
 
 func can_equip(item: Dictionary) -> bool:
+	return equip_block_reason(item) == ""
+
+
+## "" when the item can be worn, else "class" or "level".
+func equip_block_reason(item: Dictionary) -> String:
 	var base: Dictionary = defs()["bases"][item["base"]]
-	return not base.has("class") or base["class"] == active_class
+	if base.has("class") and base["class"] != active_class:
+		return "class"
+	if Items.wear_level(item, defs()) > level():
+		return "level"
+	return ""
 
 
 func equipped(slot: String) -> Dictionary:
@@ -279,6 +293,8 @@ func to_dict() -> Dictionary:
 		"shop": shop.duplicate(true),
 		"dungeons": dungeons.duplicate(true),
 		"run_state": run_state.duplicate(true),
+		"market": market.duplicate(true),
+		"player_name": player_name,
 		"next_uid": next_uid,
 	}
 
@@ -305,7 +321,29 @@ static func from_dict(p_data: Dictionary, d: Dictionary) -> Profile:
 						"cleared": bool(dungeons_[id].get("cleared", false))}
 	p.run_state = d.get("run_state", {}) if d.get("run_state") is Dictionary else {}
 	p.next_uid = int(d.get("next_uid", p.inventory.size() + 1))
+	p.player_name = str(d.get("player_name", "Maceracı"))
+	p.market = _clean_market(d.get("market", {}), p_data)
 	return p
+
+
+static func _clean_market(m: Variant, p_data: Dictionary) -> Dictionary:
+	if not m is Dictionary or not m.has("board"):
+		return {}
+	var out := {"next_id": int(m.get("next_id", 1)), "board": [], "listings": [], "mailbox": []}
+	for key in ["board", "listings", "mailbox"]:
+		for e in m.get(key, []):
+			if not e is Dictionary:
+				continue
+			if e.has("item"):
+				var cleaned := _clean_items([e["item"]], p_data)
+				if cleaned.is_empty():
+					continue
+				e["item"] = cleaned[0]
+			for k in ["price", "gold", "runs_left"]:
+				if e.has(k):
+					e[k] = int(e[k])
+			out[key].append(e)
+	return out
 
 
 ## Drops items whose base no longer exists and restores int fields.

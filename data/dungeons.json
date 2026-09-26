@@ -22,11 +22,11 @@
     "treasure": {"gold": [15, 30], "potion_chance": 0.3, "mimic_chance": 0.2, "mimic": ["mimic"]},
     "rest": {"heal_percent": 0.3, "potions": 1},
     "loot": {
-      "combat":   {"chance": 0.35},
-      "mimic":    {"chance": 1.0, "min_rarity": "rare"},
-      "elite":    {"chance": 1.0, "min_rarity": "rare", "scales": 1},
+      "combat":   {"chance": 0.35, "uniques": [{"base": "rat_fang", "chance": 0.02}, {"base": "spore_cloak", "chance": 0.02}]},
+      "mimic":    {"chance": 1.0, "min_rarity": "rare", "uniques": [{"base": "mimic_ring", "chance": 0.15}]},
+      "elite":    {"chance": 1.0, "min_rarity": "rare", "scales": 1, "uniques": [{"base": "warden_axe", "chance": 0.12}]},
       "boss":     {"chance": 1.0, "min_rarity": "rare", "scales": 2, "legendary": true,
-                   "unique": {"base": "bone_crown", "rarity": "legendary", "chance": 0.05}},
+                   "uniques": [{"base": "bone_crown", "chance": 0.06}, {"base": "kingslayer", "chance": 0.04}]},
       "treasure": {"chance": 1.0}
     }
   }

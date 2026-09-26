@@ -41,6 +41,9 @@ gereken_xp(sv) = yuvarla(50 * sv ^ 1.5)
 
 Ek özellik havuzu: +CAN, +SAL, +SAV, +HIZ, +KRT, +KAÇ, element direnci, "Savaş başında X Kalkan", "Kombo hasarı +%10" vb.
 
+Kuşanma seviyesi: eşya seviyesinin 2 altına kadar (Sv 5 eşya, Sv 3 karakterde giyilir). Pazardan çok
+yüksek seviyeli eşya alınsa bile hemen giyilemez.
+
 Efsanevi örnekleri:
 - **Kemik Kral'ın Tacı (Kask):** Düşman öldürünce 10 CAN yenile.
 - **Sonsuz Kor (Asa):** Yanma etkisi 1 tur daha uzun sürer.
@@ -124,3 +127,19 @@ Silahlar sadece aktif sınıfın silahlarından çıkar. Ölünce ganimet kalır
 
 - Can İksiri 25 altın; en fazla 6 iksir taşınır. Kasabaya dönünce stok ücretsiz olarak 3'e tamamlanır.
 - Her koşudan sonra 3 yeni eşya gelir (seviye: bitirilen zindanların en yükseği). Fiyat = parçalama değeri x 4.
+
+### Benzersiz Eşyalar (Çürük Mahzen)
+
+Sabit adlı ve nadirlikli, özel etkili eşyalar. Normal ganimete ek olarak kendi küçük ihtimalleriyle düşer,
+pazarda önerilen fiyatları x2.5'tir.
+
+| Eşya | Nadirlik | Slot | Özel etki | Kaynak |
+|------|----------|------|-----------|--------|
+| Fare Dişi Kolye | Epik | Aksesuar | Vuruşlar %25 ihtimalle Kanama | Sıradan savaş %2 |
+| Spor Pelerini | Epik | Zırh | Alınan hasarın %20'si saldırana yansır | Sıradan savaş %2 |
+| Taklitçi Dişi Yüzük | Epik | Aksesuar | Bulunan altın +%30 | Taklitçi %15 |
+| Bekçi Baltası | Epik | Silah (Savaşçı) | Her savaşta ilk saldırı +%50 | Elit %12 |
+| Kemik Kral'ın Tacı | Efsanevi | Kask | Öldürünce 10 can | Kemik Kral %6 |
+| Kral Katili | Efsanevi | Silah (Savaşçı) | Hasarın %12'si kadar can çalma, canın %30 altındayken +%30 hasar | Kemik Kral %4 |
+
+Yeni zindanlar kendi benzersiz eşyalarını getirir (Sonsuz Kor, Fısıltı vb.).

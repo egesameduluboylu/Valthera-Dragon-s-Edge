@@ -1,0 +1,5 @@
+{
+  "_comment": "Fill these in to turn on the online player market (docs/13). The anon key is public by design; security comes from the server functions and row level security.",
+  "supabase_url": "",
+  "supabase_anon_key": ""
+}

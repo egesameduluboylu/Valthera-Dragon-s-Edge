@@ -172,7 +172,13 @@ func _draw_card() -> void:
 		off.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		buttons.add_child(off)
 	else:
-		var on := UIKit.primary(UIKit.button(DataDB.t("bag.equip") if p.can_equip(item) else DataDB.t("bag.wrong_class"), "",
+		var why := p.equip_block_reason(item)
+		var label := DataDB.t("bag.equip")
+		if why == "class":
+			label = DataDB.t("bag.wrong_class")
+		elif why == "level":
+			label = DataDB.tf("bag.low_level", {"n": Items.wear_level(item, ItemUI.defs())})
+		var on := UIKit.primary(UIKit.button(label, "",
 				func() -> void:
 					if p.equip(_selected):
 						GameState.changed()

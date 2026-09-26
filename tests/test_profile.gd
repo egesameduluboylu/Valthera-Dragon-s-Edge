@@ -137,9 +137,11 @@ func test_boss_and_elite_rooms_drop_loot_and_scales() -> void:
 		run.start()
 		var drop := run._drop("elite")
 		assert_eq(drop["scales"], 1)
-		elite_items += drop["items"].size()
 		for item in drop["items"]:
 			assert_true(item["rarity"] != "common")
+			if not Items.is_unique(item, data["items"]):
+				elite_items += 1
+	# one regular item per elite, uniques come on top
 	assert_eq(elite_items, 20)
 
 
@@ -198,3 +200,26 @@ func test_run_state_resumes_between_rooms() -> void:
 	# The random stream continues where it stopped.
 	assert_eq(back.rng.randi(), run.rng.randi())
 	assert_false(back.enter(0).is_empty())
+
+
+func test_high_level_items_wait_for_the_player() -> void:
+	var p := _profile()
+	var big := _give(p, "iron_sword", "rare", 6)
+	assert_eq(p.equip_block_reason(big), "level")
+	assert_false(p.equip(big["uid"]))
+	p.set_progress(4, 0)
+	assert_true(p.equip(big["uid"]))
+
+
+func test_uniques_drop_from_their_sources() -> void:
+	var data := game_data()
+	var seen := {}
+	for s in 400:
+		var run := DungeonRun.new(data, "rotten_cellar", "warrior", 1, 0, seeded_rng(s))
+		run.start()
+		for kind in ["boss", "elite", "mimic"]:
+			for item in run._drop(kind)["items"]:
+				if Items.is_unique(item, data["items"]):
+					seen[item["base"]] = true
+	for id in ["bone_crown", "kingslayer", "warden_axe", "mimic_ring"]:
+		assert_true(seen.has(id), id)

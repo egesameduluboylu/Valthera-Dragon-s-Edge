@@ -90,7 +90,7 @@ static func roll(defs: Dictionary, level: int, rng: RandomNumberGenerator, opts:
 				continue
 			pool.append(id)
 		base_id = pool[rng.randi_range(0, pool.size() - 1)]
-	var rarity: String = opts.get("rarity", "")
+	var rarity: String = opts.get("rarity", defs["bases"][base_id].get("rarity", ""))
 	if rarity == "":
 		rarity = _roll_rarity(defs, rng, opts.get("min_rarity", "common"), opts.get("legendary", false))
 	var item := {"base": base_id, "rarity": rarity, "level": level, "upgrade": 0, "affixes": []}
@@ -152,6 +152,16 @@ static func salvage_value(item: Dictionary, defs: Dictionary) -> Dictionary:
 
 static func shop_price(item: Dictionary, defs: Dictionary) -> int:
 	return salvage_value(item, defs)["gold"] * 4
+
+
+## Named items with a fixed rarity and a special effect (docs/05 "Benzersiz Eşyalar").
+static func is_unique(item: Dictionary, defs: Dictionary) -> bool:
+	return defs["bases"][item["base"]].has("unique")
+
+
+## Level needed to wear an item: a little below the item's own level.
+static func wear_level(item: Dictionary, defs: Dictionary) -> int:
+	return maxi(1, int(item["level"]) - int(defs.get("wear_level_slack", 0)))
 
 
 static func rarity_color(item: Dictionary, defs: Dictionary) -> String:

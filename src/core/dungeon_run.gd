@@ -158,7 +158,7 @@ func open_treasure() -> Dictionary:
 		room["enemies"] = t.get("mimic", ["mimic"])
 		return {"mimic": true}
 	var range_: Array = t.get("gold", [0, 0])
-	var gold := rng.randi_range(int(range_[0]), int(range_[1]))
+	var gold := roundi(rng.randi_range(int(range_[0]), int(range_[1])) * (1.0 + float(player.perks.get("gold_find", 0))))
 	var potion := rng.randf() < float(t.get("potion_chance", 0.0))
 	gold_earned += gold
 	if potion:
@@ -405,10 +405,11 @@ func _drop(kind: String) -> Dictionary:
 	scales_earned += out["scales"]
 	if rule.is_empty() or not data.has("items"):
 		return out
-	var unique: Dictionary = rule.get("unique", {})
-	if not unique.is_empty() and rng.randf() < float(unique.get("chance", 0)):
-		out["items"].append(Items.roll(data["items"], room_level(), rng,
-				{"base": unique["base"], "rarity": unique.get("rarity", "")}))
+	# Named unique items have their own small chance on top of the normal drop.
+	for u in rule.get("uniques", []):
+		var base: Dictionary = data["items"]["bases"].get(u["base"], {})
+		if base.get("class", class_id) == class_id and rng.randf() < float(u.get("chance", 0)):
+			out["items"].append(Items.roll(data["items"], room_level(), rng, {"base": u["base"]}))
 	if rng.randf() < float(rule.get("chance", 0)):
 		out["items"].append(Items.roll(data["items"], room_level(), rng, {"class_id": class_id,
 				"min_rarity": rule.get("min_rarity", "common"), "legendary": rule.get("legendary", false)}))

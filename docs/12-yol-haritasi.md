@@ -36,6 +36,13 @@ Hedef: Savaşçı, 2 fareye karşı, düz renkli kutularla bile eğlenceli mi?
 - [x] Tüccar: iksir ve her koşudan sonra yenilenen 3 eşya
 - [x] `SaveManager` + `Profile`: otomatik kayıt ve yarım kalan koşuyu kurtarma
 
+## M3.5: Pazar ve Benzersiz Eşyalar
+- [x] 6 benzersiz eşya ve özel etkileri (can çalma, diken, ilk vuruş, kanama, altın bulma, düşük canda hasar)
+- [x] Kuşanma seviyesi
+- [x] Maceracı Pazarı: çevrimdışı simülasyon + Supabase ile oyuncular arası (bkz. 13-pazar.md)
+- [x] Sunucu testleri (yerel PostgreSQL) ve istemci uçtan uca testi CI'da
+- [x] Görsel kalite geçişi: yeniden çizilen karakterler, arka planlar ve işlenmiş arayüz çerçeveleri
+
 ## M4: Görsel ve His (Demo Tamam)
 - [x] Savaş ekranı görselleri: karakterler, düşmanlar, arka plan, ikonlar, arayüz teması
 - [x] Temel animasyonlar: bekleme salınımı, saldırı atılması, vurulma, ölüm

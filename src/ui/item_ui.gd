@@ -48,7 +48,7 @@ static func _num(v: float) -> String:
 
 
 static func perk_text(id: String, value: float) -> String:
-	var shown := str(roundi(value * 100.0)) if id == "combo_damage" else str(roundi(value))
+	var shown := str(roundi(value * 100.0)) if id in defs().get("percent_perks", []) else str(roundi(value))
 	return DataDB.tf("perk." + id, {"v": shown})
 
 
@@ -133,7 +133,10 @@ static func details(item: Dictionary, compare: Variant = null) -> VBoxContainer:
 	n.add_theme_color_override("font_outline_color", UITheme.INK)
 	n.add_theme_constant_override("outline_size", 6)
 	v.add_child(n)
-	v.add_child(UIKit.label(subtitle(item), 20, UITheme.TEXT_MUTED))
+	var sub := subtitle(item)
+	if Items.is_unique(item, defs()):
+		sub = DataDB.t("item.unique") + "  ·  " + sub
+	v.add_child(UIKit.label(sub, 20, UITheme.TEXT_MUTED))
 	var mine := Items.total_stats(item, defs())
 	var theirs: Dictionary = {} if compare == null or (compare as Dictionary).is_empty() else Items.total_stats(compare, defs())
 	for stat in defs()["stats"]:
@@ -159,4 +162,11 @@ static func details(item: Dictionary, compare: Variant = null) -> VBoxContainer:
 	for id in perks:
 		var l := UIKit.wrapped("✦ " + perk_text(id, perks[id]), 22, Color("ffcf6a"))
 		v.add_child(l)
+	var desc_key: String = base_of(item).get("desc_key", "")
+	if desc_key != "":
+		var flavor := UIKit.wrapped(DataDB.t(desc_key), 19, Color("c9b79a"))
+		v.add_child(flavor)
+	var need := Items.wear_level(item, defs())
+	if need > 1 and GameState.profile != null and need > GameState.profile.level():
+		v.add_child(UIKit.label(DataDB.tf("item.wear_level", {"n": need}), 20, DOWN))
 	return v

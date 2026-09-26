@@ -126,3 +126,82 @@ func test_heal_on_kill_perk() -> void:
 	var healed := events.filter(func(e: Dictionary) -> bool:
 			return e.get("type", "") == "heal" and e.get("target", "") == engine.player.uid)
 	assert_eq(healed.size(), 1, str(events))
+
+
+func test_unique_items_keep_their_rarity() -> void:
+	var defs := _defs()
+	var rng := seeded_rng(2)
+	for id in defs["bases"]:
+		var base: Dictionary = defs["bases"][id]
+		if not base.has("unique"):
+			continue
+		assert_true(base.has("rarity") and base.get("drop_only", false), id)
+		var item := Items.roll(defs, 2, rng, {"base": id})
+		assert_eq(item["rarity"], base["rarity"], id)
+		assert_true(Items.is_unique(item, defs), id)
+
+
+func test_wear_level_allows_a_little_above() -> void:
+	var defs := _defs()
+	assert_eq(Items.wear_level(_item("iron_sword", "common", 3), defs), 1)
+	assert_eq(Items.wear_level(_item("iron_sword", "common", 7), defs), 5)
+
+
+func test_lifesteal_heals_from_damage_dealt() -> void:
+	var engine := make_engine(["cellar_rat"], 3)
+	engine.player.perks = {"lifesteal": 0.5}
+	engine.enemies[0].hp = 1000
+	engine.start()
+	engine.player.hp = 50
+	var events := engine.use_skill("warrior_slash", "e0")
+	var heals := events.filter(func(e: Dictionary) -> bool:
+			return e["type"] == "heal" and e["target"] == engine.player.uid)
+	assert_eq(heals.size(), 1)
+	var dealt: int = events.filter(func(e: Dictionary) -> bool:
+			return e["type"] == "damage" and e["target"] == "e0")[0]["amount"]
+	assert_eq(heals[0]["amount"], roundi(dealt * 0.5))
+
+
+func test_thorns_hurt_the_attacker() -> void:
+	var engine := make_engine(["cellar_rat"], 4)
+	engine.player.perks = {"thorns": 0.5}
+	engine.enemies[0].hp = 1000
+	engine.start()
+	engine.defend()
+	assert_true(engine.enemies[0].hp < 1000, "rat hp %d" % engine.enemies[0].hp)
+
+
+func test_first_strike_only_boosts_the_first_hit() -> void:
+	var plain := make_engine(["cellar_rat"], 7)
+	plain.enemies[0].hp = 1000
+	plain.start()
+	plain.use_skill("warrior_slash", "e0")
+	var plain_dmg := 1000 - plain.enemies[0].hp
+	var boosted := make_engine(["cellar_rat"], 7)
+	boosted.player.perks = {"first_strike": 1.0}
+	boosted.enemies[0].hp = 1000
+	boosted.start()
+	boosted.use_skill("warrior_slash", "e0")
+	var first := 1000 - boosted.enemies[0].hp
+	assert_between(float(first) / plain_dmg, 1.8, 2.2)
+	assert_true(boosted._first_strike_used)
+
+
+func test_bleed_on_hit_applies_bleed() -> void:
+	var engine := make_engine(["cellar_rat"], 5)
+	engine.player.perks = {"bleed_on_hit": 1.0}
+	engine.enemies[0].hp = 1000
+	engine.start()
+	engine.use_skill("warrior_slash", "e0")
+	assert_true(engine.enemies[0].has_status("bleed"))
+
+
+func test_gold_find_raises_battle_gold() -> void:
+	var a := make_engine(["cellar_rat"], 9)
+	var b := make_engine(["cellar_rat"], 9)
+	b.player.perks = {"gold_find": 1.0}
+	for engine in [a, b]:
+		engine.start()
+		engine.enemies[0].hp = 1
+		engine.use_skill("warrior_slash", "e0")
+	assert_eq(b.reward_gold, a.reward_gold * 2)
