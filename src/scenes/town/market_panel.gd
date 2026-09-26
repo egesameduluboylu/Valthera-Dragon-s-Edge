@@ -160,7 +160,7 @@ func _listing_row(l: Dictionary) -> PanelContainer:
 	var p := _profile()
 	var item: Dictionary = l["item"]
 	_fix(item)
-	var card := _card(ItemUI.color(item))
+	var card := _card()
 	var v: VBoxContainer = card.get_child(0)
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 12)
@@ -228,7 +228,7 @@ func _draw_sell() -> void:
 
 func _sell_card(item: Dictionary) -> PanelContainer:
 	var data := DataDB.data
-	var card := _card(ItemUI.color(item))
+	var card := _card()
 	var v: VBoxContainer = card.get_child(0)
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 12)
@@ -305,7 +305,7 @@ func _draw_mine() -> void:
 	for l in listings:
 		var item: Dictionary = l["item"]
 		_fix(item)
-		var card := _card(ItemUI.color(item))
+		var card := _card()
 		var v: VBoxContainer = card.get_child(0)
 		var h := HBoxContainer.new()
 		h.add_theme_constant_override("separation", 12)
@@ -370,7 +370,7 @@ func _draw_mail() -> void:
 		var item: Dictionary = e.get("item", {}) if e.get("item") is Dictionary else {}
 		if not item.is_empty():
 			_fix(item)
-		var card := _card(ItemUI.color(item) if not item.is_empty() else UITheme.GOLD)
+		var card := _card()
 		var h := HBoxContainer.new()
 		h.add_theme_constant_override("separation", 12)
 		card.get_child(0).add_child(h)
@@ -428,10 +428,9 @@ func _refresh_mail_count() -> void:
 
 # ---------------------------------------------------------------- bits
 
-func _card(border: Color) -> PanelContainer:
+func _card() -> PanelContainer:
 	var card := PanelContainer.new()
-	var st := UITheme.panel(UITheme.WOOD_DARK, border.darkened(0.2), 18)
-	st.set_content_margin_all(12)
+	var st := UITheme.skin_panel("dark")
 	card.add_theme_stylebox_override("panel", st)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)

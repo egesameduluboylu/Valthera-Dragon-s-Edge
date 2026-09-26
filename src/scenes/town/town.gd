@@ -76,7 +76,7 @@ func _show_gate() -> void:
 	body.add_child(UIKit.npc_row(ART % "npc_keeper", DataDB.t("town.gate.keeper"), DataDB.t("town.gate.line")))
 	# dungeon card
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", UITheme.panel(UITheme.WOOD_DARK, UITheme.GOLD_DARK, 18))
+	card.add_theme_stylebox_override("panel", UITheme.skin_panel("dark"))
 	body.add_child(card)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
@@ -279,11 +279,7 @@ func _building(id: String, def: Dictionary) -> Control:
 
 func _build_header() -> void:
 	var header := PanelContainer.new()
-	var hs := UITheme.panel(Color(UITheme.WOOD, 0.94), UITheme.GOLD, 0)
-	hs.border_width_left = 0
-	hs.border_width_right = 0
-	hs.border_width_top = 0
-	hs.border_width_bottom = 4
+	var hs := UITheme.skin_panel("header")
 	hs.content_margin_top = 14
 	hs.content_margin_bottom = 12
 	hs.content_margin_left = 18
@@ -321,17 +317,13 @@ func _build_header() -> void:
 	_xp_bar = ProgressBar.new()
 	_xp_bar.show_percentage = false
 	_xp_bar.custom_minimum_size.y = 14
-	_xp_bar.add_theme_stylebox_override("fill", UITheme.bar_fill(Color("7fd4ff")))
+	_xp_bar.add_theme_stylebox_override("fill", UITheme.skin_bar_fill("xp"))
 	pv.add_child(_xp_bar)
 
 
 func _build_bottom() -> void:
 	var bar := PanelContainer.new()
-	var st := UITheme.panel(Color(UITheme.WOOD, 0.94), UITheme.GOLD, 0)
-	st.border_width_left = 0
-	st.border_width_right = 0
-	st.border_width_bottom = 0
-	st.border_width_top = 4
+	var st := UITheme.skin_panel("footer")
 	st.content_margin_top = 12
 	st.content_margin_bottom = 26
 	st.content_margin_left = 18

@@ -43,19 +43,7 @@ static func button(text: String, icon_path: String, on_press: Callable, font_siz
 
 ## A gold "main action" button.
 static func primary(b: Button) -> Button:
-	var normal := UITheme.panel(Color("8a5a1c"), UITheme.GOLD, 16)
-	normal.border_width_bottom = 7
-	normal.set_content_margin_all(10)
-	var hover := normal.duplicate()
-	hover.bg_color = Color("a06a22")
-	var pressed := normal.duplicate()
-	pressed.bg_color = Color("6a4414")
-	pressed.border_width_bottom = 3
-	pressed.border_width_top = 7
-	b.add_theme_stylebox_override("normal", normal)
-	b.add_theme_stylebox_override("hover", hover)
-	b.add_theme_stylebox_override("pressed", pressed)
-	return b
+	return UITheme.primary_button(b)
 
 
 static func icon(path: String, px: int) -> TextureRect:
@@ -110,9 +98,7 @@ static func npc_row(portrait_path: String, npc_name: String, line: String) -> HB
 	if ResourceLoader.exists(portrait_path):
 		row.add_child(icon(portrait_path, 150))
 	var bubble := PanelContainer.new()
-	var st := UITheme.panel(UITheme.PARCHMENT, UITheme.GOLD_DARK, 18)
-	st.set_content_margin_all(14)
-	bubble.add_theme_stylebox_override("panel", st)
+	bubble.add_theme_stylebox_override("panel", UITheme.skin_panel("parchment"))
 	bubble.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bubble.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(bubble)
@@ -141,10 +127,7 @@ static func sheet(title_text: String, on_close: Callable) -> Array:
 	margin.add_theme_constant_override("margin_bottom", 40)
 	root.add_child(margin)
 	var panel := PanelContainer.new()
-	var st := UITheme.panel(UITheme.WOOD, UITheme.GOLD, 26)
-	st.set_border_width_all(4)
-	st.set_content_margin_all(20)
-	panel.add_theme_stylebox_override("panel", st)
+	panel.add_theme_stylebox_override("panel", UITheme.skin_panel("wood"))
 	margin.add_child(panel)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 14)
@@ -154,10 +137,9 @@ static func sheet(title_text: String, on_close: Callable) -> Array:
 	var t := title(title_text, 42)
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.add_child(t)
-	var close := button("✕", "", on_close, 34)
-	close.custom_minimum_size = Vector2(80, 72)
+	var close := UITheme.close_button(button("", "", on_close), 72)
 	bar.add_child(close)
-	v.add_child(hsep(3))
+	v.add_child(UITheme.divider())
 	var content := VBoxContainer.new()
 	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", 14)
@@ -183,9 +165,7 @@ static func dialog(title_text: String, text: String, art_path: String = "") -> A
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(center)
 	var panel := PanelContainer.new()
-	var style := UITheme.panel(UITheme.WOOD, UITheme.GOLD, 24)
-	style.set_content_margin_all(28)
-	panel.add_theme_stylebox_override("panel", style)
+	panel.add_theme_stylebox_override("panel", UITheme.skin_panel("wood"))
 	panel.custom_minimum_size = Vector2(620, 0)
 	center.add_child(panel)
 	var v := VBoxContainer.new()
