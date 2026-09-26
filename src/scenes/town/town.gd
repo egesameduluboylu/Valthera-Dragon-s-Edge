@@ -12,11 +12,12 @@ const BUILDINGS := {
 	"gate": {"rect": Rect2(210, 250, 300, 310), "name": "town.dungeon"},
 	"smith": {"rect": Rect2(20, 560, 320, 300), "name": "town.smith"},
 	"merchant": {"rect": Rect2(380, 560, 320, 300), "name": "town.merchant"},
-	"class_master": {"rect": Rect2(20, 880, 320, 240), "name": "town.class_master", "locked": true},
+	"class_master": {"rect": Rect2(20, 880, 320, 240), "name": "town.class_master"},
 	"inn": {"rect": Rect2(380, 880, 320, 240), "name": "town.market"},
 }
 
 var _level_label: Label
+var _portrait: TextureRect
 var _xp_bar: ProgressBar
 var _gold: HBoxContainer
 var _scales: HBoxContainer
@@ -59,6 +60,8 @@ func open_panel(kind: String) -> void:
 			panel = BagPanel.new()
 		"inn":
 			panel = MarketPanel.new()
+		"class_master":
+			panel = ClassMasterPanel.new()
 		_:
 			return
 	panel.closed.connect(_close_overlay)
@@ -175,6 +178,7 @@ func _close_overlay() -> void:
 func _refresh() -> void:
 	var p := GameState.profile
 	_level_label.text = "%s  ·  %s" % [DataDB.t("class." + p.active_class), DataDB.t("ui.level") % p.level()]
+	_portrait.texture = load(DataDB.data["classes"][p.active_class].get("sprite", ""))
 	_xp_bar.max_value = Progression.xp_to_next(p.level())
 	_xp_bar.value = p.class_xp()
 	UIKit.counter_label(_gold).text = str(p.gold)
@@ -306,8 +310,8 @@ func _build_header() -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	v.add_child(row)
-	var portrait := UIKit.icon(DataDB.data["classes"][GameState.active_class].get("sprite", ""), 64)
-	row.add_child(portrait)
+	_portrait = UIKit.icon(DataDB.data["classes"][GameState.active_class].get("sprite", ""), 64)
+	row.add_child(_portrait)
 	var pv := VBoxContainer.new()
 	pv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pv.add_theme_constant_override("separation", 4)

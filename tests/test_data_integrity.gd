@@ -74,7 +74,7 @@ func test_item_data_is_consistent() -> void:
 
 func test_town_art_exists() -> void:
 	for id in ["background", "gate", "smith", "merchant", "class_master", "inn", "npc_smith", "npc_merchant", "npc_keeper",
-			"npc_innkeeper"]:
+			"npc_innkeeper", "npc_class_master"]:
 		assert_true(ResourceLoader.exists("res://assets/town/%s.png" % id), id)
 	for id in ["bag", "scale"]:
 		assert_true(ResourceLoader.exists("res://assets/icons/items/%s.png" % id), id)

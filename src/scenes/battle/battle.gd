@@ -204,6 +204,13 @@ func _apply_event(ev: Dictionary) -> float:
 		"immune":
 			_float_text(_view_of(ev["target"]), "%s -" % DataDB.t("status." + ev["status"]), Color("a0a0a0"), 28, 60)
 			return 0.15
+		"resist":
+			_float_text(_view_of(ev["target"]), DataDB.t("battle.resist"), Color("a0a0a0"), 32, 60)
+			return 0.2
+		"flurry":
+			# Rogue "Seri": the turn goes on, so say so before the player picks again.
+			_show_banner(DataDB.t("battle.flurry"), Color("ffd35a"), 44, UITheme.body_font())
+			return 0.25
 		"resource":
 			_player_view["res_bar"].value = ev["value"]
 			_player_view["res_label"].text = "%s %d / %d" % [DataDB.t("resource." + engine.player.resource_id), ev["value"], engine.player.resource_max]
@@ -282,8 +289,8 @@ func _refresh_buttons() -> void:
 		var line2 := ""
 		if reason == "cooldown":
 			line2 = DataDB.t("ui.cooldown") % engine.player.cooldowns[id]
-		elif int(def.get("cost", 0)) > 0:
-			line2 = "%d %s" % [def["cost"], DataDB.t("resource." + engine.player.resource_id)]
+		elif engine.skill_cost(id) > 0:
+			line2 = "%d %s" % [engine.skill_cost(id), DataDB.t("resource." + engine.player.resource_id)]
 		b.text = DataDB.t(def.get("name_key", id)) + ("\n" + line2 if line2 != "" else "")
 		b.disabled = busy or reason != ""
 		# Combo hint (docs/08): a finisher glows when the target has what it needs.
@@ -291,6 +298,8 @@ func _refresh_buttons() -> void:
 		b.modulate = Color(1.08, 1.04, 0.92) if ready else Color.WHITE
 		b.get_meta("glow").visible = ready
 	_defend_button.disabled = busy or engine.finished
+	# Mid-Flurry the defend button ends the turn instead (no defend bonus).
+	_defend_button.text = DataDB.t("ui.end_turn") if engine.in_flurry() else DataDB.t("ui.defend")
 	_potion_button.text = "%s x%d" % [DataDB.t("ui.potion"), engine.potions]
 	_potion_button.disabled = busy or engine.finished or engine.potions <= 0 \
 			or engine.player.hp >= engine.player.max_hp()
@@ -578,7 +587,7 @@ func _build_ui() -> void:
 	bars.add_theme_constant_override("separation", 6)
 	info.add_child(bars)
 	var hp := _labeled_bar(UITheme.HP_PLAYER, 30)
-	var res := _labeled_bar(UITheme.RAGE, 24)
+	var res := _labeled_bar(Color(DataDB.data["classes"][GameState.active_class].get("resource_color", "#c8412f")), 24)
 	bars.add_child(hp[0])
 	bars.add_child(res[0])
 	var player_statuses := HBoxContainer.new()
