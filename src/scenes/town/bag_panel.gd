@@ -54,8 +54,7 @@ func _build() -> void:
 	_content.add_child(_slots_row)
 
 	_card = PanelContainer.new()
-	var st := UITheme.panel(UITheme.WOOD_DARK, UITheme.GOLD_DARK, 18)
-	st.set_content_margin_all(14)
+	var st := UITheme.skin_panel("dark")
 	_card.add_theme_stylebox_override("panel", st)
 	_card.custom_minimum_size.y = 250
 	_content.add_child(_card)

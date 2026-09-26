@@ -59,20 +59,8 @@ static func tile(item: Dictionary, px: int, slot: String = "", worn: bool = fals
 	p.custom_minimum_size = Vector2(px, px)
 	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var st := StyleBoxFlat.new()
-	st.set_corner_radius_all(maxi(8, px / 8))
-	st.set_border_width_all(maxi(3, px / 28))
-	st.set_content_margin_all(maxi(4, px / 14))
-	if item.is_empty():
-		st.bg_color = Color("140d0b")
-		st.border_color = Color("4a3a2e")
-	else:
-		var c := color(item)
-		st.bg_color = c.darkened(0.78)
-		st.border_color = c
-		if item["rarity"] in ["epic", "legendary"]:
-			st.shadow_color = Color(c, 0.55)
-			st.shadow_size = maxi(4, px / 12)
+	var st := UITheme.skin_tile("empty" if item.is_empty() else item["rarity"])
+	st.set_content_margin_all(maxi(6, px / 7))
 	p.add_theme_stylebox_override("panel", st)
 	var holder := Control.new()
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
