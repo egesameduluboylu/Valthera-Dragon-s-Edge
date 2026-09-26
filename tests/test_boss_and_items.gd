@@ -160,34 +160,8 @@ func test_boss_is_beatable_with_combos() -> void:
 		var guard := 0
 		while not engine.finished and guard < 80:
 			guard += 1
-			_play_turn(engine)
+			bot_turn(engine)
 		if engine.victory:
 			wins += 1
 	assert_true(wins >= 24, "won %d / 40" % wins)
 
-
-## Simple combo bot: potion when low, kill adds with slash, otherwise the combo loop on the king.
-func _play_turn(engine: CombatEngine) -> void:
-	if engine.player.hp_ratio() < 0.35 and engine.potions > 0:
-		engine.use_potion()
-		return
-	var king: Combatant = null
-	var add: Combatant = null
-	for e in engine.alive_enemies():
-		if e.def_id == "bone_king":
-			king = e
-		else:
-			add = e
-	var target := king if king != null else add
-	if target == null:
-		return
-	if engine.can_use("warrior_execute") and engine.combo_ready("warrior_execute", target):
-		engine.use_skill("warrior_execute", target.uid)
-	elif engine.can_use("warrior_heavy_strike") and engine.combo_ready("warrior_heavy_strike", target):
-		engine.use_skill("warrior_heavy_strike", target.uid)
-	elif engine.can_use("warrior_shield_break"):
-		engine.use_skill("warrior_shield_break", target.uid)
-	elif add != null:
-		engine.use_skill("warrior_slash", add.uid)
-	else:
-		engine.use_skill("warrior_slash", target.uid)

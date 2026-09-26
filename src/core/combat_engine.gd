@@ -45,6 +45,8 @@ var combo_count: int = 0
 var potions: int = 0
 var finished: bool = false
 var victory: bool = false
+var reward_xp: int = 0
+var reward_gold: int = 0
 
 var _acting: Combatant = null
 var _events: Array = []
@@ -249,6 +251,8 @@ func _check_end() -> bool:
 		for e in enemies:
 			xp += e.xp_reward
 			gold += rng.randi_range(int(e.gold_range[0]), int(e.gold_range[1]))
+		reward_xp = xp
+		reward_gold = gold
 		_emit({"type": "battle_end", "victory": true, "xp": xp, "gold": gold})
 		return true
 	return false

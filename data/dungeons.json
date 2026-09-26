@@ -1,0 +1,25 @@
+{
+  "rotten_cellar": {
+    "name_key": "dungeon.rotten_cellar",
+    "level_min": 1, "level_max": 3,
+    "rooms": 5,
+    "potions": 3,
+    "victory_heal_percent": 0.2,
+    "background": "res://assets/backgrounds/rotten_cellar.png",
+    "room_weights": {"combat": 55, "elite": 15, "treasure": 10, "event": 12, "rest": 8},
+    "elite_rooms": [3, 4],
+    "min_combat_rooms": 2,
+    "combat_pool": [
+      {"enemies": ["cellar_rat", "cellar_rat"], "min_room": 1},
+      {"enemies": ["cellar_rat", "skeleton_guard"], "min_room": 1},
+      {"enemies": ["skeleton_guard", "mushroom_mage"], "min_room": 2},
+      {"enemies": ["cellar_rat", "cellar_rat", "cellar_rat"], "min_room": 2},
+      {"enemies": ["cellar_rat", "mushroom_mage", "skeleton_guard"], "min_room": 3}
+    ],
+    "elite_pool": [{"enemies": ["cellar_warden"]}],
+    "boss": ["bone_king"],
+    "events": ["suspicious_fountain", "lost_merchant", "talking_skull", "cursed_altar"],
+    "treasure": {"gold": [15, 30], "potion_chance": 0.3, "mimic_chance": 0.2, "mimic": ["mimic"]},
+    "rest": {"heal_percent": 0.3, "potions": 1}
+  }
+}

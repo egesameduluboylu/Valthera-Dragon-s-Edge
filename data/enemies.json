@@ -70,7 +70,7 @@
     "name_key": "enemy.bone_king",
     "sprite": "res://assets/sprites/enemies/bone_king.png",
     "boss": true,
-    "base": {"hp": 185, "atk": 13, "def": 18, "spd": 8, "crit": 0.05, "dodge": 0.0},
+    "base": {"hp": 160, "atk": 11, "def": 16, "spd": 8, "crit": 0.05, "dodge": 0.0},
     "elements": {"fire": 1.5, "shadow": 0.5},
     "immune": ["poison", "bleed"],
     "on_ally_death": {"heal": 20},
@@ -79,7 +79,7 @@
       "staff_strike": {"type": "attack", "power": 1.0},
       "summon_bones": {"type": "summon", "enemy": "skeleton_guard", "max_alive": 2},
       "crown_light": {"type": "shield", "amount": 30},
-      "bone_storm": {"type": "multi_attack", "power": 0.6, "hits": 3, "heavy": true}
+      "bone_storm": {"type": "multi_attack", "power": 0.5, "hits": 3, "heavy": true}
     },
     "ai": {"type": "phased", "phases": [
       {"min_hp": 0.5, "pattern": ["staff_strike", "summon_bones", "staff_strike", "crown_light"]},
