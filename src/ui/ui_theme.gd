@@ -290,10 +290,13 @@ static func _skin(file: String, key: String) -> StyleBoxTexture:
 	return s
 
 
-## Upper-cases Turkish text for Cinzel titles. Cinzel draws lowercase as small caps, which
-## turns "i" into a dotless "I", so titles are upper-cased with the Turkish i -> İ rule.
+## Upper-cases text for Cinzel titles. Cinzel draws lowercase as small caps, which
+## turns "i" into a dotless "I", so Turkish titles are upper-cased with the i -> İ rule.
+## English keeps a plain I ("UNFINISHED", not "UNFİNİSHED").
 static func caps(text: String) -> String:
-	return text.replace("i", "İ").to_upper()
+	if Settings.language == "tr":
+		text = text.replace("i", "İ")
+	return text.to_upper()
 
 
 ## Outline + size overrides so stage text stays readable over the background.

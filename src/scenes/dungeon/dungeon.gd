@@ -35,12 +35,19 @@ var _busy: bool = false
 func _ready() -> void:
 	Audio.music("dungeon")
 	theme = UITheme.build()
+	# the layout reads the dungeon's backgrounds, so the run has to exist first
+	run = _current_run()
 	_build_ui()
 	_new_run()
 
 
+## The run the town handed over (new or resumed), or a fresh one after "Run again".
+func _current_run() -> DungeonRun:
+	return GameState.run if GameState.run != null else GameState.start_run(GameState.next_dungeon, GameState.next_hard)
+
+
 func _new_run() -> void:
-	run = GameState.run if GameState.run != null else GameState.start_run(GameState.next_dungeon, GameState.next_hard)
+	run = _current_run()
 	run.leveled_up.connect(_on_level_up)
 	if run.room_number == 0:
 		run.start()
