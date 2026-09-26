@@ -28,6 +28,10 @@ var immune: Array = []
 var moves: Dictionary = {}
 var ai: Dictionary = {}
 var ai_index: int = 0
+var ai_phase: int = 0
+var on_ally_death: Dictionary = {}
+## uid of the enemy that summoned this one; summons crumble when it dies.
+var summoner: String = ""
 var intent: Dictionary = {}
 var xp_reward: int = 0
 var gold_range: Array = [0, 0]
@@ -63,6 +67,7 @@ static func make_enemy(uid_: String, enemy_id: String, enemy_def: Dictionary, le
 	c.immune = enemy_def.get("immune", [])
 	c.moves = enemy_def.get("moves", {})
 	c.ai = enemy_def.get("ai", {})
+	c.on_ally_death = enemy_def.get("on_ally_death", {})
 	c.xp_reward = int(enemy_def.get("xp", 0)) * level
 	c.gold_range = enemy_def.get("gold", [0, 0])
 	return c

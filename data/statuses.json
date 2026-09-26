@@ -5,5 +5,6 @@
   "freeze":       {"name_key": "status.freeze",       "spd_mult": 0.5, "stacks": true, "max_stacks": 3, "stun_at_stacks": 3},
   "stun":         {"name_key": "status.stun",         "skip_action": true},
   "armor_break":  {"name_key": "status.armor_break",  "def_mult": 0.5},
-  "strengthened": {"name_key": "status.strengthened", "atk_mult": 1.25}
+  "strengthened": {"name_key": "status.strengthened", "atk_mult": 1.25},
+  "enraged":      {"name_key": "status.enraged",      "atk_mult": 1.3}
 }

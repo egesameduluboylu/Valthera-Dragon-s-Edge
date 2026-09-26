@@ -49,6 +49,7 @@ static func make_engine(enemy_ids: Array, seed_value: int = 1) -> CombatEngine:
 	var data := game_data()
 	var class_def: Dictionary = data["classes"]["warrior"]
 	var engine := CombatEngine.new(data["skills"], data["statuses"], seeded_rng(seed_value))
+	engine.enemy_defs = data["enemies"]
 	var p := Combatant.make_player("warrior", class_def, 1, class_def["prototype_skills"])
 	p.stats.crit = 0.0
 	p.stats.dodge = 0.0

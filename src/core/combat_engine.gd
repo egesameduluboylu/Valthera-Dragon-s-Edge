@@ -22,24 +22,33 @@ extends RefCounted
 ##   defend {target}
 ##   skip {target}
 ##   combo {count}
+##   heal {target, amount, hp}
+##   item {source, item}
+##   summon {source, uid, enemy_id}
+##   phase {source, phase, line_key}
 ##   battle_end {victory, xp, gold}
 
 const COMBO_CHAIN_BONUS := 0.10
 const DEFEND_DAMAGE_MULT := 0.5
+const POTION_HEAL_PERCENT := 0.35
 
 var skill_defs: Dictionary
 var status_defs: Dictionary
+## enemies.json, needed when a boss summons adds mid-battle.
+var enemy_defs: Dictionary = {}
 var rng: RandomNumberGenerator
 
 var player: Combatant
 var enemies: Array[Combatant] = []
 var turn: int = 0
 var combo_count: int = 0
+var potions: int = 0
 var finished: bool = false
 var victory: bool = false
 
 var _acting: Combatant = null
 var _events: Array = []
+var _next_uid: int = 0
 
 
 func _init(p_skill_defs: Dictionary, p_status_defs: Dictionary, p_rng: RandomNumberGenerator = null) -> void:
@@ -55,11 +64,17 @@ static func from_data(data: Dictionary, class_id: String, level: int, encounter_
 	var engine := CombatEngine.new(data["skills"], data["statuses"], p_rng)
 	var p := Combatant.make_player(class_id, class_def, level, class_def.get("prototype_skills", []))
 	var enc: Dictionary = data["encounters"][encounter_id]
+	return CombatEngine.for_enemies(data, p, enc["enemies"], int(enc.get("level", 1)), p_rng)
+
+
+## A prepared player (e.g. carrying HP between dungeon rooms) against enemy ids.
+static func for_enemies(data: Dictionary, p: Combatant, enemy_ids: Array, level: int,
+		p_rng: RandomNumberGenerator = null) -> CombatEngine:
+	var engine := CombatEngine.new(data["skills"], data["statuses"], p_rng)
+	engine.enemy_defs = data["enemies"]
 	var foes: Array[Combatant] = []
-	var i := 0
-	for enemy_id in enc["enemies"]:
-		foes.append(Combatant.make_enemy("e%d" % i, enemy_id, data["enemies"][enemy_id], int(enc.get("level", 1))))
-		i += 1
+	for enemy_id in enemy_ids:
+		foes.append(Combatant.make_enemy("e%d" % foes.size(), enemy_id, data["enemies"][enemy_id], level))
 	engine.setup(p, foes)
 	return engine
 
@@ -67,6 +82,7 @@ static func from_data(data: Dictionary, class_id: String, level: int, encounter_
 func setup(p_player: Combatant, p_enemies: Array[Combatant]) -> void:
 	player = p_player
 	enemies = p_enemies
+	_next_uid = enemies.size()
 
 
 # ---------------------------------------------------------------- public API
@@ -138,6 +154,20 @@ func use_skill(skill_id: String, target_uid: String = "") -> Array:
 	return _flush()
 
 
+## Drinks a potion: heals POTION_HEAL_PERCENT of max HP and uses the turn.
+func use_potion() -> Array:
+	_events = []
+	if finished or potions <= 0 or player.hp >= player.max_hp():
+		return []
+	_acting = player
+	potions -= 1
+	combo_count = 0
+	_emit({"type": "item", "source": player.uid, "item": "potion"})
+	_heal(player, roundi(player.max_hp() * POTION_HEAL_PERCENT))
+	_end_player_turn("")
+	return _flush()
+
+
 func defend() -> Array:
 	_events = []
 	if finished:
@@ -194,6 +224,7 @@ func _enemy_phase() -> void:
 		var stun := e.get_status("stun")
 		if stun != null and not stun.skipped:
 			stun.skipped = true
+			e.ai_index = maxi(e.ai_index, 0)
 			_emit({"type": "skip", "target": e.uid})
 		else:
 			_perform_enemy_move(e)
@@ -317,9 +348,12 @@ func _choose_intent(e: Combatant) -> Dictionary:
 	var move: Dictionary = e.moves.get(move_id, {})
 	var intent := {"move": move_id, "type": move.get("type", "attack")}
 	match intent["type"]:
-		"attack":
+		"attack", "multi_attack":
+			intent["type"] = "attack"
 			intent["estimate"] = DamageCalc.estimate(e, player, float(move.get("power", 1.0)),
 					move.get("element", "physical"), status_defs)
+			intent["hits"] = int(move.get("hits", 1))
+			intent["heavy"] = move.get("heavy", false)
 			if move.has("apply_status"):
 				intent["debuff"] = true
 		"shield":
@@ -335,25 +369,80 @@ func _perform_enemy_move(e: Combatant) -> void:
 	var move_type: String = move.get("type", "attack")
 	_emit({"type": "enemy_move", "source": e.uid, "move": move_id, "move_type": move_type})
 	match move_type:
-		"attack":
-			var r := DamageCalc.roll(e, player, float(move.get("power", 1.0)),
-					move.get("element", "physical"), status_defs, rng)
-			if r["miss"]:
-				_emit({"type": "miss", "source": e.uid, "target": player.uid})
-				return
-			var amount: int = r["amount"]
-			if player.defending:
-				amount = maxi(1, roundi(amount * DEFEND_DAMAGE_MULT))
-			_deal_damage(e, player, amount, r["crit"], false, false)
-			if player.is_alive():
-				for spec in move.get("apply_status", []):
-					_apply_status(player, spec, e)
+		"attack", "multi_attack":
+			for i in int(move.get("hits", 1)):
+				if player.is_alive():
+					_enemy_hit(e, move)
+			if move.get("stun_self_if_defended", false) and player.defending and e.is_alive():
+				# Blocking a telegraphed heavy blow staggers the attacker (docs/06).
+				_apply_status(e, {"id": "stun", "turns": 1}, player)
+		"summon":
+			var enemy_id: String = move.get("enemy", "")
+			if enemy_defs.has(enemy_id):
+				var add := Combatant.make_enemy("e%d" % _next_uid, enemy_id, enemy_defs[enemy_id], e.level)
+				_next_uid += 1
+				# Summoned adds give nothing, so a boss fight can't be farmed.
+				add.xp_reward = 0
+				add.gold_range = [0, 0]
+				add.summoner = e.uid
+				enemies.append(add)
+				_emit({"type": "summon", "source": e.uid, "uid": add.uid, "enemy_id": enemy_id})
 		"shield":
 			_add_shield(e, int(move.get("amount", 0)))
 		"buff_ally":
 			var target := EnemyAI.pick_buff_target(e, alive_enemies(), move, rng)
 			for spec in move.get("apply_status", []):
 				_apply_status(target, spec, e)
+
+
+func _enemy_hit(e: Combatant, move: Dictionary) -> void:
+	var r := DamageCalc.roll(e, player, float(move.get("power", 1.0)),
+			move.get("element", "physical"), status_defs, rng)
+	if r["miss"]:
+		_emit({"type": "miss", "source": e.uid, "target": player.uid})
+		return
+	var amount: int = r["amount"]
+	if player.defending:
+		amount = maxi(1, roundi(amount * DEFEND_DAMAGE_MULT))
+	_deal_damage(e, player, amount, r["crit"], false, false)
+	if player.is_alive():
+		for spec in move.get("apply_status", []):
+			_apply_status(player, spec, e)
+
+
+## Bosses with a "phased" AI switch pattern when their HP drops below a threshold.
+func _check_phase(e: Combatant) -> void:
+	if e.ai.get("type", "") != "phased" or not e.is_alive():
+		return
+	var phases: Array = e.ai.get("phases", [])
+	while e.ai_phase < phases.size() - 1 and e.hp_ratio() < float(phases[e.ai_phase].get("min_hp", 0.0)):
+		e.ai_phase += 1
+		# The move already shown as the intent still happens; the new pattern starts
+		# from its first move on the following turn (after the usual +1).
+		e.ai_index = -1
+		var phase: Dictionary = phases[e.ai_phase]
+		_emit({"type": "phase", "source": e.uid, "phase": e.ai_phase, "line_key": phase.get("line_key", "")})
+		for spec in phase.get("on_enter_status", []):
+			_apply_status(e, spec, e)
+
+
+func _on_enemy_death(dead: Combatant) -> void:
+	for e in alive_enemies():
+		if e.summoner == dead.uid:
+			e.hp = 0
+			e.statuses.clear()
+			e.shield = 0
+			_emit({"type": "death", "target": e.uid})
+	for e in alive_enemies():
+		var heal := int(e.on_ally_death.get("heal", 0))
+		if heal > 0:
+			_heal(e, heal)
+
+
+func _heal(target: Combatant, amount: int) -> void:
+	var before := target.hp
+	target.hp = mini(target.max_hp(), target.hp + amount)
+	_emit({"type": "heal", "target": target.uid, "amount": target.hp - before, "hp": target.hp})
 
 
 # ---------------------------------------------------------------- effects
@@ -374,6 +463,10 @@ func _deal_damage(source: Combatant, target: Combatant, amount: int, crit: bool,
 		target.statuses.clear()
 		target.shield = 0
 		_emit({"type": "death", "target": target.uid})
+		if not target.is_player:
+			_on_enemy_death(target)
+	elif not target.is_player:
+		_check_phase(target)
 
 
 func _apply_status(target: Combatant, spec: Dictionary, source: Combatant) -> void:
