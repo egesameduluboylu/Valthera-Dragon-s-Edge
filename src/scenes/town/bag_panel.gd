@@ -180,6 +180,7 @@ func _draw_card() -> void:
 		var on := UIKit.primary(UIKit.button(label, "",
 				func() -> void:
 					if p.equip(_selected):
+						Audio.play("equip")
 						GameState.changed()
 					refresh()))
 		on.disabled = not p.can_equip(item)
@@ -207,6 +208,7 @@ func _confirm_salvage(item: Dictionary) -> void:
 	row.add_child(no)
 	var yes := UIKit.primary(UIKit.button(DataDB.t("bag.salvage"), ItemUI.ITEM_GOLD, func() -> void:
 		if not GameState.profile.salvage(item["uid"]).is_empty():
+			Audio.play("salvage")
 			GameState.changed()
 		parts[0].queue_free()
 		refresh()))

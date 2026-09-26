@@ -121,6 +121,8 @@ func _upgrade() -> void:
 	var p := GameState.profile
 	if not p.upgrade(_selected):
 		return
+	Audio.play("upgrade")
+	Audio.vibrate(40)
 	GameState.changed()
 	var item := p.get_item(_selected)
 	_content.remove_child(_npc)

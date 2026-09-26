@@ -126,7 +126,7 @@ func test_banking_a_run_keeps_loot_gold_and_progress() -> void:
 	assert_eq(p.potions, Profile.FREE_POTIONS, "potions refill in town")
 	assert_eq(r["added"].size(), 1)
 	assert_eq(p.bag_items().size(), 1)
-	assert_eq(p.dungeons["rotten_cellar"], {"runs": 1, "cleared": false})
+	assert_eq(p.dungeons["rotten_cellar"], {"runs": 1, "cleared": false, "stars": [false, false, false]})
 
 
 func test_boss_and_elite_rooms_drop_loot_and_scales() -> void:
@@ -152,7 +152,7 @@ func test_save_round_trip() -> void:
 	var ring := _give(p, "copper_ring", "rare", 2)
 	ring["affixes"] = [{"id": "crit", "value": 0.02}]
 	p.equip(ring["uid"])
-	p.dungeons["rotten_cellar"] = {"runs": 3, "cleared": true}
+	p.dungeons["rotten_cellar"] = {"runs": 3, "cleared": true, "stars": [true, false, true], "hard_cleared": false}
 	var json := JSON.stringify(p.to_dict())
 	var back := Profile.from_dict(game_data(), JSON.parse_string(json))
 	assert_eq(JSON.stringify(back.to_dict()), JSON.stringify(p.to_dict()))

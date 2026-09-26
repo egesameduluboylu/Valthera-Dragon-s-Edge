@@ -9,10 +9,11 @@ const VARIANCE_MAX := 1.1
 
 ## Returns {"amount": int, "crit": bool, "miss": bool}.
 static func roll(attacker: Combatant, defender: Combatant, power: float, element: String,
-		status_defs: Dictionary, rng: RandomNumberGenerator, extra_mult: float = 1.0) -> Dictionary:
-	if rng.randf() < defender.stats.dodge:
+		status_defs: Dictionary, rng: RandomNumberGenerator, extra_mult: float = 1.0,
+		force_crit: bool = false) -> Dictionary:
+	if rng.randf() < defender.effective_dodge(status_defs):
 		return {"amount": 0, "crit": false, "miss": true}
-	var crit := rng.randf() < attacker.stats.crit
+	var crit := rng.randf() < attacker.stats.crit or force_crit
 	var variance := rng.randf_range(VARIANCE_MIN, VARIANCE_MAX)
 	var amount := compute(attacker.effective_atk(status_defs), power, defender.effective_def(status_defs),
 			defender.element_mult(element), CRIT_MULT if crit else 1.0, variance, extra_mult)

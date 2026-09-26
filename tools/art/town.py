@@ -1362,6 +1362,190 @@ def npc_innkeeper():
     return p.finish(outline=2)
 
 
+def npc_class_master():
+    """Yaşlı Kaan: the old weapons master. Eyepatch, scarred face, long grey braided beard, a sword, a staff and
+    a dagger on his back, and a kind smile."""
+    p = TPainter(256, 256)
+    skin = hexc("#d89a72")
+    grey = hexc("#cfcac4")
+    gi = hexc("#7a2e2a")
+    strap = hexc("#5e3b22")
+    # ---- weapons on his back: staff (left), sword and dagger (right)
+    p.shape("line", [(28, 14), (92, 200)], WOOD_L, width=9, depth=0.3, line=1.6, tex="wood")
+    p.shape("rect", (20, 4, 40, 22), GOLD, radius=4, depth=0.3, line=1.4, spec=0.8)
+    p.glow((30, 8), 18, hexc("#6ad0ff"), 0.6)
+    p.shape("poly", [(30, -4), (38, 6), (30, 16), (22, 6)], hexc("#6ad0ff"), light=1.5, line=1.2, gloss=0.8)
+    p.shape("line", [(212, 18), (176, 110)], hexc("#3a2418"), width=10, depth=0.3, line=1.6, tex="leather")
+    for t in (0.2, 0.4, 0.6):
+        x, y = 212 + (176 - 212) * t, 18 + (110 - 18) * t
+        line(p, [(x - 6, y - 1), (x + 6, y + 3)], hexc("#8a6a4a"), 1.8)
+    p.shape("line", [(188, 70), (234, 88)], GOLD, width=8, depth=0.3, line=1.4, spec=0.8)
+    p.shape("ellipse", (204, 6, 224, 26), GOLD, depth=0.3, line=1.4, spec=0.9)
+    p.shape("line", [(236, 118), (214, 150)], hexc("#3a2418"), width=7, depth=0.3, line=1.4, tex="leather")
+    p.shape("line", [(228, 128), (248, 140)], STEEL, width=5, depth=0.3, line=1.2, spec=0.8)
+    p.shape("ellipse", (234, 108, 246, 120), STEEL, depth=0.3, line=1.2, spec=0.8)
+    # ---- wrap-over gi, sash and weapon strap
+    body = p.shape("ellipse", (14, 168, 242, 380), gi, depth=0.08, line=2, tex="cloth", tex_amt=0.6)
+    p.shape("rect", (104, 146, 152, 196), skin, radius=10, depth=0.2)
+    p.shape("poly", [(92, 184), (128, 244), (164, 184), (174, 196), (128, 256), (82, 196)], hexc("#e8dcc8"),
+            depth=0.2, line=1.5, tex="cloth", tex_amt=0.4)
+    p.shape("poly", [(40, 256), (200, 170), (214, 184), (60, 256)], strap, depth=0.25, line=1.5, tex="leather",
+            clip=body)
+    for x, y in ((92, 228), (170, 188)):
+        p.shape("rect", (x - 8, y - 7, x + 8, y + 7), GOLD, radius=2, depth=0.3, line=1.2, spec=0.9)
+    # ---- ears, head
+    for x0 in (66, 170):
+        p.shape("ellipse", (x0, 92, x0 + 22, 126), skin, depth=0.2)
+    p.shape("ellipse", (72, 36, 186, 160), skin, depth=0.1)
+    p.flat("ellipse", (98, 44, 136, 64), hexc("#ffffff", 120))
+    # grey hair swept back into a topknot
+    hair = union(p, [("poly", _catmull([(70, 100), (72, 60), (96, 36), (128, 30), (160, 36), (184, 60), (186, 100),
+                                        (174, 80), (160, 64), (128, 58), (96, 64), (82, 80), (70, 100)], 5)),
+                     ("ellipse", (112, 8, 146, 36))])
+    paint(p, hair, grey, depth=0.14, line=1.6)
+    for pts in ([(84, 64), (110, 44), (128, 40)], [(172, 64), (150, 44), (132, 40)]):
+        line(p, _catmull(pts), shade(grey, 0.7), 1.8)
+    p.shape("rect", (120, 30, 138, 38), hexc("#8a2a2a"), radius=2, depth=0.3, line=1.2)
+    p.shape("ellipse", (72, 60, 102, 118), skin, **NOLINE)
+    p.shape("ellipse", (156, 60, 186, 118), skin, **NOLINE)
+    # ---- face: eyepatch, scar, kind crinkled eye, bushy brows
+    line(p, [(70, 70), (188, 94)], hexc("#2a1a14"), 3.2, line=1.0)
+    p.shape("ellipse", (88, 90, 122, 116), hexc("#2a1a14"), depth=0.25, line=1.5, spec=0.5)
+    line(p, _catmull([(146, 104), (156, 96), (166, 104)]), DARK, 3.4)
+    line(p, [(166, 104), (170, 101)], DARK, 1.6)
+    for dx in (0, 5):
+        line(p, [(170 + dx, 106), (175 + dx, 110)], shade(skin, 0.65), 1.4)
+    for cx, f in ((104, -1), (156, 1)):
+        brow = union(p, [("ellipse", (cx - 14, 78, cx + 2, 92)), ("ellipse", (cx - 4, 74, cx + 14, 90)),
+                         ("ellipse", (cx + f * 10 - 7, 80, cx + f * 10 + 9, 94))])
+        paint(p, brow, grey, depth=0.25, line=1.3)
+    p.stroke([(94, 66), (100, 84), (116, 122), (114, 134)], hexc("#b8645a"), 3)
+    for x, y in ((96, 72), (114, 120)):
+        p.stroke([(x - 5, y + 2), (x + 5, y - 2)], hexc("#7a3a30"), 1.3)
+    p.shape("ellipse", (116, 102, 142, 130), shade(skin, 0.95), depth=0.25, line=1.5)
+    p.flat("ellipse", (122, 107, 129, 114), hexc("#ffffff", 120))
+    p.flat("ellipse", (88, 118, 102, 128), hexc("#ff6a5a", 80))
+    p.flat("ellipse", (154, 118, 168, 128), hexc("#ff6a5a", 80))
+    # ---- mustache, smile and the long braided beard
+    beard_top = union(p, [("ellipse", (92, 124, 166, 170))])
+    paint(p, beard_top, grey, depth=0.14, line=1.6)
+    y = 164
+    w = 30
+    for i in range(6):
+        for side in (-1, 1):
+            cx = 129 + side * w * 0.22
+            p.shape("ellipse", (cx - w * 0.36, y, cx + w * 0.36, y + w * 0.7), grey if side < 0 else shade(grey, 0.9),
+                    depth=0.25, line=1.3)
+        y += w * 0.46
+        w *= 0.93
+    p.shape("rect", (118, y + 2, 140, y + 12), hexc("#8a2a2a"), radius=3, depth=0.3, line=1.3)
+    p.shape("poly", [(120, y + 12), (138, y + 12), (136, y + 30), (129, y + 24), (122, y + 30)], grey, depth=0.25,
+            line=1.3)
+    p.shape("chord", (110, 128, 148, 152), hexc("#6a2a2a"), start=0, end=180, depth=0.25, line=1.3)
+    p.shape("rect", (114, 138, 144, 142), WHITE, radius=1, **NOLINE)
+    m = union(p, [("ellipse", (92, 122, 130, 140)), ("ellipse", (128, 122, 166, 140))])
+    paint(p, m, shade(grey, 1.1), depth=0.22, line=1.4)
+    # ---- a hand raised in greeting, with bandaged knuckles
+    p.shape("line", [(214, 256), (218, 200)], gi, width=30, depth=0.15, line=1.8, tex="cloth", tex_amt=0.5)
+    p.shape("rect", (200, 176, 236, 204), hexc("#e8dcc8"), radius=6, depth=0.2, line=1.4)
+    hand = union(p, [("ellipse", (198, 136, 238, 184))] +
+                 [("rect", (200 + i * 9, 116 + abs(i - 1.5) * 4, 209 + i * 9, 150), {"radius": 4}) for i in range(4)])
+    paint(p, hand, skin, depth=0.16)
+    p.shape("line", [(198, 166), (188, 146)], skin, width=10, depth=0.25, line=1.4)
+    for i in range(3):
+        line(p, [(209 + i * 9, 124 + abs(i - 1) * 3), (209 + i * 9, 148)], shade(skin, 0.7), 1.2)
+    return p.finish(outline=2)
+
+
+def npc_nara():
+    """Nara: young dragon scholar with round glasses and a messy auburn bun, holding up a glowing dragon scale."""
+    p = TPainter(256, 256)
+    skin = hexc("#f6caa4")
+    hair = hexc("#b4502a")
+    blouse = hexc("#f2ece0")
+    vest = hexc("#3f7a6a")
+    strap = hexc("#7a4a2a")
+    scale_c = hexc("#ff9a3a")
+    # ---- hair mass behind, messy bun with a pencil
+    hm = union(p, [("ellipse", (62, 50, 196, 184)), ("ellipse", (58, 110, 104, 206)),
+                   ("ellipse", (154, 110, 200, 200))])
+    paint(p, hm, hair, depth=0.1, line=1.8)
+    bun = union(p, [("ellipse", (98, 6, 160, 58)), ("ellipse", (88, 22, 118, 50)), ("ellipse", (144, 20, 170, 46))])
+    paint(p, bun, hair, depth=0.14, line=1.8)
+    for pts in ([(108, 20), (124, 14), (140, 22)], [(104, 36), (128, 30), (150, 40)]):
+        line(p, _catmull(pts), shade(hair, 0.7), 1.8)
+    line(p, [(168, 6), (100, 44)], hexc("#f0c040"), 5, line=1.2)
+    p.shape("poly", [(168, 6), (178, 2), (174, 12)], hexc("#e8b88a"), line=1.0)
+    p.shape("ellipse", (94, 40, 104, 50), hexc("#e87a8a"), line=1.0)
+    for pts in ([(84, 96), (76, 118), (82, 134)], [(174, 94), (182, 114), (176, 128)]):
+        line(p, _catmull(pts, 4), hair, 3.2, line=1.1)
+    # ---- blouse, vest, satchel strap
+    body = p.shape("ellipse", (22, 180, 234, 380), vest, depth=0.08, line=2, tex="cloth", tex_amt=0.6)
+    p.shape("rect", (108, 150, 150, 200), skin, radius=10, depth=0.2)
+    p.shape("poly", [(94, 186), (129, 232), (164, 186), (156, 256), (102, 256)], blouse, depth=0.15, line=1.5,
+            tex="cloth", tex_amt=0.4)
+    for y in (216, 234, 250):
+        p.shape("ellipse", (126, y - 3, 132, y + 3), GOLD, line=0.9, spec=0.8)
+    p.shape("poly", [(154, 180), (176, 180), (80, 256), (56, 256)], strap, depth=0.25, line=1.5, tex="leather",
+            clip=body)
+    for i in range(10):
+        t = i / 10
+        x, y = 160 + (70 - 160) * t, 186 + (254 - 186) * t
+        line(p, [(x, y), (x - 2.4, y + 1.8)], hexc("#d8b080"), 1.1)
+    # satchel with scrolls poking out
+    for x, col in ((186, "#f3e4bf"), (200, "#e8d4a8"), (214, "#f3e4bf")):
+        p.shape("rect", (x - 6, 200, x + 6, 236), hexc(col), radius=5, depth=0.2, line=1.3)
+        p.shape("ellipse", (x - 6, 196, x + 6, 206), shade(hexc(col), 0.85), depth=0.3, line=1.1)
+    p.shape("rect", (170, 220, 240, 256), strap, radius=8, depth=0.15, line=1.6, tex="leather")
+    p.shape("chord", (168, 212, 242, 244), shade(strap, 1.15), start=180, end=360, depth=0.2, line=1.4,
+            tex="leather")
+    p.shape("rect", (198, 226, 212, 238), GOLD, radius=2, depth=0.3, line=1.1, spec=0.8)
+    # ---- face: freckles, big excited eyes behind round glasses, open smile
+    p.shape("ellipse", (82, 70, 176, 172), skin, depth=0.1)
+    fringe = union(p, [("chord", (78, 58, 180, 120), {"start": 180, "end": 360}),
+                       ("poly", [(80, 92), (92, 112), (100, 92), (112, 108), (122, 86)])])
+    paint(p, fringe, hair, depth=0.14, line=1.6)
+    for x in (108, 148):
+        _eye(p, x, 124, 8)
+        p.flat("ellipse", (x + 1, 126, x + 5, 130), hexc("#ffffff", 200))
+    line(p, _catmull([(96, 104), (106, 98), (118, 102)]), shade(hair, 0.8), 3)
+    line(p, _catmull([(138, 100), (150, 96), (160, 102)]), shade(hair, 0.8), 3)
+    for x in (108, 148):
+        ring = ImageChops.subtract(p._mask("ellipse", (x - 17, 107, x + 17, 141)),
+                                   p._mask("ellipse", (x - 13, 111, x + 13, 137)))
+        paint(p, ring, hexc("#8a5a2a"), depth=0.3, line=1.1)
+        p.shape("poly", [(x - 10, 116), (x - 4, 112), (x - 12, 126)], hexc("#ffffff", 150), **NOLINE)
+    line(p, [(125, 122), (131, 122)], hexc("#8a5a2a"), 3, line=0.9)
+    rng = random.Random(7)
+    for _ in range(14):
+        x = rng.choice((rng.uniform(92, 110), rng.uniform(146, 166)))
+        y = rng.uniform(142, 152)
+        p.flat("ellipse", (x - 1.2, y - 1.2, x + 1.2, y + 1.2), hexc("#c07a4a", 180))
+    p.flat("ellipse", (90, 142, 106, 152), hexc("#ff7a8a", 90))
+    p.flat("ellipse", (152, 142, 168, 152), hexc("#ff7a8a", 90))
+    line(p, [(128, 130), (125, 142), (130, 143)], shade(skin, 0.7), 2)
+    p.shape("chord", (112, 144, 146, 172), hexc("#7a2a3a"), start=0, end=180, depth=0.25, line=1.3)
+    p.shape("ellipse", (120, 158, 138, 170), hexc("#e8707a"), **NOLINE)
+    p.shape("rect", (116, 157, 142, 161), WHITE, radius=1, **NOLINE)
+    # ---- hand holding up a glowing dragon scale
+    p.shape("line", [(70, 256), (52, 196)], vest, width=30, depth=0.15, line=1.8, tex="cloth", tex_amt=0.5)
+    p.shape("rect", (38, 186, 70, 204), blouse, radius=6, depth=0.2, line=1.4)
+    p.glow((50, 128), 64, scale_c, 0.75)
+    sc = _catmull([(50, 170), (76, 138), (84, 106), (74, 88), (50, 82), (26, 88), (16, 106), (24, 138), (50, 170)], 5)
+    p.shape("poly", sc, hexc("#ff9a3a"), depth=0.2, light=1.5, line=1.8, spec=1.0, ink=hexc("#6a1a0a"))
+    inner = [(50 + (x - 50) * 0.78, 122 + (y - 122) * 0.78) for x, y in sc]
+    p.shape("poly", inner, hexc("#ffc85a"), depth=0.25, light=1.45, line=0, rim=0, ao=0)
+    line(p, _catmull([(24, 104), (36, 92), (50, 89), (64, 92), (76, 104)], 5), hexc("#fff4c8", 200), 2.4)
+    p.shape("poly", [(34, 100), (44, 90), (40, 118), (32, 124)], hexc("#ffffff", 170), **NOLINE)
+    p.sparkle((66, 100), 6)
+    p.shape("ellipse", (30, 160, 70, 196), skin, depth=0.2)
+    for y in (170, 178, 186):
+        line(p, [(36, y), (56, y - 1)], shade(skin, 0.65), 1.6)
+    for x, y, r in ((20, 70, 7), (88, 84, 5), (86, 160, 4)):
+        p.shape("poly", icons._star(x, y, r, r * 0.35, 4), hexc("#fff6b0"), line=0.8, depth=0.2)
+    return p.finish(outline=2)
+
+
 TOWN = {
     "background": background,
     "gate": gate,
@@ -1373,4 +1557,6 @@ TOWN = {
     "npc_merchant": npc_merchant,
     "npc_keeper": npc_keeper,
     "npc_innkeeper": npc_innkeeper,
+    "npc_class_master": npc_class_master,
+    "npc_nara": npc_nara,
 }

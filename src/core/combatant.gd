@@ -2,10 +2,13 @@ class_name Combatant
 extends RefCounted
 ## Shared runtime state for the player and enemies during a battle.
 
+const MAX_DODGE := 0.75
+
 var uid: String
 var def_id: String
 var name_key: String
 var is_player: bool = false
+var is_boss: bool = false
 var level: int = 1
 var stats: Stats
 var hp: int
@@ -70,6 +73,7 @@ static func make_enemy(uid_: String, enemy_id: String, enemy_def: Dictionary, le
 	c.moves = enemy_def.get("moves", {})
 	c.ai = enemy_def.get("ai", {})
 	c.on_ally_death = enemy_def.get("on_ally_death", {})
+	c.is_boss = enemy_def.get("boss", false)
 	c.xp_reward = int(enemy_def.get("xp", 0)) * level
 	c.gold_range = enemy_def.get("gold", [0, 0])
 	return c
@@ -106,6 +110,14 @@ func effective_def(status_defs: Dictionary) -> float:
 
 func effective_spd(status_defs: Dictionary) -> float:
 	return stats.spd * _status_mult("spd_mult", status_defs)
+
+
+## Dodge chance with status bonuses (Smoke Bomb), capped so nothing is untouchable.
+func effective_dodge(status_defs: Dictionary) -> float:
+	var d := stats.dodge
+	for id in statuses:
+		d += float(status_defs.get(id, {}).get("dodge_add", 0.0))
+	return minf(d, MAX_DODGE)
 
 
 func element_mult(element: String) -> float:

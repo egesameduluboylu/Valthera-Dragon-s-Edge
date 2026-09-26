@@ -4,7 +4,6 @@ extends Control
 ## through GameState, which saves after each change.
 
 const DUNGEON_SCENE := "res://src/scenes/dungeon/dungeon.tscn"
-const DUNGEON_ID := "rotten_cellar"
 const ART := "res://assets/town/%s.png"
 const ITEM_ICON := "res://assets/icons/items/%s.png"
 ## Building sprites and their spots on the 720x1280 background (tools/art/town.py).
@@ -12,11 +11,12 @@ const BUILDINGS := {
 	"gate": {"rect": Rect2(210, 250, 300, 310), "name": "town.dungeon"},
 	"smith": {"rect": Rect2(20, 560, 320, 300), "name": "town.smith"},
 	"merchant": {"rect": Rect2(380, 560, 320, 300), "name": "town.merchant"},
-	"class_master": {"rect": Rect2(20, 880, 320, 240), "name": "town.class_master", "locked": true},
+	"class_master": {"rect": Rect2(20, 880, 320, 240), "name": "town.class_master"},
 	"inn": {"rect": Rect2(380, 880, 320, 240), "name": "town.market"},
 }
 
 var _level_label: Label
+var _portrait: TextureRect
 var _xp_bar: ProgressBar
 var _gold: HBoxContainer
 var _scales: HBoxContainer
@@ -28,6 +28,7 @@ var _busy: bool = false
 
 
 func _ready() -> void:
+	Audio.music("town")
 	theme = UITheme.build()
 	_build()
 	_refresh()
@@ -36,6 +37,9 @@ func _ready() -> void:
 	_fade_to(0.0)
 	if GameState.run == null and not GameState.profile.run_state.is_empty():
 		_ask_resume()
+	elif StoryDialog.has_scene("game_intro") and GameState.profile.take_story("game_intro"):
+		GameState.changed()
+		add_child(StoryDialog.new("game_intro"))
 	else:
 		_market_news()
 
@@ -59,6 +63,12 @@ func open_panel(kind: String) -> void:
 			panel = BagPanel.new()
 		"inn":
 			panel = MarketPanel.new()
+		"class_master":
+			panel = ClassMasterPanel.new()
+		"settings":
+			var sp := SettingsPanel.new()
+			sp.reload.connect(func() -> void: get_tree().reload_current_scene())
+			panel = sp
 		_:
 			return
 	panel.closed.connect(_close_overlay)
@@ -67,54 +77,20 @@ func open_panel(kind: String) -> void:
 
 
 func _show_gate() -> void:
-	var p := GameState.profile
-	var d: Dictionary = DataDB.data["dungeons"][DUNGEON_ID]
-	var parts := UIKit.dialog(DataDB.t("town.gate.title"), "")
-	_overlay.add_child(parts[0])
+	var gate := GatePanel.new()
+	gate.closed.connect(_close_overlay)
+	gate.enter.connect(_enter_dungeon)
+	_overlay.add_child(gate)
 	_overlay.visible = true
-	var body: VBoxContainer = parts[1]
-	body.add_child(UIKit.npc_row(ART % "npc_keeper", DataDB.t("town.gate.keeper"), DataDB.t("town.gate.line")))
-	# dungeon card
-	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", UITheme.skin_panel("dark"))
-	body.add_child(card)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 14)
-	card.add_child(row)
-	var thumb := UIKit.icon(d.get("background", ""), 0)
-	thumb.custom_minimum_size = Vector2(170, 170)
-	thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	row.add_child(thumb)
-	var info := VBoxContainer.new()
-	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info.add_theme_constant_override("separation", 4)
-	row.add_child(info)
-	info.add_child(UIKit.title(DataDB.t(d["name_key"]), 30))
-	info.add_child(UIKit.label(DataDB.tf("town.gate.levels", {"a": int(d["level_min"]), "b": int(d["level_max"])}), 22, UITheme.TEXT))
-	var stats: Dictionary = p.dungeons.get(DUNGEON_ID, {})
-	var runs_text := DataDB.tf("town.gate.runs", {"n": stats.get("runs", 0)})
-	if stats.get("cleared", false):
-		runs_text += "  ·  " + DataDB.t("town.gate.cleared") + " ★"
-	info.add_child(UIKit.label(runs_text, 22, UITheme.GOLD if stats.get("cleared", false) else UITheme.TEXT_MUTED))
-	var pot := UIKit.counter(ITEM_ICON % "potion", DataDB.tf("town.gate.potions", {"n": p.potions}), UITheme.TEXT, 30)
-	info.add_child(pot)
-	var buttons := HBoxContainer.new()
-	buttons.add_theme_constant_override("separation", 14)
-	body.add_child(buttons)
-	var back := UIKit.button(DataDB.t("bag.close"), "", _close_overlay)
-	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	buttons.add_child(back)
-	var go := UIKit.primary(UIKit.button(DataDB.t("town.gate.enter"), "res://assets/icons/rooms/combat.png", _enter_dungeon))
-	go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	go.size_flags_stretch_ratio = 1.6
-	buttons.add_child(go)
 
 
-func _enter_dungeon() -> void:
+func _enter_dungeon(dungeon_id: String, hard: bool) -> void:
 	if _busy:
 		return
 	_busy = true
 	GameState.run = null
+	GameState.next_dungeon = dungeon_id
+	GameState.next_hard = hard
 	await _fade_to(1.0)
 	get_tree().change_scene_to_file(DUNGEON_SCENE)
 
@@ -175,6 +151,7 @@ func _close_overlay() -> void:
 func _refresh() -> void:
 	var p := GameState.profile
 	_level_label.text = "%s  ·  %s" % [DataDB.t("class." + p.active_class), DataDB.t("ui.level") % p.level()]
+	_portrait.texture = load(DataDB.data["classes"][p.active_class].get("sprite", ""))
 	_xp_bar.max_value = Progression.xp_to_next(p.level())
 	_xp_bar.value = p.class_xp()
 	UIKit.counter_label(_gold).text = str(p.gold)
@@ -303,11 +280,15 @@ func _build_header() -> void:
 	top.add_child(UIKit.spacer(12, false))
 	_potions = UIKit.counter(ITEM_ICON % "potion", "0", UITheme.TEXT, 34)
 	top.add_child(_potions)
+	top.add_child(UIKit.spacer(12, false))
+	var gear := UITheme.close_button(UIKit.button("", "", func() -> void: open_panel("settings")), 56, "gear")
+	gear.tooltip_text = DataDB.t("town.settings")
+	top.add_child(gear)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	v.add_child(row)
-	var portrait := UIKit.icon(DataDB.data["classes"][GameState.active_class].get("sprite", ""), 64)
-	row.add_child(portrait)
+	_portrait = UIKit.icon(DataDB.data["classes"][GameState.active_class].get("sprite", ""), 64)
+	row.add_child(_portrait)
 	var pv := VBoxContainer.new()
 	pv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pv.add_theme_constant_override("separation", 4)

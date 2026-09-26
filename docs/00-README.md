@@ -23,6 +23,7 @@ tasarım değiştiğinde önce ilgili doküman güncellenir.
 | 11 | [11-gelir-modeli.md](11-gelir-modeli.md) | Para kazanma yaklaşımı |
 | 12 | [12-yol-haritasi.md](12-yol-haritasi.md) | Kilometre taşları ve görev listesi |
 | 13 | [13-pazar.md](13-pazar.md) | Oyuncular arası pazar, benzersiz eşyalar, sunucu |
+| 14 | [14-yayin.md](14-yayin.md) | Android dışa aktarma, ikon, Google Play adımları |
 
 ## Kısa Özet
 

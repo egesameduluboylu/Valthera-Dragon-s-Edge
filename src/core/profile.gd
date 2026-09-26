@@ -10,20 +10,23 @@ const POTION_PRICE := 25
 const FREE_POTIONS := 3
 const MAX_POTIONS := 6
 const SHOP_SIZE := 3
+const LOADOUT_SIZE := 4
 
 var data: Dictionary
 var active_class: String = "warrior"
-var classes: Dictionary = {}          # class_id -> {level, xp}
+var classes: Dictionary = {}          # unlocked class_id -> {level, xp}
+var loadouts: Dictionary = {}         # class_id -> the 4 skill ids taken into battle
 var gold: int = 0
 var scales: int = 0
 var potions: int = FREE_POTIONS
 var inventory: Array = []             # item dictionaries, see Items
 var equipment: Dictionary = {}        # slot -> item uid or ""
 var shop: Array = []                  # items for sale at the merchant
-var dungeons: Dictionary = {}         # dungeon_id -> {runs, cleared}
+var dungeons: Dictionary = {}         # dungeon_id -> {runs, cleared, stars: [3 bools], hard_cleared}
 var run_state: Dictionary = {}        # DungeonRun.to_dict() between rooms, or {}
 var market: Dictionary = {}           # offline marketplace: board, own listings, mailbox (LocalMarket)
 var player_name: String = ""          # shown on the player's market listings
+var story_seen: Array = []            # story.json scene ids already shown
 var save_id: String = ""              # random per new game; the online market keys listed items by it
 var online_claims: Dictionary = {}    # online mailbox id -> claim op id, until the reward is applied
 var next_uid: int = 1
@@ -35,15 +38,20 @@ func _init(p_data: Dictionary) -> void:
 		equipment[slot] = ""
 
 
-## A fresh save: level 1 warrior wearing the starter gear from items.json.
-static func new_game(p_data: Dictionary, rng: RandomNumberGenerator = null) -> Profile:
+## A fresh save: a level 1 hero of the chosen class wearing the starter gear from
+## items.json and the class's starter weapon.
+static func new_game(p_data: Dictionary, rng: RandomNumberGenerator = null, class_id: String = "warrior") -> Profile:
 	var p := Profile.new(p_data)
-	p.classes = {"warrior": {"level": 1, "xp": 0}}
+	p.active_class = class_id
+	p.classes = {class_id: {"level": 1, "xp": 0}}
 	for spec in p_data["items"].get("starter", []):
+		if p_data["items"]["bases"][spec["base"]].get("slot", "") == "weapon":
+			continue
 		var item := {"base": spec["base"], "rarity": spec["rarity"], "level": int(spec["level"]),
 				"upgrade": 0, "affixes": []}
 		p.add_item(item)
 		p.equip(item["uid"])
+	p._give_starter_weapon(class_id)
 	var r := rng if rng != null else RandomNumberGenerator.new()
 	p.restock_shop(r)
 	p.player_name = "Maceracı %04d" % r.randi_range(1, 9999)
@@ -54,6 +62,112 @@ static func new_game(p_data: Dictionary, rng: RandomNumberGenerator = null) -> P
 
 func defs() -> Dictionary:
 	return data["items"]
+
+
+# ---------------------------------------------------------------- classes and skills
+
+## True the first time a story scene should play; marks it as seen.
+func take_story(scene_id: String) -> bool:
+	if story_seen.has(scene_id):
+		return false
+	story_seen.append(scene_id)
+	return true
+
+
+func is_unlocked(class_id: String) -> bool:
+	return classes.has(class_id)
+
+
+## Why the Class Master won't teach a class yet: "unlocked", "locked" (clear the first
+## dungeon first) or "" when it can be learned now.
+func class_unlock_block(class_id: String) -> String:
+	if is_unlocked(class_id):
+		return "unlocked"
+	var need: String = data["classes"][class_id].get("unlock_after", "")
+	if need != "" and not dungeons.get(need, {}).get("cleared", false):
+		return "locked"
+	return ""
+
+
+func unlock_class(class_id: String) -> bool:
+	if class_unlock_block(class_id) != "":
+		return false
+	classes[class_id] = {"level": 1, "xp": 0}
+	_give_starter_weapon(class_id)
+	return true
+
+
+## Makes another unlocked class the active one. Its level, skills and weapon come with
+## it; armour and trinkets are shared (docs/04).
+func switch_class(class_id: String) -> bool:
+	if not is_unlocked(class_id) or not run_state.is_empty():
+		return false
+	active_class = class_id
+	var weapon := equipped("weapon")
+	if not weapon.is_empty() and not can_equip(weapon):
+		equipment["weapon"] = ""
+	if equipped("weapon").is_empty():
+		var best := {}
+		for item in bag_items():
+			if slot_of(item) == "weapon" and can_equip(item) \
+					and (best.is_empty() or Items.total_stats(item, defs()).get("atk", 0) > Items.total_stats(best, defs()).get("atk", 0)):
+				best = item
+		if not best.is_empty():
+			equipment["weapon"] = best["uid"]
+	return true
+
+
+func _give_starter_weapon(class_id: String) -> void:
+	var base: String = data["classes"][class_id].get("starter_weapon", "")
+	if base == "":
+		return
+	var item := {"base": base, "rarity": "common", "level": 1, "upgrade": 0, "affixes": []}
+	add_item(item)
+	if active_class == class_id and equipped("weapon").is_empty():
+		equip(item["uid"])
+
+
+## Skills of the active class that its level has unlocked, in data order.
+func unlocked_skills(class_id: String = "") -> Array[String]:
+	var cls := class_id if class_id != "" else active_class
+	var lv := int(classes.get(cls, {}).get("level", 1))
+	var out: Array[String] = []
+	for id in data["skills"]:
+		var d: Dictionary = data["skills"][id]
+		if d.get("class", "") == cls and int(d.get("unlock_level", 1)) <= lv:
+			out.append(id)
+	return out
+
+
+## The 4 skills taken into battle: the saved choice (dropping anything no longer
+## valid), topped up from the starter skills.
+func loadout(class_id: String = "") -> Array[String]:
+	var cls := class_id if class_id != "" else active_class
+	var usable := unlocked_skills(cls)
+	var out: Array[String] = []
+	for id in loadouts.get(cls, []):
+		if usable.has(id) and not out.has(id) and out.size() < LOADOUT_SIZE:
+			out.append(id)
+	for id in data["classes"][cls].get("starter_skills", []) + usable:
+		if out.size() >= LOADOUT_SIZE:
+			break
+		if usable.has(id) and not out.has(id):
+			out.append(id)
+	return out
+
+
+## Swaps skill `new_id` into the active loadout at `slot` (0-3). If it is already in
+## the loadout the two slots trade places.
+func set_loadout_slot(slot: int, new_id: String) -> bool:
+	if slot < 0 or slot >= LOADOUT_SIZE or not unlocked_skills().has(new_id):
+		return false
+	var cur := loadout()
+	var old := cur.find(new_id)
+	if old >= 0:
+		cur[old] = cur[slot]
+	cur[slot] = new_id
+	loadouts[active_class] = cur
+	return true
 
 
 func level() -> int:
@@ -190,7 +304,7 @@ func upgrade(uid: String) -> bool:
 ## The active class at its level wearing its gear, for the character sheet.
 func player() -> Combatant:
 	var class_def: Dictionary = data["classes"][active_class]
-	var c := Combatant.make_player(active_class, class_def, level(), [])
+	var c := Combatant.make_player(active_class, class_def, level(), loadout())
 	Items.apply_equipment(c, equipped_items(), defs())
 	c.hp = c.max_hp()
 	return c
@@ -246,18 +360,38 @@ func buy_shop_item(index: int) -> bool:
 
 # ---------------------------------------------------------------- dungeon runs
 
+## Dungeons open one after another: each needs the one before it cleared.
+func dungeon_unlocked(dungeon_id: String) -> bool:
+	var need: String = data["dungeons"][dungeon_id].get("unlock_after", "")
+	return need == "" or dungeon_cleared(need)
+
+
+func dungeon_cleared(dungeon_id: String) -> bool:
+	return dungeons.get(dungeon_id, {}).get("cleared", false)
+
+
+func dungeon_stars(dungeon_id: String) -> Array:
+	return dungeons.get(dungeon_id, {}).get("stars", [false, false, false])
+
+
+## Hard mode opens once all three stars are earned (docs/05).
+func hard_unlocked(dungeon_id: String) -> bool:
+	return not dungeon_stars(dungeon_id).has(false)
+
+
 ## Starts a run with the worn gear and the potion stock.
-func start_run(dungeon_id: String, rng: RandomNumberGenerator = null) -> DungeonRun:
+func start_run(dungeon_id: String, rng: RandomNumberGenerator = null, hard: bool = false) -> DungeonRun:
 	var gear: Array = []
 	for item in equipped_items():
 		gear.append(item.duplicate(true))
-	var run := DungeonRun.new(data, dungeon_id, active_class, level(), class_xp(), rng, gear)
+	var run := DungeonRun.new(data, dungeon_id, active_class, level(), class_xp(), rng, gear, loadout())
 	run.potions = potions
+	run.hard = hard and hard_unlocked(dungeon_id)
 	return run
 
 
-## Banks a finished run. Returns what happened to the loot:
-## {added: [items], salvaged: {gold, scales, count}}.
+## Banks a finished run. Returns what happened to the loot and the stars:
+## {added: [items], salvaged: {gold, scales, count}, new_stars: [indexes], reward: item or {}}.
 func apply_run(run: DungeonRun, rng: RandomNumberGenerator = null) -> Dictionary:
 	set_progress(run.level, run.class_xp)
 	gold += run.gold_earned
@@ -275,12 +409,30 @@ func apply_run(run: DungeonRun, rng: RandomNumberGenerator = null) -> Dictionary
 	potions = maxi(run.potions, FREE_POTIONS)   # Nara refills the basics in town
 	var d: Dictionary = dungeons.get(run.dungeon_id, {"runs": 0, "cleared": false})
 	d["runs"] = int(d["runs"]) + 1
+	var first_clear: bool = run.outcome == "cleared" and not d.get("cleared", false)
 	if run.outcome == "cleared":
 		d["cleared"] = true
+		if run.hard:
+			d["hard_cleared"] = true
+	var stars: Array = d.get("stars", [false, false, false]).duplicate()
+	var new_stars: Array = []
+	var earned := run.stars()
+	for i in 3:
+		if earned[i] and not stars[i]:
+			stars[i] = true
+			new_stars.append(i)
+	d["stars"] = stars
 	dungeons[run.dungeon_id] = d
+	# The story's last gift (docs/07): the dragon egg on the first clear of the lair.
+	var reward := {}
+	var spec: Dictionary = data["dungeons"][run.dungeon_id].get("first_clear_reward", {})
+	if first_clear and not spec.is_empty():
+		reward = Items.roll(defs(), int(data["dungeons"][run.dungeon_id].get("level_max", 1)),
+				rng if rng != null else RandomNumberGenerator.new(), {"base": spec["base"]})
+		add_item(reward)
 	run_state = {}
 	restock_shop(rng if rng != null else RandomNumberGenerator.new())
-	return {"added": added, "salvaged": salvaged}
+	return {"added": added, "salvaged": salvaged, "new_stars": new_stars, "first_clear": first_clear, "reward": reward}
 
 
 # ---------------------------------------------------------------- save format
@@ -290,6 +442,7 @@ func to_dict() -> Dictionary:
 		"version": VERSION,
 		"active_class": active_class,
 		"classes": classes.duplicate(true),
+		"loadouts": loadouts.duplicate(true),
 		"gold": gold, "dragon_scales": scales, "potions": potions,
 		"equipment": equipment.duplicate(),
 		"inventory": inventory.duplicate(true),
@@ -298,6 +451,7 @@ func to_dict() -> Dictionary:
 		"run_state": run_state.duplicate(true),
 		"market": market.duplicate(true),
 		"player_name": player_name,
+		"story_seen": story_seen.duplicate(),
 		"save_id": save_id,
 		"online_claims": online_claims.duplicate(),
 		"next_uid": next_uid,
@@ -306,10 +460,21 @@ func to_dict() -> Dictionary:
 
 static func from_dict(p_data: Dictionary, d: Dictionary) -> Profile:
 	var p := Profile.new(p_data)
-	p.active_class = d.get("active_class", "warrior")
-	p.classes = d.get("classes", {"warrior": {"level": 1, "xp": 0}})
-	for id in p.classes:   # JSON numbers load as floats
-		p.classes[id] = {"level": int(p.classes[id].get("level", 1)), "xp": int(p.classes[id].get("xp", 0))}
+	var classes_: Variant = d.get("classes", {})
+	if classes_ is Dictionary:
+		for id in classes_:   # JSON numbers load as floats
+			if p_data["classes"].has(id) and classes_[id] is Dictionary:
+				p.classes[id] = {"level": int(classes_[id].get("level", 1)), "xp": int(classes_[id].get("xp", 0))}
+	if p.classes.is_empty():
+		p.classes = {"warrior": {"level": 1, "xp": 0}}
+	p.active_class = str(d.get("active_class", "warrior"))
+	if not p.classes.has(p.active_class):
+		p.active_class = p.classes.keys()[0]
+	var loadouts_: Variant = d.get("loadouts", {})
+	if loadouts_ is Dictionary:
+		for id in loadouts_:
+			if p.classes.has(id) and loadouts_[id] is Array:
+				p.loadouts[id] = loadouts_[id].map(func(x: Variant) -> String: return str(x))
 	p.gold = int(d.get("gold", 0))
 	p.scales = int(d.get("dragon_scales", 0))
 	p.potions = int(d.get("potions", FREE_POTIONS))
@@ -329,10 +494,18 @@ static func from_dict(p_data: Dictionary, d: Dictionary) -> Profile:
 	if dungeons_ is Dictionary:
 		for id in dungeons_:
 			if p_data["dungeons"].has(id) and dungeons_[id] is Dictionary:
+				var stars_: Variant = dungeons_[id].get("stars", [])
+				var stars: Array = []
+				for i in 3:
+					stars.append(stars_ is Array and i < stars_.size() and bool(stars_[i]))
 				p.dungeons[id] = {"runs": int(dungeons_[id].get("runs", 0)),
-						"cleared": bool(dungeons_[id].get("cleared", false))}
+						"cleared": bool(dungeons_[id].get("cleared", false)), "stars": stars,
+						"hard_cleared": bool(dungeons_[id].get("hard_cleared", false))}
 	p.run_state = d.get("run_state", {}) if d.get("run_state") is Dictionary else {}
 	p.player_name = str(d.get("player_name", "Maceracı"))
+	var seen: Variant = d.get("story_seen", [])
+	if seen is Array:
+		p.story_seen = seen.map(func(x: Variant) -> String: return str(x))
 	p.market = _clean_market(d.get("market", {}), p_data)
 	p.save_id = str(d.get("save_id", ""))
 	if p.save_id == "":

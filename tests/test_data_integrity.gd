@@ -2,7 +2,7 @@ extends TestCase
 ## Catches broken references in the JSON data: missing text, art or ids.
 
 const TEXT_KEYS := ["name_key", "desc_key", "title_key", "text_key", "label_key", "line_key"]
-const PATH_KEYS := ["sprite", "icon", "background"]
+const PATH_KEYS := ["sprite", "icon", "background", "map_background"]
 
 
 func test_every_text_key_and_asset_exists() -> void:
@@ -74,7 +74,68 @@ func test_item_data_is_consistent() -> void:
 
 func test_town_art_exists() -> void:
 	for id in ["background", "gate", "smith", "merchant", "class_master", "inn", "npc_smith", "npc_merchant", "npc_keeper",
-			"npc_innkeeper"]:
+			"npc_innkeeper", "npc_class_master"]:
 		assert_true(ResourceLoader.exists("res://assets/town/%s.png" % id), id)
 	for id in ["bag", "scale"]:
 		assert_true(ResourceLoader.exists("res://assets/icons/items/%s.png" % id), id)
+
+
+## Tutorial hints (src/ui/tutorial.gd) build their text key from the flag id, and there is
+## one class hint per class. Read from the source, since the script needs autoloads.
+func test_every_tutorial_hint_has_text() -> void:
+	var text := DataLoader.load_json("res://data/text/tr.json")
+	var src := FileAccess.get_file_as_string("res://src/ui/tutorial.gd")
+	var re := RegEx.create_from_string("\"(tut_[a-z_]+)\"")
+	var flags: Array = []
+	for m in re.search_all(src):
+		if not flags.has(m.get_string(1)):
+			flags.append(m.get_string(1))
+	assert_true(flags.size() >= 5, "found the FLAGS list")
+	for id in game_data()["classes"]:
+		assert_true(flags.has("tut_class_" + id), "class hint for " + id)
+	for id in flags:
+		assert_true(text.has("tut." + id.trim_prefix("tut_")), id)
+	for key in ["tut.next", "tut.skip", "npc.nara"]:
+		assert_true(text.has(key), key)
+	assert_true(ResourceLoader.exists("res://assets/ui/skin/gear_normal.png"), "gear button")
+	assert_true(ResourceLoader.exists("res://assets/ui/skin/knob.png"), "slider knob")
+
+
+## Every language file has the Turkish keys and the same {placeholders} and % tokens.
+func test_translations_match_turkish() -> void:
+	var tr_text := DataLoader.load_json("res://data/text/tr.json")
+	var re := RegEx.create_from_string("\\{[a-z_0-9]+\\}|%[ds%]")
+	for lang in ["en"]:
+		var other := DataLoader.load_json("res://data/text/%s.json" % lang)
+		for key in tr_text:
+			if not other.has(key):
+				assert_true(false, "%s missing %s" % [lang, key])
+				continue
+			var a: Array = re.search_all(tr_text[key]).map(func(m: RegExMatch) -> String: return m.get_string())
+			var b: Array = re.search_all(other[key]).map(func(m: RegExMatch) -> String: return m.get_string())
+			a.sort()
+			b.sort()
+			assert_eq(b, a, "%s %s placeholders" % [lang, key])
+
+
+## Every sound the code asks for exists (src/autoload/audio.gd skips missing files quietly).
+func test_every_played_sound_exists() -> void:
+	var re := RegEx.create_from_string("Audio\\.play\\(\"([a-z_]*[a-z])\"")
+	var names := {}
+	for dir in ["res://src/scenes/battle", "res://src/scenes/dungeon", "res://src/scenes/town", "res://src/ui",
+			"res://src/autoload"]:
+		for f in DirAccess.get_files_at(dir):
+			if f.ends_with(".gd"):
+				for m in re.search_all(FileAccess.get_file_as_string(dir + "/" + f)):
+					names[m.get_string(1)] = true
+	for id in game_data()["skills"]:
+		var element: String = game_data()["skills"][id].get("element", "physical")
+		if element != "physical":
+			names["magic_" + element] = true
+	for n in ["level_up", "stab", "slash", "smoke", "shield"]:
+		names[n] = true
+	assert_true(names.size() > 20, "found the sounds")
+	for n in names:
+		assert_true(ResourceLoader.exists("res://assets/audio/sfx/%s.wav" % n), n)
+	for track in ["town", "dungeon", "battle", "boss", "ending"]:
+		assert_true(ResourceLoader.exists("res://assets/audio/music/%s.wav" % track), track)

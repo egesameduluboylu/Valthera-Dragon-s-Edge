@@ -12,14 +12,13 @@
   },
   "warrior_heavy_strike": {
     "class": "warrior", "name_key": "skill.heavy_strike", "icon": "res://assets/icons/skills/heavy_strike.png", "desc_key": "skill.heavy_strike.desc",
-    "unlock_level": 2, "role": "finisher", "cost": 30, "cooldown": 0,
+    "unlock_level": 1, "role": "finisher", "cost": 30, "cooldown": 0,
     "power": 1.4, "element": "physical", "target": "single_enemy",
-    "combo": {"requires_status": "armor_break", "multiplier": 1.8, "consume": true,
-              "apply_status": [{"id": "stun", "turns": 2}]}
+    "combo": {"requires_status": "armor_break", "multiplier": 1.8, "consume": true, "apply_status": [{"id": "stun", "turns": 2}]}
   },
   "warrior_battle_cry": {
     "class": "warrior", "name_key": "skill.battle_cry", "icon": "res://assets/icons/skills/battle_cry.png", "desc_key": "skill.battle_cry.desc",
-    "unlock_level": 4, "role": "neutral", "cost": 20, "cooldown": 4,
+    "unlock_level": 3, "role": "neutral", "cost": 20, "cooldown": 4,
     "power": 0.0, "element": "physical", "target": "self",
     "apply_status": [{"id": "strengthened", "turns": 2}]
   },
@@ -31,21 +30,115 @@
   },
   "warrior_execute": {
     "class": "warrior", "name_key": "skill.execute", "icon": "res://assets/icons/skills/execute.png", "desc_key": "skill.execute.desc",
-    "unlock_level": 9, "role": "finisher", "cost": 40, "cooldown": 3,
+    "unlock_level": 1, "role": "finisher", "cost": 40, "cooldown": 3,
     "power": 1.6, "element": "physical", "target": "single_enemy",
-    "combo": {"requires_status": "stun", "multiplier": 2.0, "consume": true,
-              "low_hp_threshold": 0.25, "low_hp_multiplier": 3.0}
+    "combo": {"requires_status": "stun", "multiplier": 2.0, "consume": true, "low_hp_threshold": 0.25, "low_hp_multiplier": 3.0}
   },
   "warrior_iron_wall": {
     "class": "warrior", "name_key": "skill.iron_wall", "icon": "res://assets/icons/skills/iron_wall.png", "desc_key": "skill.iron_wall.desc",
-    "unlock_level": 12, "role": "neutral", "cost": 0, "cooldown": 4,
+    "unlock_level": 9, "role": "neutral", "cost": 0, "cooldown": 4,
     "power": 0.0, "element": "physical", "target": "self",
     "shield_max_hp_percent": 0.25
   },
   "warrior_whirlwind": {
     "class": "warrior", "name_key": "skill.whirlwind", "icon": "res://assets/icons/skills/whirlwind.png", "desc_key": "skill.whirlwind.desc",
-    "unlock_level": 16, "role": "finisher", "cost": 60, "cooldown": 3,
+    "unlock_level": 12, "role": "finisher", "cost": 60, "cooldown": 3,
     "power": 0.9, "element": "physical", "target": "all_enemies",
     "combo": {"requires_status": "bleed", "multiplier": 1.7, "consume": false}
+  },
+  "mage_arcane_bolt": {
+    "class": "mage", "name_key": "skill.arcane_bolt", "icon": "res://assets/icons/skills/arcane_bolt.png", "desc_key": "skill.arcane_bolt.desc",
+    "unlock_level": 1, "role": "neutral", "cost": 0, "cooldown": 0,
+    "power": 0.9, "element": "shadow", "target": "single_enemy",
+    "resource_gain": 5
+  },
+  "mage_fireball": {
+    "class": "mage", "name_key": "skill.fireball", "icon": "res://assets/icons/skills/fireball.png", "desc_key": "skill.fireball.desc",
+    "unlock_level": 1, "role": "setup", "cost": 20, "cooldown": 0,
+    "power": 1.0, "element": "fire", "target": "single_enemy",
+    "apply_status": [{"id": "burn", "turns": 3}]
+  },
+  "mage_flame_burst": {
+    "class": "mage", "name_key": "skill.flame_burst", "icon": "res://assets/icons/skills/flame_burst.png", "desc_key": "skill.flame_burst.desc",
+    "unlock_level": 1, "role": "finisher", "cost": 30, "cooldown": 1,
+    "power": 1.2, "element": "fire", "target": "single_enemy",
+    "combo": {"requires_status": "burn", "multiplier": 2.0, "consume": true}
+  },
+  "mage_ice_lance": {
+    "class": "mage", "name_key": "skill.ice_lance", "icon": "res://assets/icons/skills/ice_lance.png", "desc_key": "skill.ice_lance.desc",
+    "unlock_level": 1, "role": "setup", "cost": 20, "cooldown": 0,
+    "power": 0.9, "element": "ice", "target": "single_enemy",
+    "apply_status": [{"id": "freeze", "turns": 3}]
+  },
+  "mage_mana_shield": {
+    "class": "mage", "name_key": "skill.mana_shield", "icon": "res://assets/icons/skills/mana_shield.png", "desc_key": "skill.mana_shield.desc",
+    "unlock_level": 3, "role": "neutral", "cost": 25, "cooldown": 3,
+    "power": 0.0, "element": "physical", "target": "self",
+    "shield_flat": 30,
+    "shield_atk": 1.0
+  },
+  "mage_shatter": {
+    "class": "mage", "name_key": "skill.shatter", "icon": "res://assets/icons/skills/shatter.png", "desc_key": "skill.shatter.desc",
+    "unlock_level": 6, "role": "finisher", "cost": 35, "cooldown": 2,
+    "power": 1.3, "element": "ice", "target": "single_enemy",
+    "combo": {"requires_status": "freeze", "multiplier": 1.5, "per_stack": 0.5, "consume": true}
+  },
+  "mage_chain_lightning": {
+    "class": "mage", "name_key": "skill.chain_lightning", "icon": "res://assets/icons/skills/chain_lightning.png", "desc_key": "skill.chain_lightning.desc",
+    "unlock_level": 9, "role": "neutral", "cost": 40, "cooldown": 2,
+    "power": 0.8, "element": "lightning", "target": "all_enemies"
+  },
+  "mage_meteor": {
+    "class": "mage", "name_key": "skill.meteor", "icon": "res://assets/icons/skills/meteor.png", "desc_key": "skill.meteor.desc",
+    "unlock_level": 12, "role": "finisher", "cost": 70, "cooldown": 5,
+    "power": 2.0, "element": "fire", "target": "all_enemies",
+    "combo": {"requires_status": "burn", "multiplier": 1.5, "consume": false}
+  },
+  "rogue_stab": {
+    "class": "rogue", "name_key": "skill.stab", "icon": "res://assets/icons/skills/stab.png", "desc_key": "skill.stab.desc",
+    "unlock_level": 1, "role": "neutral", "cost": 10, "cooldown": 0,
+    "power": 1.0, "element": "physical", "target": "single_enemy"
+  },
+  "rogue_poison_blade": {
+    "class": "rogue", "name_key": "skill.poison_blade", "icon": "res://assets/icons/skills/poison_blade.png", "desc_key": "skill.poison_blade.desc",
+    "unlock_level": 1, "role": "setup", "cost": 20, "cooldown": 0,
+    "power": 0.6, "element": "physical", "target": "single_enemy",
+    "apply_status": [{"id": "poison", "turns": 4, "stacks": 2}]
+  },
+  "rogue_backstab": {
+    "class": "rogue", "name_key": "skill.backstab", "icon": "res://assets/icons/skills/backstab.png", "desc_key": "skill.backstab.desc",
+    "unlock_level": 1, "role": "finisher", "cost": 35, "cooldown": 1,
+    "power": 1.5, "element": "physical", "target": "single_enemy",
+    "combo": {"requires_status": ["poison", "stun"], "multiplier": 1.0, "force_crit": true, "consume": false}
+  },
+  "rogue_smoke_bomb": {
+    "class": "rogue", "name_key": "skill.smoke_bomb", "icon": "res://assets/icons/skills/smoke_bomb.png", "desc_key": "skill.smoke_bomb.desc",
+    "unlock_level": 3, "role": "neutral", "cost": 30, "cooldown": 4,
+    "power": 0.0, "element": "physical", "target": "self",
+    "apply_status": [{"id": "evasive", "turns": 2}]
+  },
+  "rogue_blind": {
+    "class": "rogue", "name_key": "skill.blind", "icon": "res://assets/icons/skills/blind.png", "desc_key": "skill.blind.desc",
+    "unlock_level": 1, "role": "setup", "cost": 15, "cooldown": 2,
+    "power": 0.3, "element": "physical", "target": "single_enemy",
+    "apply_status": [{"id": "stun", "turns": 2, "boss_chance": 0.5}]
+  },
+  "rogue_poison_burst": {
+    "class": "rogue", "name_key": "skill.poison_burst", "icon": "res://assets/icons/skills/poison_burst.png", "desc_key": "skill.poison_burst.desc",
+    "unlock_level": 6, "role": "finisher", "cost": 40, "cooldown": 2,
+    "power": 0.5, "element": "shadow", "target": "single_enemy",
+    "combo": {"requires_status": "poison", "multiplier": 1.0, "detonate": true, "consume": true}
+  },
+  "rogue_blade_rain": {
+    "class": "rogue", "name_key": "skill.blade_rain", "icon": "res://assets/icons/skills/blade_rain.png", "desc_key": "skill.blade_rain.desc",
+    "unlock_level": 9, "role": "neutral", "cost": 45, "cooldown": 3,
+    "power": 0.5, "element": "physical", "target": "random_enemies",
+    "hits": 4
+  },
+  "rogue_shadow_step": {
+    "class": "rogue", "name_key": "skill.shadow_step", "icon": "res://assets/icons/skills/shadow_step.png", "desc_key": "skill.shadow_step.desc",
+    "unlock_level": 12, "role": "finisher", "cost": 50, "cooldown": 4,
+    "power": 2.2, "element": "physical", "target": "single_enemy",
+    "combo": {"requires_status": "stun", "multiplier": 3.0, "consume": true, "refund": true}
   }
 }

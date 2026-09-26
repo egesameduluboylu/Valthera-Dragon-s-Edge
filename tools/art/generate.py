@@ -2,7 +2,10 @@
 
     python3 -m pip install pillow
     python3 tools/art/generate.py            # everything
-    python3 tools/art/generate.py sprites    # one group: sprites | backgrounds | icons | scenes
+    python3 tools/art/generate.py sprites    # one group: sprites | backgrounds | icons | scenes | town | skin
+
+backgrounds writes every dungeon's battle background plus the map backgrounds of the later dungeons
+(mushroom_cave, frozen_pass, burnt_keep, dragon_lair); the cellar's map stays in the scenes group.
 
 The art is original and generated from code, so there are no third-party licences to track.
 """
@@ -35,6 +38,9 @@ def main(groups):
             save(fn(), f"sprites/{name}.png")
     if "backgrounds" in groups:
         save(backgrounds.rotten_cellar(), "backgrounds/rotten_cellar.png")
+        for k, (battle, dungeon_map) in backgrounds.DUNGEONS.items():
+            save(battle(), f"backgrounds/{k}.png")
+            save(dungeon_map(), f"backgrounds/{k}_map.png")
     if "icons" in groups:
         for k in icons.SKILL_ICONS:
             save(icons.skill_icon(k), f"icons/skills/{k}.png")

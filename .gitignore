@@ -2,7 +2,6 @@
 .godot/
 /android/
 *.translation
-export_presets.cfg
 export_credentials.cfg
 
 # OS
@@ -12,3 +11,4 @@ Thumbs.db
 # Python
 __pycache__/
 tests/_*
+/build/

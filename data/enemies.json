@@ -87,5 +87,329 @@
        "line_key": "boss.bone_king.phase2",
        "on_enter_status": [{"id": "enraged", "turns": 99}]}
     ]}
+  },
+  "cave_slime": {
+    "name_key": "enemy.cave_slime",
+    "sprite": "res://assets/sprites/enemies/cave_slime.png",
+    "base": {"hp": 52, "atk": 7, "def": 4, "spd": 5, "crit": 0.05, "dodge": 0.0},
+    "elements": {"fire": 1.5, "lightning": 1.25, "physical": 0.8},
+    "immune": ["poison", "bleed"],
+    "xp": 12,
+    "gold": [6, 10],
+    "moves": {
+      "slam": {"type": "attack", "power": 1.0},
+      "acid_spit": {"type": "attack", "power": 0.7, "element": "shadow", "apply_status": [{"id": "armor_break", "turns": 2}]}
+    },
+    "ai": {"type": "pattern", "pattern": ["slam", "acid_spit", "slam"]}
+  },
+  "toxic_toad": {
+    "name_key": "enemy.toxic_toad",
+    "sprite": "res://assets/sprites/enemies/toxic_toad.png",
+    "base": {"hp": 38, "atk": 7.8, "def": 6, "spd": 9, "crit": 0.05, "dodge": 0.05},
+    "elements": {"fire": 1.5, "ice": 1.25},
+    "immune": ["poison"],
+    "xp": 12,
+    "gold": [6, 10],
+    "moves": {
+      "tongue": {"type": "attack", "power": 0.8, "apply_status": [{"id": "poison", "turns": 4, "stacks": 1}]},
+      "leap": {"type": "attack", "power": 1.5, "heavy": true}
+    },
+    "ai": {"type": "pattern", "pattern": ["tongue", "tongue", "leap"]}
+  },
+  "glow_bat": {
+    "name_key": "enemy.glow_bat",
+    "sprite": "res://assets/sprites/enemies/glow_bat.png",
+    "base": {"hp": 27, "atk": 7, "def": 3, "spd": 15, "crit": 0.08, "dodge": 0.2},
+    "elements": {"lightning": 1.5, "fire": 1.25},
+    "immune": [],
+    "xp": 11,
+    "gold": [5, 9],
+    "moves": {
+      "flurry_bite": {"type": "multi_attack", "power": 0.6, "hits": 2},
+      "screech": {"type": "attack", "power": 0.9}
+    },
+    "ai": {"type": "pattern", "pattern": ["flurry_bite", "screech"]}
+  },
+  "shroom_brute": {
+    "name_key": "enemy.shroom_brute",
+    "sprite": "res://assets/sprites/enemies/shroom_brute.png",
+    "elite": true,
+    "base": {"hp": 124, "atk": 12.5, "def": 22, "spd": 6, "crit": 0.05, "dodge": 0.0},
+    "elements": {"fire": 1.5, "physical": 0.85},
+    "immune": ["poison"],
+    "xp": 30,
+    "gold": [30, 45],
+    "moves": {
+      "club": {"type": "attack", "power": 1.0},
+      "harden": {"type": "shield", "amount": 25},
+      "stomp": {"type": "attack", "power": 2.0, "heavy": true, "stun_self_if_defended": true}
+    },
+    "ai": {"type": "pattern", "pattern": ["club", "harden", "stomp"]}
+  },
+  "spore_mother": {
+    "name_key": "enemy.spore_mother",
+    "sprite": "res://assets/sprites/enemies/spore_mother.png",
+    "boss": true,
+    "base": {"hp": 180, "atk": 9.4, "def": 18, "spd": 7, "crit": 0.05, "dodge": 0.0},
+    "elements": {"fire": 1.6},
+    "immune": ["poison", "bleed"],
+    "on_ally_death": {"heal": 25},
+    "xp": 140,
+    "gold": [190, 230],
+    "moves": {
+      "vine_lash": {"type": "attack", "power": 1.0},
+      "spawn_shroom": {"type": "summon", "enemy": "mushroom_mage", "max_alive": 2},
+      "spore_burst": {"type": "attack", "power": 0.6, "element": "shadow", "apply_status": [{"id": "poison", "turns": 4, "stacks": 2}]},
+      "rot_bloom": {"type": "multi_attack", "power": 0.5, "hits": 3, "heavy": true, "apply_status": [{"id": "poison", "turns": 3, "stacks": 1}]},
+      "cap_shield": {"type": "shield", "amount": 35}
+    },
+    "ai": {"type": "phased", "phases": [
+      {"min_hp": 0.5, "pattern": ["vine_lash", "spawn_shroom", "spore_burst", "cap_shield"]},
+      {"min_hp": 0.0, "pattern": ["rot_bloom", "vine_lash", "spawn_shroom", "spore_burst"], "line_key": "boss.spore_mother.phase2", "on_enter_status": [{"id": "enraged", "turns": 99}]}
+    ]}
+  },
+  "frost_wolf": {
+    "name_key": "enemy.frost_wolf",
+    "sprite": "res://assets/sprites/enemies/frost_wolf.png",
+    "base": {"hp": 45, "atk": 11, "def": 7, "spd": 13, "crit": 0.08, "dodge": 0.05},
+    "elements": {"fire": 1.5},
+    "immune": ["freeze"],
+    "xp": 13,
+    "gold": [8, 12],
+    "moves": {
+      "bite": {"type": "attack", "power": 1.0},
+      "howl": {"type": "buff_ally", "apply_status": [{"id": "strengthened", "turns": 2}]},
+      "frost_fang": {"type": "attack", "power": 0.8, "element": "ice", "apply_status": [{"id": "chill", "turns": 2}]}
+    },
+    "ai": {"type": "pattern", "pattern": ["bite", "frost_fang", "howl"]}
+  },
+  "ice_wisp": {
+    "name_key": "enemy.ice_wisp",
+    "sprite": "res://assets/sprites/enemies/ice_wisp.png",
+    "base": {"hp": 32, "atk": 12, "def": 4, "spd": 11, "crit": 0.05, "dodge": 0.15},
+    "elements": {"fire": 2.0, "physical": 0.75, "ice": 0.25},
+    "immune": ["freeze", "bleed", "poison"],
+    "xp": 13,
+    "gold": [8, 12],
+    "moves": {
+      "shard": {"type": "attack", "power": 1.0, "element": "ice"},
+      "cold_touch": {"type": "attack", "power": 0.7, "element": "ice", "apply_status": [{"id": "chill", "turns": 2}]}
+    },
+    "ai": {"type": "pattern", "pattern": ["cold_touch", "shard", "shard"]}
+  },
+  "yeti_cub": {
+    "name_key": "enemy.yeti_cub",
+    "sprite": "res://assets/sprites/enemies/yeti_cub.png",
+    "base": {"hp": 70, "atk": 11, "def": 12, "spd": 7, "crit": 0.05, "dodge": 0.0},
+    "elements": {"fire": 1.5},
+    "immune": ["freeze"],
+    "xp": 14,
+    "gold": [9, 14],
+    "moves": {
+      "snowball": {"type": "attack", "power": 1.0},
+      "pack_snow": {"type": "shield", "amount": 20},
+      "belly_flop": {"type": "attack", "power": 1.7, "heavy": true}
+    },
+    "ai": {"type": "pattern", "pattern": ["snowball", "pack_snow", "belly_flop"]}
+  },
+  "ice_troll": {
+    "name_key": "enemy.ice_troll",
+    "sprite": "res://assets/sprites/enemies/ice_troll.png",
+    "elite": true,
+    "base": {"hp": 150, "atk": 17, "def": 24, "spd": 6, "crit": 0.05, "dodge": 0.0},
+    "elements": {"fire": 1.6, "ice": 0.5},
+    "immune": ["freeze", "bleed"],
+    "xp": 35,
+    "gold": [40, 60],
+    "moves": {
+      "club": {"type": "attack", "power": 1.0, "element": "ice"},
+      "frost_armor": {"type": "shield", "amount": 35},
+      "avalanche": {"type": "attack", "power": 2.1, "heavy": true, "stun_self_if_defended": true, "apply_status": [{"id": "chill", "turns": 2}]}
+    },
+    "ai": {"type": "pattern", "pattern": ["club", "frost_armor", "club", "avalanche"]}
+  },
+  "frostbreath": {
+    "name_key": "enemy.frostbreath",
+    "sprite": "res://assets/sprites/enemies/frostbreath.png",
+    "boss": true,
+    "base": {"hp": 220, "atk": 13, "def": 20, "spd": 10, "crit": 0.05, "dodge": 0.05},
+    "elements": {"fire": 1.6, "ice": 0.25},
+    "immune": ["freeze", "poison"],
+    "xp": 180,
+    "gold": [260, 320],
+    "moves": {
+      "claw": {"type": "attack", "power": 1.0},
+      "frost_breath": {"type": "attack", "power": 1.2, "element": "ice", "apply_status": [{"id": "chill", "turns": 2}]},
+      "ice_scales": {"type": "shield", "amount": 40},
+      "blizzard": {"type": "multi_attack", "power": 0.45, "hits": 4, "heavy": true, "element": "ice", "apply_status": [{"id": "chill", "turns": 2}]},
+      "call_wolf": {"type": "summon", "enemy": "frost_wolf", "max_alive": 1}
+    },
+    "ai": {"type": "phased", "phases": [
+      {"min_hp": 0.5, "pattern": ["claw", "frost_breath", "ice_scales", "claw"]},
+      {"min_hp": 0.0, "pattern": ["blizzard", "claw", "call_wolf", "frost_breath"], "line_key": "boss.frostbreath.phase2", "on_enter_status": [{"id": "enraged", "turns": 99}]}
+    ]}
+  },
+  "cultist": {
+    "name_key": "enemy.cultist",
+    "sprite": "res://assets/sprites/enemies/cultist.png",
+    "base": {"hp": 32, "atk": 6.8, "def": 8, "spd": 10, "crit": 0.05, "dodge": 0.05},
+    "elements": {"ice": 1.5, "shadow": 0.75},
+    "immune": [],
+    "xp": 14,
+    "gold": [10, 15],
+    "moves": {
+      "blessing": {"type": "buff_ally", "apply_status": [{"id": "strengthened", "turns": 2}]},
+      "ritual_dagger": {"type": "attack", "power": 1.0, "apply_status": [{"id": "bleed", "turns": 3}]}
+    },
+    "ai": {"type": "support", "buff_move": "blessing", "solo_move": "ritual_dagger"}
+  },
+  "fire_imp": {
+    "name_key": "enemy.fire_imp",
+    "sprite": "res://assets/sprites/enemies/fire_imp.png",
+    "base": {"hp": 26, "atk": 8.1, "def": 5, "spd": 14, "crit": 0.08, "dodge": 0.15},
+    "elements": {"ice": 1.75, "fire": 0.25},
+    "immune": ["burn"],
+    "xp": 14,
+    "gold": [10, 15],
+    "moves": {
+      "pitchfork": {"type": "attack", "power": 1.0},
+      "fire_spit": {"type": "attack", "power": 0.8, "element": "fire", "apply_status": [{"id": "burn", "turns": 2}]}
+    },
+    "ai": {"type": "pattern", "pattern": ["fire_spit", "pitchfork", "pitchfork"]}
+  },
+  "ember_hound": {
+    "name_key": "enemy.ember_hound",
+    "sprite": "res://assets/sprites/enemies/ember_hound.png",
+    "base": {"hp": 39, "atk": 7.4, "def": 9, "spd": 14, "crit": 0.08, "dodge": 0.05},
+    "elements": {"ice": 1.6, "fire": 0.25},
+    "immune": ["burn"],
+    "xp": 15,
+    "gold": [10, 16],
+    "moves": {
+      "savage_bite": {"type": "multi_attack", "power": 0.6, "hits": 2},
+      "burning_maul": {"type": "attack", "power": 1.3, "element": "fire", "apply_status": [{"id": "burn", "turns": 2}]}
+    },
+    "ai": {"type": "pattern", "pattern": ["savage_bite", "savage_bite", "burning_maul"]}
+  },
+  "flame_knight": {
+    "name_key": "enemy.flame_knight",
+    "sprite": "res://assets/sprites/enemies/flame_knight.png",
+    "elite": true,
+    "base": {"hp": 128, "atk": 11.2, "def": 28, "spd": 7, "crit": 0.05, "dodge": 0.0},
+    "elements": {"ice": 1.6, "fire": 0.25, "physical": 0.8},
+    "immune": ["burn", "bleed"],
+    "xp": 40,
+    "gold": [50, 75],
+    "moves": {
+      "flaming_sword": {"type": "attack", "power": 1.0, "element": "fire"},
+      "iron_guard": {"type": "shield", "amount": 40},
+      "inferno_cleave": {"type": "attack", "power": 2.2, "heavy": true, "stun_self_if_defended": true, "element": "fire", "apply_status": [{"id": "burn", "turns": 2}]}
+    },
+    "ai": {"type": "pattern", "pattern": ["flaming_sword", "iron_guard", "flaming_sword", "inferno_cleave"]}
+  },
+  "ember_priestess": {
+    "name_key": "enemy.ember_priestess",
+    "sprite": "res://assets/sprites/enemies/ember_priestess.png",
+    "boss": true,
+    "base": {"hp": 180, "atk": 8.7, "def": 20, "spd": 9, "crit": 0.05, "dodge": 0.05},
+    "elements": {"ice": 1.6, "fire": 0.25},
+    "immune": ["burn", "poison"],
+    "on_ally_death": {"heal": 30},
+    "xp": 220,
+    "gold": [320, 380],
+    "moves": {
+      "censer_swing": {"type": "attack", "power": 1.0, "element": "fire"},
+      "summon_cultist": {"type": "summon", "enemy": "cultist", "max_alive": 2},
+      "ember_ward": {"type": "shield", "amount": 45},
+      "fire_rain": {"type": "multi_attack", "power": 0.5, "hits": 3, "heavy": true, "element": "fire", "apply_status": [{"id": "burn", "turns": 2}]},
+      "ritual_flame": {"type": "attack", "power": 1.4, "element": "fire", "apply_status": [{"id": "burn", "turns": 3}]}
+    },
+    "ai": {"type": "phased", "phases": [
+      {"min_hp": 0.5, "pattern": ["censer_swing", "summon_cultist", "ritual_flame", "ember_ward"]},
+      {"min_hp": 0.0, "pattern": ["fire_rain", "censer_swing", "summon_cultist", "ritual_flame"], "line_key": "boss.ember_priestess.phase2", "on_enter_status": [{"id": "enraged", "turns": 99}]}
+    ]}
+  },
+  "dragon_guard": {
+    "name_key": "enemy.dragon_guard",
+    "sprite": "res://assets/sprites/enemies/dragon_guard.png",
+    "base": {"hp": 36, "atk": 6, "def": 22, "spd": 8, "crit": 0.05, "dodge": 0.0},
+    "elements": {"lightning": 1.5, "ice": 1.25},
+    "immune": ["bleed"],
+    "xp": 16,
+    "gold": [12, 18],
+    "moves": {
+      "tower_shield": {"type": "shield", "amount": 25},
+      "spear_thrust": {"type": "attack", "power": 1.1},
+      "pin": {"type": "attack", "power": 0.9, "apply_status": [{"id": "armor_break", "turns": 2}]}
+    },
+    "ai": {"type": "pattern", "pattern": ["tower_shield", "spear_thrust", "pin"]}
+  },
+  "whelp": {
+    "name_key": "enemy.whelp",
+    "sprite": "res://assets/sprites/enemies/whelp.png",
+    "base": {"hp": 29, "atk": 7, "def": 10, "spd": 12, "crit": 0.08, "dodge": 0.05},
+    "elements": {"ice": 1.6, "fire": 0.25},
+    "immune": ["burn"],
+    "xp": 16,
+    "gold": [12, 18],
+    "moves": {
+      "nip": {"type": "attack", "power": 1.0},
+      "flame_puff": {"type": "attack", "power": 1.0, "element": "fire", "apply_status": [{"id": "burn", "turns": 2}]}
+    },
+    "ai": {"type": "pattern", "pattern": ["nip", "flame_puff"]}
+  },
+  "ash_wraith": {
+    "name_key": "enemy.ash_wraith",
+    "sprite": "res://assets/sprites/enemies/ash_wraith.png",
+    "base": {"hp": 26, "atk": 7, "def": 5, "spd": 12, "crit": 0.05, "dodge": 0.25},
+    "elements": {"lightning": 1.5, "fire": 1.25, "physical": 0.75},
+    "immune": ["poison", "bleed", "burn"],
+    "xp": 16,
+    "gold": [12, 18],
+    "moves": {
+      "ash_claw": {"type": "attack", "power": 1.0, "element": "shadow"},
+      "choking_ash": {"type": "attack", "power": 0.7, "element": "shadow", "apply_status": [{"id": "armor_break", "turns": 2}, {"id": "chill", "turns": 2}]}
+    },
+    "ai": {"type": "pattern", "pattern": ["choking_ash", "ash_claw", "ash_claw"]}
+  },
+  "elder_drake": {
+    "name_key": "enemy.elder_drake",
+    "sprite": "res://assets/sprites/enemies/elder_drake.png",
+    "elite": true,
+    "base": {"hp": 120, "atk": 10, "def": 28, "spd": 8, "crit": 0.05, "dodge": 0.0},
+    "elements": {"ice": 1.6, "lightning": 1.25, "fire": 0.25},
+    "immune": ["burn", "bleed"],
+    "xp": 50,
+    "gold": [60, 90],
+    "moves": {
+      "horn_ram": {"type": "attack", "power": 1.0},
+      "scale_wall": {"type": "shield", "amount": 50},
+      "fire_breath": {"type": "attack", "power": 1.3, "element": "fire", "apply_status": [{"id": "burn", "turns": 3}]},
+      "tail_sweep": {"type": "attack", "power": 2.2, "heavy": true, "stun_self_if_defended": true}
+    },
+    "ai": {"type": "pattern", "pattern": ["horn_ram", "fire_breath", "scale_wall", "tail_sweep"]}
+  },
+  "ashwing": {
+    "name_key": "enemy.ashwing",
+    "sprite": "res://assets/sprites/enemies/ashwing.png",
+    "boss": true,
+    "base": {"hp": 153, "atk": 7.5, "def": 24, "spd": 11, "crit": 0.08, "dodge": 0.05},
+    "elements": {"ice": 1.5, "lightning": 1.25, "fire": 0.25},
+    "immune": ["burn", "poison", "bleed"],
+    "xp": 300,
+    "gold": [500, 600],
+    "moves": {
+      "claw_rake": {"type": "attack", "power": 1.0},
+      "ash_breath": {"type": "attack", "power": 1.2, "element": "fire", "apply_status": [{"id": "burn", "turns": 3}]},
+      "wing_guard": {"type": "shield", "amount": 55},
+      "call_whelp": {"type": "summon", "enemy": "whelp", "max_alive": 2},
+      "ember_storm": {"type": "multi_attack", "power": 0.45, "hits": 4, "heavy": true, "element": "fire", "apply_status": [{"id": "burn", "turns": 2}]},
+      "cataclysm": {"type": "attack", "power": 2.4, "heavy": true, "element": "fire", "stun_self_if_defended": true}
+    },
+    "ai": {"type": "phased", "phases": [
+      {"min_hp": 0.66, "pattern": ["claw_rake", "ash_breath", "wing_guard", "claw_rake"]},
+      {"min_hp": 0.33, "pattern": ["call_whelp", "ember_storm", "claw_rake", "ash_breath"], "line_key": "boss.ashwing.phase2", "on_enter_status": [{"id": "strengthened", "turns": 99}]},
+      {"min_hp": 0.0, "pattern": ["cataclysm", "claw_rake", "ember_storm", "ash_breath"], "line_key": "boss.ashwing.phase3", "on_enter_status": [{"id": "enraged", "turns": 99}]}
+    ]}
   }
 }

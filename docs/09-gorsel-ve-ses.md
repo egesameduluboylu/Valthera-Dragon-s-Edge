@@ -36,11 +36,12 @@ Eksik animasyonlar Godot Tween ile taklit edilir (ileri atılma, sarsılma, solm
 
 ## Ses
 
-- **Müzik:** Kasaba (sakin, akustik), Zindan (gerilimli döngü), Patron (hızlı), Zafer ve Yenilgi jingle'ları.
-  - Kaynak: OpenGameArt, "Abstraction" müzik paketleri, veya ücretsiz lisanslı chiptune.
-- **Efektler:** Kılıç, büyü, zehir, kritik, kombo, eşya düşmesi (nadirliğe göre farklı), buton tıklama.
-  - Kaynak: Kenney "RPG Audio", sfxr/jsfxr ile üretilmiş retro efektler.
-- Ses dosyaları: müzik `.ogg`, efektler `.wav`.
+Bütün sesler koddan üretilir (`tools/audio`, `python3 tools/audio/generate.py`), dışarıdan dosya yok. Aynı kod her seferinde aynı dosyaları yazar.
+
+- **Müzik** (`assets/audio/music/`, 22 kHz mono WAV, kusursuz döngü): Kasaba (G majör, lavta ve flüt), Zindan (D minör, loş), Savaş (A minör, 132 bpm), Patron (D minör, taiko ve koro), Son (kasaba ezgisinin 3/4 hâli). Sahne değişince 0.6 sn geçişle değişir.
+- **Efektler** (`assets/audio/sfx/`, 36 dosya): arayüz tıklama/açma/kapama, satın alma, kuşanma, güçlendirme, parçalama; kılıç, hançer, ateş, buz, yıldırım, gölge, zehir, duman; vuruş, kritik, ıska, kombo, düşman saldırısı ve ölümü, patron fazı, zafer, yenilgi, seviye atlama, yıldız, kapı, sandık.
+- `Audio` autoload'u çalar (8 ses kanalı). Müzikle uyumlu sesler (yıldız, altın, iyileşme...) perdesi oynatılmadan çalınır; seviye atlama sesi zafer müziği bitince gelir.
+- Titreşim: vuruş alınca, kombo, patron fazı ve demircide. Ayarlardan kapatılabilir.
 
 ## Teknik Görsel Kurallar
 

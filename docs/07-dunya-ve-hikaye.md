@@ -19,7 +19,7 @@ Oyuncunun merkezi. Tek ekranlık, dokunulabilir binalardan oluşur:
 | Zindan Kapısı | Bekçi Tozlu | Zindan seçimi |
 | Demirci | Usta Örs (sağır, bağırarak konuşur) | Güçlendirme, parçalama |
 | Tüccar | Madam Pırıl | İksir ve eşya satışı |
-| Sınıf Ustası | Yaşlı Kaan | Sınıf değiştirme, yetenek seçimi |
+| Sınıf Ustası | Yaşlı Kaan | Sınıf öğrenme ve değiştirme, yetenek seçimi |
 | Han | Hancı Bulut | Hikâye, günlük görevler (sonra) |
 
 ## Ana Karakterler
@@ -42,3 +42,5 @@ Oyuncunun merkezi. Tek ekranlık, dokunulabilir binalardan oluşur:
 - Her zindanın başında ve sonunda kısa bir diyalog sahnesi (karakter portresi + metin balonu).
 - Patronların savaş içinde 1-2 repliği var (faz geçişlerinde).
 - Tüm metinler `data/text/tr.json` içinde tutulur (ileride İngilizce çeviri için).
+- Sahneler `data/story.json` içinde: oyunun girişi (kasabaya ilk gelişte), her zindanın girişi (ilk koşuda) ve sonu (ilk temizlemede). Her sahne bir kez oynar ve kayıtta hatırlanır; "Geç" ile atlanabilir.
+- Oyunun sonu: Kül Kanat'ın son repliklerinden sonra "Son... Şimdilik" ekranı ve Ejder Yumurtası.

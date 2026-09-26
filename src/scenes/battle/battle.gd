@@ -56,6 +56,8 @@ func setup(p_engine: CombatEngine, p_background: String) -> void:
 
 
 func _ready() -> void:
+	# battle speed setting: timers and tweens all follow the engine's time scale
+	Engine.time_scale = Settings.battle_speed
 	theme = UITheme.build()
 	if background == "":
 		background = DataDB.data["encounters"]["prototype"].get("background", "")
@@ -66,12 +68,18 @@ func _ready() -> void:
 		_new_battle()
 
 
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0
+
+
 func _new_battle() -> void:
 	engine = CombatEngine.from_data(DataDB.data, GameState.active_class, GameState.level(), "prototype")
 	_start_battle()
 
 
 func _start_battle() -> void:
+	var boss := engine.enemies.any(func(e: Combatant) -> bool: return e.is_boss)
+	Audio.music("boss" if boss else "battle")
 	selected_target = engine.alive_enemies()[0].uid
 	_restart_button.visible = not run_mode
 	_level_label.text = DataDB.t("ui.level") % engine.player.level
@@ -132,12 +140,110 @@ func _play(events: Array) -> void:
 	if current == null or not current.is_alive():
 		var alive := engine.alive_enemies()
 		selected_target = alive[0].uid if not alive.is_empty() else ""
+	_refresh()
+	await _coach()
 	busy = false
 	_refresh()
 
 
+# ---------------------------------------------------------------- tutorial
+
+## Shows the first-battle hints that fit this moment, one after another (docs/09).
+func _coach() -> void:
+	if engine.finished or GameState.profile == null:
+		return
+	var hint := _next_hint()
+	while not hint.is_empty():
+		GameState.profile.take_story(hint[0])
+		GameState.save()
+		var t := Tutorial.new(hint[0], hint[1])
+		add_child(t)
+		await t.finished
+		hint = _next_hint()
+
+
+## [hint id, control to frame] for the next unseen hint that applies now, or [].
+func _next_hint() -> Array:
+	var seen: Array = GameState.profile.story_seen
+	var want := func(id: String) -> bool: return not seen.has(id)
+	if want.call("tut_intent"):
+		for e in engine.alive_enemies():
+			var view: Dictionary = _enemy_views.get(e.uid, {})
+			if not view.is_empty() and view["intent"].visible:
+				return ["tut_intent", view["intent"]]
+	if want.call("tut_skills"):
+		return ["tut_skills", _skill_grid]
+	var class_hint := "tut_class_" + engine.player.def_id
+	if want.call(class_hint) and Tutorial.FLAGS.has(class_hint):
+		return [class_hint, _player_view["res_bar"]]
+	if want.call("tut_combo"):
+		# buttons are still disabled here (busy), so ask the engine instead of the glow
+		var target := engine.get_combatant(selected_target)
+		for id in _skill_buttons:
+			if engine.skill_block_reason(id) == "" and engine.combo_ready(id, target):
+				return ["tut_combo", _skill_buttons[id]]
+	if want.call("tut_defend") and engine.player.hp * 2 < engine.player.max_hp():
+		return ["tut_defend", _defend_button.get_parent()]
+	return []
+
+
+## Sound and vibration for one event (docs/09).
+func _sfx(ev: Dictionary) -> void:
+	match ev["type"]:
+		"skill":
+			var def := DataDB.skill(ev["skill"])
+			var element: String = def.get("element", "physical")
+			if def.get("target", "") == "self":
+				Audio.play("smoke" if ev["skill"] == "rogue_smoke_bomb" else "shield")
+			elif element == "physical":
+				Audio.play("stab" if engine.player.def_id == "rogue" else "slash")
+			else:
+				Audio.play("magic_" + element)
+		"enemy_move":
+			if ev["move_type"] in ["attack", "multi_attack"]:
+				Audio.play("enemy_attack")
+		"damage":
+			if ev["dot"]:
+				return
+			if ev["target"] == "p":
+				Audio.play("player_hurt")
+				Audio.vibrate(60 if ev["crit"] else 35)
+			else:
+				Audio.play("crit" if ev["crit"] else "hit")
+		"miss":
+			Audio.play("miss")
+		"death":
+			if ev["target"] != "p":
+				Audio.play("enemy_death")
+		"status_applied":
+			if ev["status"] == "stun":
+				Audio.play("stun")
+			elif ev["status"] == "poison":
+				Audio.play("poison")
+			elif ev["target"] == "p":
+				Audio.play("status_bad")
+		"heal":
+			if ev["amount"] > 0:
+				Audio.play("heal")
+		"item":
+			Audio.play("potion")
+		"summon":
+			Audio.play("summon")
+		"phase":
+			Audio.play("boss_phase", 0.0)
+			Audio.vibrate(250)
+		"combo":
+			Audio.play("combo", 0.0)
+			Audio.vibrate(50)
+		"flurry":
+			Audio.play("star")
+		"battle_end":
+			Audio.play("victory" if ev["victory"] else "defeat", 0.0)
+
+
 ## Draws one event and returns how long to pause after it.
 func _apply_event(ev: Dictionary) -> float:
+	_sfx(ev)
 	match ev["type"]:
 		"turn_start":
 			_turn_label.text = DataDB.t("ui.turn") % ev["turn"]
@@ -204,6 +310,13 @@ func _apply_event(ev: Dictionary) -> float:
 		"immune":
 			_float_text(_view_of(ev["target"]), "%s -" % DataDB.t("status." + ev["status"]), Color("a0a0a0"), 28, 60)
 			return 0.15
+		"resist":
+			_float_text(_view_of(ev["target"]), DataDB.t("battle.resist"), Color("a0a0a0"), 32, 60)
+			return 0.2
+		"flurry":
+			# Rogue "Seri": the turn goes on, so say so before the player picks again.
+			_show_banner(DataDB.t("battle.flurry"), Color("ffd35a"), 44, UITheme.body_font())
+			return 0.25
 		"resource":
 			_player_view["res_bar"].value = ev["value"]
 			_player_view["res_label"].text = "%s %d / %d" % [DataDB.t("resource." + engine.player.resource_id), ev["value"], engine.player.resource_max]
@@ -282,8 +395,8 @@ func _refresh_buttons() -> void:
 		var line2 := ""
 		if reason == "cooldown":
 			line2 = DataDB.t("ui.cooldown") % engine.player.cooldowns[id]
-		elif int(def.get("cost", 0)) > 0:
-			line2 = "%d %s" % [def["cost"], DataDB.t("resource." + engine.player.resource_id)]
+		elif engine.skill_cost(id) > 0:
+			line2 = "%d %s" % [engine.skill_cost(id), DataDB.t("resource." + engine.player.resource_id)]
 		b.text = DataDB.t(def.get("name_key", id)) + ("\n" + line2 if line2 != "" else "")
 		b.disabled = busy or reason != ""
 		# Combo hint (docs/08): a finisher glows when the target has what it needs.
@@ -291,6 +404,8 @@ func _refresh_buttons() -> void:
 		b.modulate = Color(1.08, 1.04, 0.92) if ready else Color.WHITE
 		b.get_meta("glow").visible = ready
 	_defend_button.disabled = busy or engine.finished
+	# Mid-Flurry the defend button ends the turn instead (no defend bonus).
+	_defend_button.text = DataDB.t("ui.end_turn") if engine.in_flurry() else DataDB.t("ui.defend")
 	_potion_button.text = "%s x%d" % [DataDB.t("ui.potion"), engine.potions]
 	_potion_button.disabled = busy or engine.finished or engine.potions <= 0 \
 			or engine.player.hp >= engine.player.max_hp()
@@ -578,7 +693,7 @@ func _build_ui() -> void:
 	bars.add_theme_constant_override("separation", 6)
 	info.add_child(bars)
 	var hp := _labeled_bar(UITheme.HP_PLAYER, 30)
-	var res := _labeled_bar(UITheme.RAGE, 24)
+	var res := _labeled_bar(Color(DataDB.data["classes"][GameState.active_class].get("resource_color", "#c8412f")), 24)
 	bars.add_child(hp[0])
 	bars.add_child(res[0])
 	var player_statuses := HBoxContainer.new()

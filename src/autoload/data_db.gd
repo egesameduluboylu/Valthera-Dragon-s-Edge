@@ -7,7 +7,14 @@ var text: Dictionary = {}
 
 func _ready() -> void:
 	data = DataLoader.load_game_data()
-	text = DataLoader.load_json("res://data/text/tr.json")
+	load_text(Settings.language)
+
+
+## Loads the text for `lang`; keys it lacks fall back to the first language (Turkish).
+func load_text(lang: String) -> void:
+	text = DataLoader.load_json("res://data/text/%s.json" % Settings.LANGUAGES[0])
+	if lang != Settings.LANGUAGES[0] and FileAccess.file_exists("res://data/text/%s.json" % lang):
+		text.merge(DataLoader.load_json("res://data/text/%s.json" % lang), true)
 
 
 func skill(id: String) -> Dictionary:
