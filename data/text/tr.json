@@ -511,5 +511,7 @@
   "tut.defend": "Canın azaldı! Savun gelen hasarı azaltır ve kaynağını doldurur. İksir canını yeniler, ama zindan boyunca sayısı sınırlı.",
   "tut.next": "Devam etmek için dokun",
   "tut.skip": "Rehberi Atla",
-  "town.settings": "Ayarlar"
+  "town.settings": "Ayarlar",
+  "settings.speed": "Savaş Hızı",
+  "settings.language": "Dil"
 }

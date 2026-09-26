@@ -67,7 +67,7 @@ func open_panel(kind: String) -> void:
 			panel = ClassMasterPanel.new()
 		"settings":
 			var sp := SettingsPanel.new()
-			sp.reset_done.connect(func() -> void: get_tree().reload_current_scene())
+			sp.reload.connect(func() -> void: get_tree().reload_current_scene())
 			panel = sp
 		_:
 			return

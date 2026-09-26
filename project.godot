@@ -16,6 +16,7 @@ config/features=PackedStringArray("4.5", "GL Compatibility")
 
 [autoload]
 
+Settings="*res://src/autoload/settings.gd"
 EventBus="*res://src/autoload/event_bus.gd"
 DataDB="*res://src/autoload/data_db.gd"
 SaveManager="*res://src/autoload/save_manager.gd"

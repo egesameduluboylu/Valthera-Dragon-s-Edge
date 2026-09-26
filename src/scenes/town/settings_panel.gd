@@ -1,12 +1,14 @@
 class_name SettingsPanel
 extends Control
-## Settings (docs/09): music and sound volume, vibration, replaying the tutorial and
-## wiping the save. Sound settings live in Audio's own file, so a reset keeps them.
+## Settings (docs/08): music and sound volume, vibration, battle speed, language,
+## replaying the tutorial and wiping the save. Values live in the Settings autoload.
 
 signal closed
-## Emitted after the save was wiped; the town reloads itself.
-signal reset_done
+## Emitted after the save was wiped or the language changed; the town rebuilds itself.
+signal reload
 
+## Language names are shown in their own language.
+const LANGUAGE_NAMES := {"tr": "Türkçe", "en": "English"}
 const VERSION := "0.5"
 
 
@@ -21,11 +23,24 @@ func _ready() -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 18)
 	card.add_child(v)
-	v.add_child(_slider_row("settings.music", Audio.music_volume, Audio.set_music_volume))
-	v.add_child(_slider_row("settings.sfx", Audio.sfx_volume, func(x: float) -> void:
-		Audio.set_sfx_volume(x)
+	v.add_child(_slider_row("settings.music", Settings.music, func(x: float) -> void: Settings.set_value("music", x)))
+	v.add_child(_slider_row("settings.sfx", Settings.sfx, func(x: float) -> void:
+		Settings.set_value("sfx", x)
 		Audio.play("ui_click", 0.0)))
 	v.add_child(_toggle_row())
+	var speeds: Array = []
+	for sp in Settings.SPEEDS:
+		speeds.append([sp, ("%.1fx" % sp).replace(".0x", "x")])
+	v.add_child(_choice_row("settings.speed", speeds, Settings.battle_speed, func(x: Variant) -> void:
+		Settings.set_value("battle_speed", x)))
+	var langs: Array = []
+	for id in Settings.LANGUAGES:
+		langs.append([id, LANGUAGE_NAMES.get(id, id)])
+	v.add_child(_choice_row("settings.language", langs, Settings.language, func(x: Variant) -> void:
+		if x != Settings.language:
+			Settings.set_value("language", x)
+			DataDB.load_text(x)
+			reload.emit()))
 	content.add_child(UITheme.divider())
 	var tut := UIKit.button(DataDB.t("settings.tutorial"), "", _replay_tutorial, 24)
 	content.add_child(tut)
@@ -83,22 +98,51 @@ func _toggle_row() -> HBoxContainer:
 	h.add_child(name_)
 	var b := UIKit.button("", "", func() -> void: pass, 22)
 	b.toggle_mode = true
-	b.button_pressed = Audio.vibration
+	b.button_pressed = Settings.vibration
 	b.custom_minimum_size = Vector2(150, 60)
 	var paint := func() -> void:
 		b.text = DataDB.t("settings.on" if b.button_pressed else "settings.off")
 		if b.button_pressed:
 			UIKit.primary(b)
 		else:
-			for st in ["normal", "hover", "pressed", "hover_pressed"]:
-				b.add_theme_stylebox_override(st, UITheme.skin_button("normal" if st != "pressed" else "pressed"))
+			UITheme.plain_button(b)
 	paint.call()
 	b.toggled.connect(func(on: bool) -> void:
-		Audio.set_vibration(on)
+		Settings.set_value("vibration", on)
 		paint.call()
 		Audio.vibrate(60))
 	h.add_child(b)
 	return h
+
+
+## A label and a row of buttons, one per option ([value, text]); the current one is lit.
+func _choice_row(key: String, options: Array, current: Variant, on_pick: Callable) -> VBoxContainer:
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	v.add_child(UIKit.label(DataDB.t(key), 26))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	v.add_child(row)
+	var buttons: Array[Button] = []
+	for opt in options:
+		var b := UIKit.button(opt[1], "", func() -> void: pass, 22)
+		b.custom_minimum_size.y = 58
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(b)
+		buttons.append(b)
+	var paint := func(value: Variant) -> void:
+		for i in buttons.size():
+			if options[i][0] == value:
+				UIKit.primary(buttons[i])
+			else:
+				UITheme.plain_button(buttons[i])
+	paint.call(current)
+	for i in buttons.size():
+		var value: Variant = options[i][0]
+		buttons[i].pressed.connect(func() -> void:
+			paint.call(value)
+			on_pick.call(value))
+	return v
 
 
 func _replay_tutorial() -> void:
@@ -124,7 +168,7 @@ func _confirm_reset() -> void:
 	row.add_child(no)
 	var yes := UIKit.button(DataDB.t("settings.reset_yes"), "", func() -> void:
 		GameState.reset_game()
-		reset_done.emit())
+		reload.emit())
 	yes.add_theme_color_override("font_color", Color("ff9a8a"))
 	yes.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(yes)

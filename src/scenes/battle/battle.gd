@@ -56,6 +56,8 @@ func setup(p_engine: CombatEngine, p_background: String) -> void:
 
 
 func _ready() -> void:
+	# battle speed setting: timers and tweens all follow the engine's time scale
+	Engine.time_scale = Settings.battle_speed
 	theme = UITheme.build()
 	if background == "":
 		background = DataDB.data["encounters"]["prototype"].get("background", "")
@@ -64,6 +66,10 @@ func _ready() -> void:
 		_start_battle()
 	else:
 		_new_battle()
+
+
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0
 
 
 func _new_battle() -> void:
