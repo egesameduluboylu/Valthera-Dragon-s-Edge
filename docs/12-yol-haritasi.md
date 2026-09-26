@@ -36,9 +36,12 @@ Hedef: Savaşçı, 2 fareye karşı, düz renkli kutularla bile eğlenceli mi?
 - [ ] `SaveManager`: kayıt ve koşu kurtarma
 
 ## M4: Görsel ve His (Demo Tamam)
-- [ ] Piksel sanat assetleri, animasyonlar
+- [x] Savaş ekranı görselleri: karakterler, düşmanlar, arka plan, ikonlar, arayüz teması
+- [x] Temel animasyonlar: bekleme salınımı, saldırı atılması, vurulma, ölüm
+- [ ] Diğer zindanlar ve ekranlar için görseller
 - [ ] Ses ve müzik
-- [ ] Ekran titremesi, kombo efektleri, titreşim
+- [x] Ekran titremesi, kombo efektleri
+- [ ] Titreşim
 - [ ] Yönlendirmeli ilk savaş (tutorial)
 - [ ] Giriş ve Kemik Kral diyalogları
 - **DEMO:** 1 sınıf, 1 zindan, 3 düşman + elit + patron. 5-10 kişiye test ettir.

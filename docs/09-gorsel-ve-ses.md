@@ -2,25 +2,32 @@
 
 ## Sanat Yönü
 
-- **2D, yandan görünüm, piksel sanat** (karakterler 32x32 veya 48x48, 4 kat büyütülerek gösterilir).
-  - Neden: Tek kişi için en hızlı üretilen stil, ücretsiz kaynakları bol, mobilde net görünür.
-- Sıcak ve doygun renk paleti; her zindanın kendi baskın rengi (Mahzen: yeşil-gri, Mağara: mor, Geçit: buz mavisi...).
-- Arayüz: koyu kahve/ahşap çerçeveler, parşömen panelleri; fantastik ama okunaklı.
-- Yazı tipi: Türkçe karakter (ç, ğ, ı, ö, ş, ü) destekleyen piksel font. Adaylar: "Pixel Operator", "m5x7" (Türkçe desteği kontrol edilmeli).
+- **2D, yandan görünüm, çizgi film (flash cartoon) stili:** Kalın mürekkep çizgileri, düz renkler ve hücre gölgelendirme. DragonFable'ın Flash dönemi görünümüne en yakın stil bu.
+- Oyuncu sağa, düşmanlar sola bakar. Karakterler 256x256 çiziliyor, ekranda 200-270 px boyutunda gösteriliyor.
+- Sıcak ve doygun renk paleti. Her zindanın kendi baskın rengi var (Mahzen: gri taş ve meşale turuncusu, Mağara: mor, Geçit: buz mavisi...).
+- Arayüz: koyu ahşap paneller, altın çerçeveler. Butonlar kabarık görünüyor; basınca içe göçüyor.
+- Yazı tipleri (ikisi de OFL lisanslı, Türkçe karakterleri destekliyor):
+  - **Nunito** (kalın): tüm arayüz metinleri
+  - **Cinzel**: başlıklar, sınıf adı, "KOMBO" ve "ZAFER" yazıları
 
-## Asset Kaynakları (Demo için)
+## Assetler Nasıl Üretiliyor
 
-Hepsi ticari kullanıma uygun lisanslar; kullanmadan önce her paketin lisansı tekrar kontrol edilecek.
+Engelli asset sitelerine ve lisans takibine bağımlı kalmamak için görseller **koddan üretiliyor**:
 
-| İhtiyaç | Kaynak |
-|---------|--------|
-| Karakter ve düşman spriteları | itch.io: "0x72 Dungeon Tileset II", Kenney "Tiny Dungeon" |
-| Arayüz | Kenney "UI Pack: Pixel Adventure" |
-| İkonlar (yetenek, eşya) | itch.io: "Shikashi's Fantasy Icons Pack" |
-| Efektler | itch.io piksel VFX paketleri, Godot parçacık sistemi |
-| Arka planlar | Basit katmanlı piksel arka planlar (kendimiz, zindan başına 1) |
+```bash
+python3 -m pip install pillow
+python3 tools/art/generate.py          # tüm görseller
+python3 tools/art/generate.py sprites  # sadece karakterler
+```
 
-Kullanılan her asset `assets/CREDITS.md` dosyasına lisansıyla birlikte yazılır.
+| Dosya | İçerik |
+|-------|--------|
+| `tools/art/painter.py` | Çizim altyapısı: süper örnekleme, otomatik gölge ve ışık, mürekkep çizgisi |
+| `tools/art/characters.py` | Savaşçı, Mahzen Faresi, İskelet Muhafız, Mantar Büyücü |
+| `tools/art/backgrounds.py` | Çürük Mahzen arka planı (tuğla duvar, kemer, meşaleler, fıçılar) |
+| `tools/art/icons.py` | Yetenek, niyet ve durum ikonları |
+
+Yeni bir düşman eklemek için `characters.py` içine bir fonksiyon yazıp `SPRITES` sözlüğüne eklemek yeterli. Oyuna sonradan elle çizilmiş veya satın alınmış assetler eklenirse aynı dosya yollarına konabilir. Bu durumda `assets/CREDITS.md` dosyasına lisanslarıyla birlikte yazılmalı.
 
 ## Animasyon Listesi (Karakter Başına)
 
@@ -37,6 +44,5 @@ Eksik animasyonlar Godot Tween ile taklit edilir (ileri atılma, sarsılma, solm
 
 ## Teknik Görsel Kurallar
 
-- Doku filtresi: **Nearest** (piksel sanat bulanıklaşmasın).
-- Piksel mükemmel ölçekleme: tam sayı katları (4x).
+- Doku filtresi: **Linear** (çizgi film stili yumuşak kenar ister).
 - Aynı anda ekranda en fazla ~200 parçacık (düşük seviye telefonlar için).

@@ -1,6 +1,7 @@
 {
   "cellar_rat": {
     "name_key": "enemy.cellar_rat",
+    "sprite": "res://assets/sprites/enemies/cellar_rat.png",
     "base": {"hp": 30, "atk": 8, "def": 5, "spd": 12, "crit": 0.05, "dodge": 0.05},
     "elements": {"fire": 1.5},
     "immune": [],
@@ -13,6 +14,7 @@
   },
   "skeleton_guard": {
     "name_key": "enemy.skeleton_guard",
+    "sprite": "res://assets/sprites/enemies/skeleton_guard.png",
     "base": {"hp": 45, "atk": 10, "def": 20, "spd": 6, "crit": 0.05, "dodge": 0.0},
     "elements": {"fire": 1.5, "shadow": 0.5},
     "immune": ["poison", "bleed"],
@@ -25,6 +27,7 @@
   },
   "mushroom_mage": {
     "name_key": "enemy.mushroom_mage",
+    "sprite": "res://assets/sprites/enemies/mushroom_mage.png",
     "base": {"hp": 35, "atk": 12, "def": 8, "spd": 9, "crit": 0.05, "dodge": 0.0},
     "elements": {"fire": 1.5},
     "immune": ["poison"],

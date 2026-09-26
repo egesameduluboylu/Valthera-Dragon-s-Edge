@@ -1,49 +1,49 @@
 {
   "warrior_slash": {
-    "class": "warrior", "name_key": "skill.slash", "desc_key": "skill.slash.desc",
+    "class": "warrior", "name_key": "skill.slash", "icon": "res://assets/icons/skills/slash.png", "desc_key": "skill.slash.desc",
     "unlock_level": 1, "role": "neutral", "cost": 0, "cooldown": 0,
     "power": 1.0, "element": "physical", "target": "single_enemy"
   },
   "warrior_shield_break": {
-    "class": "warrior", "name_key": "skill.shield_break", "desc_key": "skill.shield_break.desc",
+    "class": "warrior", "name_key": "skill.shield_break", "icon": "res://assets/icons/skills/shield_break.png", "desc_key": "skill.shield_break.desc",
     "unlock_level": 1, "role": "setup", "cost": 0, "cooldown": 2,
     "power": 0.6, "element": "physical", "target": "single_enemy",
     "apply_status": [{"id": "armor_break", "turns": 2}]
   },
   "warrior_heavy_strike": {
-    "class": "warrior", "name_key": "skill.heavy_strike", "desc_key": "skill.heavy_strike.desc",
+    "class": "warrior", "name_key": "skill.heavy_strike", "icon": "res://assets/icons/skills/heavy_strike.png", "desc_key": "skill.heavy_strike.desc",
     "unlock_level": 2, "role": "finisher", "cost": 30, "cooldown": 0,
     "power": 1.4, "element": "physical", "target": "single_enemy",
     "combo": {"requires_status": "armor_break", "multiplier": 1.8, "consume": true,
               "apply_status": [{"id": "stun", "turns": 2}]}
   },
   "warrior_battle_cry": {
-    "class": "warrior", "name_key": "skill.battle_cry", "desc_key": "skill.battle_cry.desc",
+    "class": "warrior", "name_key": "skill.battle_cry", "icon": "res://assets/icons/skills/battle_cry.png", "desc_key": "skill.battle_cry.desc",
     "unlock_level": 4, "role": "neutral", "cost": 20, "cooldown": 4,
     "power": 0.0, "element": "physical", "target": "self",
     "apply_status": [{"id": "strengthened", "turns": 2}]
   },
   "warrior_rending_cut": {
-    "class": "warrior", "name_key": "skill.rending_cut", "desc_key": "skill.rending_cut.desc",
+    "class": "warrior", "name_key": "skill.rending_cut", "icon": "res://assets/icons/skills/rending_cut.png", "desc_key": "skill.rending_cut.desc",
     "unlock_level": 6, "role": "setup", "cost": 0, "cooldown": 1,
     "power": 0.8, "element": "physical", "target": "single_enemy",
     "apply_status": [{"id": "bleed", "turns": 3}]
   },
   "warrior_execute": {
-    "class": "warrior", "name_key": "skill.execute", "desc_key": "skill.execute.desc",
+    "class": "warrior", "name_key": "skill.execute", "icon": "res://assets/icons/skills/execute.png", "desc_key": "skill.execute.desc",
     "unlock_level": 9, "role": "finisher", "cost": 40, "cooldown": 3,
     "power": 1.6, "element": "physical", "target": "single_enemy",
     "combo": {"requires_status": "stun", "multiplier": 2.0, "consume": true,
               "low_hp_threshold": 0.25, "low_hp_multiplier": 3.0}
   },
   "warrior_iron_wall": {
-    "class": "warrior", "name_key": "skill.iron_wall", "desc_key": "skill.iron_wall.desc",
+    "class": "warrior", "name_key": "skill.iron_wall", "icon": "res://assets/icons/skills/iron_wall.png", "desc_key": "skill.iron_wall.desc",
     "unlock_level": 12, "role": "neutral", "cost": 0, "cooldown": 4,
     "power": 0.0, "element": "physical", "target": "self",
     "shield_max_hp_percent": 0.25
   },
   "warrior_whirlwind": {
-    "class": "warrior", "name_key": "skill.whirlwind", "desc_key": "skill.whirlwind.desc",
+    "class": "warrior", "name_key": "skill.whirlwind", "icon": "res://assets/icons/skills/whirlwind.png", "desc_key": "skill.whirlwind.desc",
     "unlock_level": 16, "role": "finisher", "cost": 60, "cooldown": 3,
     "power": 0.9, "element": "physical", "target": "all_enemies",
     "combo": {"requires_status": "bleed", "multiplier": 1.7, "consume": false}

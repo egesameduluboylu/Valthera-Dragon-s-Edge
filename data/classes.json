@@ -1,6 +1,7 @@
 {
   "warrior": {
     "name_key": "class.warrior",
+    "sprite": "res://assets/sprites/player/warrior.png",
     "resource": "rage",
     "resource_start": 20,
     "resource_max": 100,
