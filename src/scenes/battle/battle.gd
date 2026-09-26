@@ -238,13 +238,15 @@ func _fill_status_row(row: HBoxContainer, c: Combatant) -> void:
 	for child in row.get_children():
 		child.queue_free()
 	if c.shield > 0:
-		row.add_child(_status_chip("shield_status", str(c.shield)))
+		row.add_child(_status_chip("shield_status", str(c.shield), "ui.shield"))
 	for id in c.statuses:
 		var s: StatusEffect = c.statuses[id]
-		row.add_child(_status_chip(id, "x%d" % s.stacks if s.stacks > 1 else str(s.turns)))
+		# Stacked effects show both the stacks and the turns left, e.g. "x2·4".
+		var text := "x%d·%d" % [s.stacks, s.turns] if s.stacks > 1 else str(s.turns)
+		row.add_child(_status_chip(id, text, "status." + id))
 
 
-func _status_chip(icon_id: String, text: String) -> Control:
+func _status_chip(icon_id: String, text: String, tooltip_key: String) -> Control:
 	var box := HBoxContainer.new()
 	box.add_theme_constant_override("separation", 0)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -253,7 +255,7 @@ func _status_chip(icon_id: String, text: String) -> Control:
 	icon.custom_minimum_size = Vector2(34, 34)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.tooltip_text = DataDB.t("status." + icon_id)
+	icon.tooltip_text = DataDB.t(tooltip_key)
 	box.add_child(icon)
 	box.add_child(UITheme.stage_label(_label(text), 20))
 	return box
