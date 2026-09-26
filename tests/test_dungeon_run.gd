@@ -222,7 +222,9 @@ func test_skull_riddle() -> void:
 	_enter_as(run, {"type": "event", "event": "talking_skull", "level": 1})
 	var r := run.choose_event(1)
 	assert_eq(r["text_key"], "event.skull.right")
-	assert_eq(run.gold_earned, 60)
+	assert_eq(run.loot.size(), 1)
+	assert_true(run.loot[0]["rarity"] != "common", run.loot[0]["rarity"])
+	assert_eq(r["changes"]["item"], run.loot[0])
 
 
 func test_altar_trades_hp_for_attack_and_never_kills() -> void:
@@ -236,11 +238,14 @@ func test_altar_trades_hp_for_attack_and_never_kills() -> void:
 
 
 func test_first_runs_are_usually_survivable() -> void:
-	# A fresh level 1 warrior playing the combos (never defending), always taking the
-	# first door, should clear a good share of runs; the boss is where most runs end.
+	# A fresh level 1 warrior with the starter sword, playing the combos (never
+	# defending) and always taking the first door, should clear a good share of runs
+	# but not most of them; the boss is where most runs end.
 	var cleared := 0
 	for s in 30:
-		var run := _run(s)
+		var profile := Profile.new_game(game_data(), seeded_rng(s))
+		var run := profile.start_run("rotten_cellar", seeded_rng(s))
+		run.start()
 		while run.outcome == "":
 			var room := run.enter(0)
 			match room["type"]:
@@ -265,4 +270,4 @@ func test_first_runs_are_usually_survivable() -> void:
 				run.next_room()
 		if run.outcome == "cleared":
 			cleared += 1
-	assert_true(cleared >= 9, "cleared %d / 30" % cleared)
+	assert_between(cleared, 9, 21, "cleared %d / 30" % cleared)

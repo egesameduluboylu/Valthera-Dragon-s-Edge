@@ -37,6 +37,10 @@ var history: Array[String] = []
 ## "" while running, then "cleared", "escaped" or "died".
 var outcome: String = ""
 
+## Worn items (copies of the player's gear) and the items found on this run.
+var equipment: Array = []
+var loot: Array = []
+var scales_earned: int = 0
 var gold_earned: int = 0
 var xp_earned: int = 0
 var gold_lost: int = 0
@@ -44,7 +48,7 @@ var kills: int = 0
 
 
 func _init(p_data: Dictionary, p_dungeon_id: String, p_class_id: String, p_level: int,
-		p_class_xp: int = 0, p_rng: RandomNumberGenerator = null) -> void:
+		p_class_xp: int = 0, p_rng: RandomNumberGenerator = null, p_equipment: Array = []) -> void:
 	data = p_data
 	dungeon_id = p_dungeon_id
 	def = data["dungeons"][dungeon_id]
@@ -55,6 +59,9 @@ func _init(p_data: Dictionary, p_dungeon_id: String, p_class_id: String, p_level
 	potions = int(def.get("potions", 3))
 	var class_def: Dictionary = data["classes"][class_id]
 	player = Combatant.make_player(class_id, class_def, level, class_def.get("prototype_skills", []))
+	equipment = p_equipment
+	_rebuild_stats()
+	player.hp = player.max_hp()
 
 
 func room_count() -> int:
@@ -109,7 +116,7 @@ func make_battle() -> CombatEngine:
 	return engine
 
 
-## Takes the result of a finished battle. Returns {xp, gold, levels, healed}.
+## Takes the result of a finished battle. Returns {xp, gold, levels, healed, items, scales}.
 func finish_battle(engine: CombatEngine) -> Dictionary:
 	potions = engine.potions
 	player.statuses.clear()
@@ -127,17 +134,20 @@ func finish_battle(engine: CombatEngine) -> Dictionary:
 	var gold := engine.reward_gold
 	gold_earned += gold
 	var levels := _gain_xp(xp)
+	var kind: String = "mimic" if room.get("mimic", false) else room["type"]
+	var drops := _drop(kind)
 	# Catching your breath after a won fight (docs/06); the boss room ends the run anyway.
 	var healed := _heal(roundi(player.max_hp() * float(def.get("victory_heal_percent", 0.0))))
 	room["done"] = true
 	if room["type"] == "boss":
 		_finish("cleared")
-	return {"xp": xp, "gold": gold, "levels": levels, "healed": healed}
+	return {"xp": xp, "gold": gold, "levels": levels, "healed": healed,
+			"items": drops["items"], "scales": drops["scales"]}
 
 
 # ---------------------------------------------------------------- non-combat rooms
 
-## Opens the chest. Returns {mimic} or {gold, potion}. A mimic turns the room into a battle.
+## Opens the chest. Returns {mimic} or {gold, potion, items}. A mimic turns the room into a battle.
 func open_treasure() -> Dictionary:
 	if room.get("type", "") != "treasure" or room.get("done", false):
 		return {}
@@ -154,7 +164,7 @@ func open_treasure() -> Dictionary:
 	if potion:
 		potions += 1
 	room["done"] = true
-	return {"mimic": false, "gold": gold, "potion": potion}
+	return {"mimic": false, "gold": gold, "potion": potion, "items": _drop("treasure")["items"]}
 
 
 func rest(option: String) -> Dictionary:
@@ -205,12 +215,73 @@ func choose_event(index: int) -> Dictionary:
 	if effects.has("potions"):
 		potions += int(effects["potions"])
 		changes["potions"] = int(effects["potions"])
+	if effects.has("item"):
+		var item := Items.roll(data["items"], room_level(), rng,
+				{"class_id": class_id, "min_rarity": effects["item"]})
+		loot.append(item)
+		changes["item"] = item
 	if effects.has("atk_percent"):
 		atk_percent += float(effects["atk_percent"])
 		_rebuild_stats()
 		changes["atk_percent"] = float(effects["atk_percent"])
 	room["done"] = true
 	return {"text_key": pick.get("text_key", ""), "effects": effects, "changes": changes}
+
+
+# ---------------------------------------------------------------- save and resume
+
+## Run state for the save file (docs/10). Only saved while choosing a door, so a
+## resumed run never lands in the middle of a room.
+func to_dict() -> Dictionary:
+	if state != State.CHOOSING or outcome != "":
+		return {}
+	return {
+		"dungeon_id": dungeon_id, "class_id": class_id, "level": level, "class_xp": class_xp,
+		"hp": player.hp, "potions": potions, "atk_percent": atk_percent,
+		"room_number": room_number, "choices": choices.duplicate(true), "history": history.duplicate(),
+		"equipment": equipment.duplicate(true), "loot": loot.duplicate(true),
+		"scales_earned": scales_earned, "gold_earned": gold_earned, "xp_earned": xp_earned,
+		"kills": kills,
+		# Strings keep the 64-bit values exact through JSON.
+		"rng_seed": str(rng.seed), "rng_state": str(rng.state),
+	}
+
+
+## Rebuilds a run saved by to_dict(). Returns null when the save no longer fits the data.
+static func from_dict(p_data: Dictionary, d: Dictionary) -> DungeonRun:
+	var id: String = d.get("dungeon_id", "")
+	var cls: String = d.get("class_id", "")
+	if not p_data["dungeons"].has(id) or not p_data["classes"].has(cls) or d.get("choices", []).is_empty():
+		return null
+	var rng_ := RandomNumberGenerator.new()
+	rng_.seed = int(str(d.get("rng_seed", "0")))
+	rng_.state = int(str(d.get("rng_state", "0")))
+	var equipment_: Array = []
+	for item in d.get("equipment", []):
+		if item is Dictionary and p_data["items"]["bases"].has(item.get("base", "")):
+			equipment_.append(item)
+	var run := DungeonRun.new(p_data, id, cls, int(d.get("level", 1)), int(d.get("class_xp", 0)), rng_, equipment_)
+	run.atk_percent = float(d.get("atk_percent", 0.0))
+	run._rebuild_stats()
+	run.player.hp = clampi(int(d.get("hp", run.player.max_hp())), 1, run.player.max_hp())
+	run.potions = int(d.get("potions", 0))
+	run.room_number = int(d.get("room_number", 1))
+	run.choices = d.get("choices", [])
+	for c in run.choices:
+		c["level"] = int(c.get("level", 1))
+	for t in d.get("history", []):
+		run.history.append(str(t))
+	run.loot = d.get("loot", []).filter(func(i: Variant) -> bool:
+			return i is Dictionary and p_data["items"]["bases"].has(i.get("base", "")))
+	for item in run.loot + run.equipment:
+		item["level"] = int(item.get("level", 1))
+		item["upgrade"] = int(item.get("upgrade", 0))
+	run.scales_earned = int(d.get("scales_earned", 0))
+	run.gold_earned = int(d.get("gold_earned", 0))
+	run.xp_earned = int(d.get("xp_earned", 0))
+	run.kills = int(d.get("kills", 0))
+	run.state = State.CHOOSING
+	return run
 
 
 # ---------------------------------------------------------------- internals
@@ -320,8 +391,29 @@ func _rebuild_stats() -> void:
 	var old_max := player.max_hp()
 	player.level = level
 	player.stats = Stats.from_dict(class_def.get("base", {}), class_def.get("per_level", {}), level)
+	player.perks = {}
+	if data.has("items"):
+		Items.apply_equipment(player, equipment, data["items"])
 	player.stats.atk *= 1.0 + atk_percent
 	player.hp = clampi(player.hp + player.max_hp() - old_max, 1, player.max_hp())
+
+
+## Rolls the loot for a room kind from dungeons.json "loot". Returns {items, scales}.
+func _drop(kind: String) -> Dictionary:
+	var rule: Dictionary = def.get("loot", {}).get(kind, {})
+	var out := {"items": [], "scales": int(rule.get("scales", 0))}
+	scales_earned += out["scales"]
+	if rule.is_empty() or not data.has("items"):
+		return out
+	var unique: Dictionary = rule.get("unique", {})
+	if not unique.is_empty() and rng.randf() < float(unique.get("chance", 0)):
+		out["items"].append(Items.roll(data["items"], room_level(), rng,
+				{"base": unique["base"], "rarity": unique.get("rarity", "")}))
+	if rng.randf() < float(rule.get("chance", 0)):
+		out["items"].append(Items.roll(data["items"], room_level(), rng, {"class_id": class_id,
+				"min_rarity": rule.get("min_rarity", "common"), "legendary": rule.get("legendary", false)}))
+	loot.append_array(out["items"])
+	return out
 
 
 func _finish(result: String) -> void:

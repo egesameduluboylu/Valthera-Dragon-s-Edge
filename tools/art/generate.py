@@ -15,6 +15,7 @@ ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 
 import backgrounds  # noqa: E402
 import characters  # noqa: E402
+import gear  # noqa: E402
 import icons  # noqa: E402
 import scenes  # noqa: E402
 
@@ -44,6 +45,8 @@ def main(groups):
             save(icons.room_icon(k), f"icons/rooms/{k}.png")
         for k in icons.ITEM_ICONS:
             save(icons.item_icon(k), f"icons/items/{k}.png")
+        for k, fn in gear.GEAR.items():
+            save(fn(), f"icons/items/gear/{k}.png")
     if "scenes" in groups:
         save(scenes.cellar_map(), "backgrounds/rotten_cellar_map.png")
         save(scenes.door(), "ui/door.png")
