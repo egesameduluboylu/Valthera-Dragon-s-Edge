@@ -31,6 +31,8 @@ extends RefCounted
 const COMBO_CHAIN_BONUS := 0.10
 const DEFEND_DAMAGE_MULT := 0.5
 const POTION_HEAL_PERCENT := 0.35
+const LOW_LEVEL_GAP := 5
+const LOW_LEVEL_XP_MULT := 0.2
 
 var skill_defs: Dictionary
 var status_defs: Dictionary
@@ -79,6 +81,13 @@ static func for_enemies(data: Dictionary, p: Combatant, enemy_ids: Array, level:
 		foes.append(Combatant.make_enemy("e%d" % foes.size(), enemy_id, data["enemies"][enemy_id], level))
 	engine.setup(p, foes)
 	return engine
+
+
+## Enemies 5+ levels below the player give 20% XP, to discourage farming (docs/05).
+static func xp_for(base_xp: int, player_level: int, enemy_level: int) -> int:
+	if player_level - enemy_level >= LOW_LEVEL_GAP:
+		return roundi(base_xp * LOW_LEVEL_XP_MULT)
+	return base_xp
 
 
 func setup(p_player: Combatant, p_enemies: Array[Combatant]) -> void:
@@ -249,7 +258,7 @@ func _check_end() -> bool:
 		var xp := 0
 		var gold := 0
 		for e in enemies:
-			xp += e.xp_reward
+			xp += CombatEngine.xp_for(e.xp_reward, player.level, e.level)
 			gold += rng.randi_range(int(e.gold_range[0]), int(e.gold_range[1]))
 		reward_xp = xp
 		reward_gold = gold

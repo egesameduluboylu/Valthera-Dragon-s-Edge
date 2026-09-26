@@ -188,6 +188,18 @@ func test_victory_rewards() -> void:
 	assert_eq(engine.use_skill("warrior_slash", "e0"), [], "no actions after the battle ends")
 
 
+func test_low_level_enemies_give_reduced_xp() -> void:
+	assert_eq(CombatEngine.xp_for(30, 6, 1), 6, "5 levels below: 20%")
+	assert_eq(CombatEngine.xp_for(30, 5, 1), 30, "4 levels below: full")
+	var engine := make_engine(["cellar_rat"])
+	engine.player.level = 6
+	engine.start()
+	engine.enemies[0].hp = 1
+	var ev := engine.use_skill("warrior_slash", "e0")
+	assert_eq(events_of(ev, "battle_end")[0]["xp"], 2)
+	assert_eq(engine.reward_xp, 2)
+
+
 func test_defeat() -> void:
 	var engine := make_engine(["cellar_rat"])
 	engine.enemies[0].hp = 1000

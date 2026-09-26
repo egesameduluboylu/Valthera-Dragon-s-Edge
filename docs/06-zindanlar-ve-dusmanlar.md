@@ -83,7 +83,7 @@ Değerler seviye 1 içindir. Seviye başına: CAN +%15, SAL +%10, SAV +%10.
   - Desen: Asa Vuruşu, Kemik Çağır (1 İskelet Muhafız çağırır, sahada en fazla 2), Asa Vuruşu, Taç Işığı (kendine 30 Kalkan).
   - Çağrılan iskeletler XP ve altın vermez; Kral ölünce onlar da toz olur.
 - **Faz 2 (CAN %50 altı):** "Yeter! Artık ciddiyim... sanırım."
-  - SAL +%30 (Öfkeli durumu). Yeni hamle: **Kemik Fırtınası** (1 tur önceden ünlemle uyarır, oyuncuya 0.6 güçte 3 vuruş).
+  - SAL +%30 (Öfkeli durumu). Yeni hamle: **Kemik Fırtınası** (1 tur önceden ünlemle uyarır, oyuncuya 0.5 güçte 3 vuruş).
   - Faza geçtiği turda zaten gösterdiği hamleyi yapar; yeni desen bir sonraki turdan başlar, böylece Fırtına her zaman önceden görünür.
   - Çağırdığı iskeletler öldüğünde Kral'a 20 CAN verir (öncelik sorusu yaratır).
 - Ödül: 100 XP, 150 altın, garanti Nadir eşya, %5 Kemik Kral'ın Tacı.
