@@ -7,12 +7,15 @@ extends Node
 ##
 ## The server owns listings and the mailbox; the local profile only changes after the
 ## server said ok (the item leaves the bag when it is listed, gold is paid on a buy and
-## added on a claim).
+## added on a claim). Claims are idempotent: the claim's op id is saved in the profile
+## before asking, so a claim whose answer got lost is asked again (and paid once) later.
 
 const SESSION_PATH := "user://online_session.json"
 const TIMEOUT := 12.0
 
 var profile: Profile
+## Saves the profile; GameState sets it. Claims save before and after asking the server.
+var save_profile: Callable = func() -> void: pass
 var data: Dictionary
 var url: String
 var anon_key: String
@@ -44,6 +47,7 @@ func my_listings() -> Dictionary:
 
 
 func mailbox() -> Dictionary:
+	await _resume_claims()
 	return await _rpc("market_mailbox", {})
 
 
@@ -59,7 +63,10 @@ func create_listing(uid: String, price: int) -> Dictionary:
 	var fee := Market.listing_fee(price, data)
 	if profile.gold < fee:
 		return _fail("market.err_fee")
-	var r := await _rpc("market_create_listing", {"p_item": Market.listed_copy(item), "p_price": price})
+	# The server takes each item once per seller; save_id tells apart saves that reuse bag uids.
+	var sent := Market.listed_copy(item)
+	sent["uid"] = "%s/%s" % [profile.save_id, uid]
+	var r := await _rpc("market_create_listing", {"p_item": sent, "p_price": price})
 	if r.get("ok", false):
 		# The item may have changed while we waited; take exactly what was listed.
 		var still := profile.get_item(uid)
@@ -82,28 +89,54 @@ func buy(id: String, price: int = -1) -> Dictionary:
 	if r.get("ok", false):
 		profile.gold -= int(r.get("price", maxi(price, 0)))
 		var item: Dictionary = r["item"]
-		_clean(item)
+		_clean(item, data)
 		profile.add_item(item)
 		r["item"] = item
 	return r
 
 
 func claim(id: String) -> Dictionary:
-	if profile.bag_items().size() >= profile.bag_size():
+	if not profile.online_claims.has(id) and profile.bag_items().size() >= profile.bag_size():
 		# Items need room; gold doesn't, but we can't tell which one it is before asking.
 		var box := await mailbox()
 		for e in box.get("entries", []):
 			if str(e["id"]) == id and e["kind"] == "item":
 				return _fail("market.err_bag")
-	var r := await _rpc("market_claim", {"p_id": id})
+	var op: String = profile.online_claims.get(id, "")
+	if op == "":
+		op = Crypto.new().generate_random_bytes(16).hex_encode()
+		profile.online_claims[id] = op
+		save_profile.call()
+	return await _claim_once(id, op)
+
+
+## Asks the server for a claim and applies the reward in the same profile save that
+## forgets the op id. The reward is applied only while the op id is still pending, so an
+## answer that arrives twice pays once. Offline errors keep the op id for a later retry.
+func _claim_once(id: String, op: String) -> Dictionary:
+	var r := await _rpc("market_claim", {"p_id": id, "p_op": op})
+	if profile.online_claims.get(id, "") != op:
+		return r
 	if r.get("ok", false):
 		if r.has("gold"):
 			profile.gold += int(r["gold"])
 		if r.get("item") is Dictionary:
 			var item: Dictionary = r["item"]
-			_clean(item)
+			_clean(item, data)
 			profile.add_item(item)
+	elif r.get("error", "") not in ["market.err_gone", "market.err_bad_request"]:
+		return r
+	profile.online_claims.erase(id)
+	save_profile.call()
 	return r
+
+
+## Finishes claims whose answer never arrived (the server gives the same reward again).
+func _resume_claims() -> void:
+	for id in profile.online_claims.keys():
+		var r := await _claim_once(id, profile.online_claims[id])
+		if r.get("error", "") in ["market.err_offline", "market.err_auth"]:
+			return
 
 
 ## Online listings sell to real players; nothing happens between runs.
@@ -117,12 +150,22 @@ func _rpc(fn: String, body: Dictionary) -> Dictionary:
 	var ready := await _ensure_session()
 	if not ready.get("ok", false):
 		return ready
+	return await _rpc_with_refresh(fn, body)
+
+
+## Calls a function; on 401 (an expired or revoked token) refreshes the session once,
+## joins again if needed and retries.
+func _rpc_with_refresh(fn: String, body: Dictionary) -> Dictionary:
 	var r := await _call_rpc(fn, body)
 	if r.get("_status", 0) == 401:
 		_session.erase("access_token")
 		var again := await _refresh()
 		if not again.get("ok", false):
 			return again
+		if fn != "market_join":
+			var joined := await _join()
+			if not joined.get("ok", false):
+				return joined
 		r = await _call_rpc(fn, body)
 	r.erase("_status")
 	return r
@@ -148,12 +191,18 @@ func _ensure_session() -> Dictionary:
 			r = await _sign_up()
 		if not r.get("ok", false):
 			return r
-	if _joined_as != profile.player_name:
-		var j := await _call_rpc("market_join", {"p_name": profile.player_name})
-		if not j.get("ok", false):
-			return j
+	return await _join()
+
+
+## Creates or renames the market profile when the name or the session changed. A saved
+## token may have expired, so this goes through the same refresh-and-retry path.
+func _join() -> Dictionary:
+	if _joined_as == profile.player_name:
+		return {"ok": true}
+	var j := await _rpc_with_refresh("market_join", {"p_name": profile.player_name})
+	if j.get("ok", false):
 		_joined_as = profile.player_name
-	return {"ok": true}
+	return j
 
 
 ## Anonymous sign-in (Supabase: POST /auth/v1/signup with no email).
@@ -214,10 +263,13 @@ func _save_session() -> void:
 		f.store_string(JSON.stringify(_session))
 
 
-## JSON numbers come back as floats.
-static func _clean(item: Dictionary) -> void:
+## JSON numbers come back as floats; affixes without a proper value are dropped.
+static func _clean(item: Dictionary, p_data: Dictionary) -> void:
 	item["level"] = int(item.get("level", 1))
 	item["upgrade"] = int(item.get("upgrade", 0))
+	var affixes: Variant = item.get("affixes", [])
+	item["affixes"] = (affixes as Array).filter(func(a: Variant) -> bool:
+			return Items.is_valid_affix(a, p_data["items"])) if affixes is Array else []
 	item.erase("uid")
 
 

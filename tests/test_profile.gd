@@ -176,6 +176,28 @@ func test_broken_save_data_is_cleaned() -> void:
 	assert_eq(p.run_state, {})
 
 
+func test_affixes_without_a_value_are_dropped_on_load() -> void:
+	var d := {"inventory": [{"uid": "i1", "base": "iron_helm", "rarity": "epic", "level": 2, "affixes": [
+			{"id": "crit"}, {"id": "hp", "value": "lots"}, "atk", {"id": "nope", "value": 1.0},
+			{"id": "def", "value": 2}]}]}
+	var p := Profile.from_dict(game_data(), d)
+	assert_eq(p.inventory[0]["affixes"], [{"id": "def", "value": 2.0}])
+	# The stat helpers skip such affixes instead of crashing.
+	var raw := {"base": "iron_helm", "rarity": "rare", "level": 2, "affixes": [{"id": "crit"}, null]}
+	assert_eq(Items.total_stats(raw, game_data()["items"]), Items.main_stats(raw, game_data()["items"]))
+	assert_eq(Items.perks(raw, game_data()["items"]), {})
+
+
+func test_online_market_state_survives_save_and_load() -> void:
+	var p := _profile(4)
+	p.online_claims = {"mail-1": "op-1"}
+	var back := Profile.from_dict(game_data(), JSON.parse_string(JSON.stringify(p.to_dict())))
+	assert_eq(back.save_id, p.save_id)
+	assert_eq(back.online_claims, {"mail-1": "op-1"})
+	assert_true(p.save_id.length() == 16 and p.save_id != _profile(4).save_id, "save ids differ per new game")
+	assert_true(Profile.from_dict(game_data(), {}).save_id != "", "old saves get a save id")
+
+
 func test_run_state_resumes_between_rooms() -> void:
 	var p := _profile()
 	var run := p.start_run("rotten_cellar", seeded_rng(9))

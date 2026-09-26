@@ -28,6 +28,8 @@ static func main_stats(item: Dictionary, defs: Dictionary) -> Dictionary:
 static func total_stats(item: Dictionary, defs: Dictionary) -> Dictionary:
 	var out := main_stats(item, defs)
 	for a in item.get("affixes", []):
+		if not is_valid_affix(a, defs):
+			continue
 		if a["id"] in defs["stats"]:
 			out[a["id"]] = _round_stat(a["id"], float(out.get(a["id"], 0)) + float(a["value"]))
 	return out
@@ -37,12 +39,23 @@ static func total_stats(item: Dictionary, defs: Dictionary) -> Dictionary:
 static func perks(item: Dictionary, defs: Dictionary) -> Dictionary:
 	var out := {}
 	for a in item.get("affixes", []):
+		if not is_valid_affix(a, defs):
+			continue
 		if not a["id"] in defs["stats"]:
 			out[a["id"]] = float(out.get(a["id"], 0)) + float(a["value"])
 	var unique: Dictionary = defs["bases"][item["base"]].get("unique", {})
 	for k in unique:
 		out[k] = float(out.get(k, 0)) + float(unique[k])
 	return out
+
+
+## An affix is {id, value} with a known id and a finite number as its value. Edited or
+## broken saves can hold anything else; such affixes are ignored (and dropped on load).
+static func is_valid_affix(a: Variant, defs: Dictionary) -> bool:
+	if not a is Dictionary or not defs["affixes"].has(str(a.get("id", ""))):
+		return false
+	var v: Variant = a.get("value")
+	return (v is float or v is int) and is_finite(float(v))
 
 
 ## Adds worn items to a combatant's stats and perks.

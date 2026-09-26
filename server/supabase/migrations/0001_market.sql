@@ -20,6 +20,8 @@ create table if not exists public.listings (
   id          uuid primary key default gen_random_uuid(),
   seller      uuid not null references public.players (id) on delete cascade,
   seller_name text not null,
+  -- The seller's own id for the item (save id + bag uid): an item can be listed only once.
+  item_uid    text not null check (char_length(item_uid) between 1 and 80),
   item        jsonb not null,
   slot        text not null,
   rarity      text not null,
@@ -33,6 +35,8 @@ create table if not exists public.listings (
 );
 create index if not exists listings_browse on public.listings (status, slot, rarity, price);
 create index if not exists listings_seller on public.listings (seller, status);
+create unique index if not exists listings_seller_item on public.listings (seller, item_uid);
+create index if not exists listings_buyer on public.listings (buyer, closed_at);
 
 -- Gold from sales and items that came back, waiting for their owner to collect them.
 create table if not exists public.mailbox (
@@ -43,7 +47,10 @@ create table if not exists public.mailbox (
   item       jsonb,
   note       text not null,
   created_at timestamptz not null default now(),
-  claimed_at timestamptz
+  claimed_at timestamptz,
+  -- Claim receipt: the client's operation id. A retry with the same id (after a lost
+  -- response) gets the same reward back instead of an error.
+  claim_op   text
 );
 create index if not exists mailbox_owner on public.mailbox (owner, claimed_at);
 
@@ -126,6 +133,11 @@ begin
   if jsonb_typeof(p_item->'affixes') is distinct from 'array' then return 'market.err_bad_item'; end if;
   if jsonb_array_length(p_item->'affixes') <> (v_rarity->>'affixes')::integer then return 'market.err_bad_item'; end if;
   for v_affix in select * from jsonb_array_elements(p_item->'affixes') loop
+    -- every affix is {id: text, value: number}; JSON numbers are always finite
+    if jsonb_typeof(v_affix) is distinct from 'object' or jsonb_typeof(v_affix->'id') is distinct from 'string'
+        or jsonb_typeof(v_affix->'value') is distinct from 'number' then
+      return 'market.err_bad_item';
+    end if;
     v_def := v_items->'affixes'->(v_affix->>'id');
     if v_def is null or (v_affix->>'id') = any(v_ids) then return 'market.err_bad_item'; end if;
     v_ids := v_ids || (v_affix->>'id');
@@ -142,6 +154,10 @@ begin
   end loop;
   return '';
 end $$;
+
+-- Serializes one player's market writes (listing and buying limits are count-then-insert).
+create or replace function public._lock_player(p_player uuid) returns void
+language sql volatile as $$ select pg_advisory_xact_lock(hashtext('market:' || p_player::text)) $$;
 
 -- Closes the caller's listings that ran out of time and mails the items back.
 create or replace function public._expire_for(p_player uuid) returns void
@@ -181,6 +197,7 @@ returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 declare v jsonb;
 begin
+  if auth.uid() is null then return public._fail('market.err_auth'); end if;
   select coalesce(jsonb_agg(public._listing_json(l) order by
       case when p_sort = 'price' then l.price end asc,
       case when p_sort = 'price_desc' then l.price end desc,
@@ -211,37 +228,56 @@ begin
 end $$;
 
 -- The client removes the item from its bag and pays the listing fee after an ok.
+-- p_item carries the seller's item uid; an item uid is accepted once per seller, and a
+-- retry of the same listing (lost response) gets the same listing back.
 create or replace function public.market_create_listing(p_item jsonb, p_price integer) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
   v_market jsonb := public._cfg('market');
   v_items jsonb := public._cfg('items');
   v_player public.players;
+  v_uid text := p_item->>'uid';
   v_item jsonb := p_item - 'uid';
   v_err text;
   v_min integer;
   v_active integer;
+  v_today integer;
   v_listing public.listings;
+  v_fee integer;
 begin
   if auth.uid() is null then return public._fail('market.err_auth'); end if;
   select * into v_player from public.players where id = auth.uid();
   if not found then return public._fail('market.err_no_profile'); end if;
   v_err := public.validate_item(v_item);
   if v_err <> '' then return public._fail(v_err); end if;
+  if jsonb_typeof(p_item->'uid') is distinct from 'string' or char_length(v_uid) not between 1 and 80 then
+    return public._fail('market.err_bad_item');
+  end if;
   v_min := greatest(1, public._salvage_gold(v_item));
   if p_price is null or p_price < v_min then return public._fail('market.err_price_low'); end if;
   if p_price > (v_market->>'max_price')::integer then return public._fail('market.err_price_high'); end if;
+  v_fee := greatest((v_market->>'min_listing_fee')::integer,
+                    public._round(p_price * (v_market->>'listing_fee_percent')::numeric));
+  perform public._lock_player(auth.uid());
+  select * into v_listing from public.listings where seller = auth.uid() and item_uid = v_uid;
+  if found then
+    if v_listing.status = 'active' and v_listing.item = v_item and v_listing.price = p_price then
+      return jsonb_build_object('ok', true, 'listing', public._listing_json(v_listing), 'fee', v_fee);
+    end if;
+    return public._fail('market.err_listed_before');
+  end if;
   perform public._expire_for(auth.uid());
   select count(*) into v_active from public.listings where seller = auth.uid() and status = 'active';
   if v_active >= (v_market->>'max_listings')::integer then return public._fail('market.err_too_many'); end if;
-  insert into public.listings (seller, seller_name, item, slot, rarity, is_unique, price, expires_at)
-    values (auth.uid(), v_player.name, v_item, v_items->'bases'->(v_item->>'base')->>'slot', v_item->>'rarity',
+  select count(*) into v_today from public.listings
+    where seller = auth.uid() and created_at > now() - interval '24 hours';
+  if v_today >= (v_market->>'max_listings_per_day')::integer then return public._fail('market.err_daily_limit'); end if;
+  insert into public.listings (seller, seller_name, item_uid, item, slot, rarity, is_unique, price, expires_at)
+    values (auth.uid(), v_player.name, v_uid, v_item, v_items->'bases'->(v_item->>'base')->>'slot', v_item->>'rarity',
             (v_items->'bases'->(v_item->>'base')) ? 'unique', p_price,
             now() + make_interval(hours => (v_market->>'listing_hours')::integer))
     returning * into v_listing;
-  return jsonb_build_object('ok', true, 'listing', public._listing_json(v_listing),
-    'fee', greatest((v_market->>'min_listing_fee')::integer,
-                    public._round(p_price * (v_market->>'listing_fee_percent')::numeric)));
+  return jsonb_build_object('ok', true, 'listing', public._listing_json(v_listing), 'fee', v_fee);
 end $$;
 
 create or replace function public.market_cancel_listing(p_id uuid) returns jsonb
@@ -259,23 +295,32 @@ end $$;
 
 -- Marks the listing sold (only one buyer can win) and mails the seller the gold minus tax.
 -- The client pays the price from its own gold and adds the returned item to its bag.
+-- Gold lives in the client's save, so the server caps what one player can buy a day.
 create or replace function public.market_buy(p_id uuid) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
+  v_market jsonb := public._cfg('market');
   v_listing public.listings;
-  v_tax numeric := (public._cfg('market')->>'tax_percent')::numeric;
+  v_tax numeric := (v_market->>'tax_percent')::numeric;
+  v_count integer;
+  v_gold bigint;
 begin
   if auth.uid() is null then return public._fail('market.err_auth'); end if;
   if not exists (select 1 from public.players where id = auth.uid()) then return public._fail('market.err_no_profile'); end if;
+  perform public._lock_player(auth.uid());
+  select * into v_listing from public.listings where id = p_id;
+  if not found then return public._fail('market.err_gone'); end if;
+  if v_listing.seller = auth.uid() then return public._fail('market.err_own'); end if;
+  select count(*), coalesce(sum(price), 0) into v_count, v_gold from public.listings
+    where buyer = auth.uid() and status = 'sold' and closed_at > now() - interval '24 hours';
+  if v_count >= (v_market->>'max_buys_per_day')::integer
+      or v_gold + v_listing.price > (v_market->>'max_buy_gold_per_day')::bigint then
+    return public._fail('market.err_buy_limit');
+  end if;
   update public.listings set status = 'sold', buyer = auth.uid(), closed_at = now()
     where id = p_id and status = 'active' and expires_at > now() and seller <> auth.uid()
     returning * into v_listing;
-  if v_listing.id is null then
-    if exists (select 1 from public.listings where id = p_id and seller = auth.uid()) then
-      return public._fail('market.err_own');
-    end if;
-    return public._fail('market.err_gone');
-  end if;
+  if not found then return public._fail('market.err_gone'); end if;
   insert into public.mailbox (owner, kind, gold, item, note)
     values (v_listing.seller, 'gold', v_listing.price - public._round(v_listing.price * v_tax), v_listing.item, 'market.mail_sold');
   return jsonb_build_object('ok', true, 'item', v_listing.item, 'price', v_listing.price);
@@ -294,30 +339,34 @@ begin
 end $$;
 
 -- Marks a mailbox entry collected and returns it; the client adds the gold or item.
-create or replace function public.market_claim(p_id uuid) returns jsonb
+-- p_op is the client's id for this claim, saved on its side before calling: asking again
+-- with the same id returns the same reward, so a lost response loses nothing.
+drop function if exists public.market_claim(uuid);
+create or replace function public.market_claim(p_id uuid, p_op text) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare v public.mailbox;
 begin
   if auth.uid() is null then return public._fail('market.err_auth'); end if;
-  update public.mailbox set claimed_at = now()
+  if p_op is null or char_length(p_op) not between 8 and 64 then return public._fail('market.err_bad_request'); end if;
+  update public.mailbox set claimed_at = now(), claim_op = p_op
     where id = p_id and owner = auth.uid() and claimed_at is null
     returning * into v;
-  if v.id is null then return public._fail('market.err_gone'); end if;
+  if v.id is null then
+    select * into v from public.mailbox where id = p_id and owner = auth.uid() and claim_op = p_op;
+    if v.id is null then return public._fail('market.err_gone'); end if;
+  end if;
   if v.kind = 'gold' then return jsonb_build_object('ok', true, 'gold', v.gold); end if;
   return jsonb_build_object('ok', true, 'item', v.item);
 end $$;
 
-revoke all on function public.validate_item(jsonb) from public;
-revoke all on function public._expire_for(uuid) from public;
-revoke all on function public._salvage_gold(jsonb) from public;
-revoke all on function public._cfg(text) from public;
+-- Functions are executable by PUBLIC by default (and Supabase also grants anon). Only
+-- signed-in players may use the market API; the helpers stay internal.
+revoke all on function public._cfg(text), public._fail(text), public._round(numeric), public._salvage_gold(jsonb),
+  public.validate_item(jsonb), public._lock_player(uuid), public._expire_for(uuid), public._listing_json(public.listings),
+  public.market_join(text), public.market_browse(text, text, boolean, text, integer, integer),
+  public.market_my_listings(), public.market_create_listing(jsonb, integer), public.market_cancel_listing(uuid),
+  public.market_buy(uuid), public.market_mailbox(), public.market_claim(uuid, text)
+  from public, anon, authenticated;
 grant execute on function public.market_join(text), public.market_browse(text, text, boolean, text, integer, integer),
   public.market_my_listings(), public.market_create_listing(jsonb, integer), public.market_cancel_listing(uuid),
-  public.market_buy(uuid), public.market_mailbox(), public.market_claim(uuid) to authenticated;
--- Supabase grants new functions to anon and authenticated by default; only signed-in
--- players may use the market, and the helpers stay internal.
-revoke execute on function public.validate_item(jsonb), public._expire_for(uuid), public._salvage_gold(jsonb),
-  public._cfg(text) from anon, authenticated;
-revoke execute on function public.market_join(text), public.market_browse(text, text, boolean, text, integer, integer),
-  public.market_my_listings(), public.market_create_listing(jsonb, integer), public.market_cancel_listing(uuid),
-  public.market_buy(uuid), public.market_mailbox(), public.market_claim(uuid) from anon;
+  public.market_buy(uuid), public.market_mailbox(), public.market_claim(uuid, text) to authenticated;

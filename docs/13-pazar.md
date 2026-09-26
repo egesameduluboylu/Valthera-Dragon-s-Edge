@@ -23,6 +23,8 @@ Sayılar `data/market.json` içinde.
 - **Fiyat:** en az eşyanın parçalama değeri (parçalamaktan ucuza satılamaz), en fazla 1.000.000.
 - **Önerilen fiyat:** tüccar fiyatı; benzersiz eşyalarda x2.5.
 - **Aynı anda en fazla 5 ilan.** Kuşanılı eşya satılamaz; ilan verilen eşya çantadan çıkar.
+- **Günlük sınırlar (çevrimiçi):** oyuncu başına 24 saatte en fazla 20 ilan, 30 satın alma ve toplam
+  200.000 altınlık alım (bkz. Güvenlik sınırları).
 - **Süre:** çevrimiçi 48 saat, çevrimdışı 3 koşu. Satılmayan eşya postaya geri gelir.
 - **Geri çekme:** ilan panodan indirilir, eşya postaya gelir; ücret iade edilmez.
 - **Posta:** satış altınları, geri gelen ve geri çekilen eşyalar burada bekler. "Al" ile çantaya/altına eklenir
@@ -64,6 +66,34 @@ ganimete ek olarak) ve pazarda en değerli mallardır. Ayrıntılar ve düşme o
   nadirliği doğru mu, seviye 1-20, güçlendirme 0-10, ek özellik sayısı nadirliğe uygun mu, değerler aralıkta mı.
   Kurallar `data/` dosyalarından üretilen `market_config` tablosundan okunur.
 - Aynı ilanı iki kişi aynı anda alamaz: satın alma tek bir `update ... where status = 'active'` ile yapılır.
-- **Bilinen sınır:** altın ve çanta şimdilik cihazda. Tam hile koruması için bulut kayıt (M6).
+- Bir oyuncunun ilan verme ve satın alma işlemleri sırayla çalışır (oyuncu başına `pg_advisory_xact_lock`), böylece
+  aynı anda gönderilen istekler 5 ilan ve günlük sınırları aşamaz.
+- Fonksiyonlar yalnızca giriş yapmış oyunculara (`authenticated`) açıktır; `anon` ve `PUBLIC` çalıştıramaz.
+- **Postadan alma tekrarlanabilir:** oyun her "Al" için bir işlem kimliği üretir ve sunucuya sormadan önce kayda
+  yazar. Sunucu bu kimliği posta satırına (alma makbuzu) işler; cevap yolda kaybolursa aynı kimlikle tekrar
+  sorulunca aynı ödülü yeniden döner. Oyun ödülü ekler ve kimliği aynı kayıtta siler; Posta sekmesi açılınca
+  yarım kalan almalar tamamlanır. Böylece altın ve eşya kaybolmaz, iki kez de gelmez.
+
+## Güvenlik sınırları
+
+Altın ve çanta şimdilik **cihazdaki kayıtta** duruyor; sunucu oyuncunun gerçekte neye sahip olduğunu bilmez.
+Bu yüzden kayıt dosyasını düzenleyen biri pazara kendi uydurduğu (ama kurallara uyan) bir eşyayı koyabilir ve
+kendine yazdığı altınla alım yapabilir. Asıl çözüm kaydı sunucuya taşımak (bulut kayıt, M6); o zamana kadar
+sunucu zararı şu önlemlerle sınırlar:
+
+- **Eşya kuralları:** `validate_item` her eşyayı `data/` kurallarıyla denetler (taban, nadirlik, seviye,
+  güçlendirme, ek özellik sayısı; her ek özellik `{id, value}` biçiminde, değeri sayı ve aralık içinde olmalı).
+  İmkânsız eşyalar reddedilir.
+- **Her eşya bir kez:** oyun her eşyayı kayıt kimliği + çanta kimliğiyle gönderir; aynı satıcı aynı eşyayı
+  (satılmış, geri çekilmiş ya da süresi dolmuş olsa bile) ikinci kez ilana koyamaz. Eski bir kaydı geri yükleyip
+  satılmış eşyayı tekrar satmak böylece engellenir. Cevabı kaybolan bir ilan isteği tekrarlanırsa aynı ilan döner.
+- **Günlük ilan sınırı:** satıcı başına 24 saatte `max_listings_per_day` (20) ilan.
+- **Günlük alım sınırı:** alıcı başına 24 saatte `max_buys_per_day` (30) alım ve toplam `max_buy_gold_per_day`
+  (200.000) altın. Sahte altınla pazardan boşaltılabilecek mal bununla sınırlı kalır.
+- **Kendi ilanını alamazsın:** sunucu, satıcısı alıcının kendisi olan ilanı reddeder.
+
+Kalan açıklar: çanta kimliğini değiştiren biri uydurduğu eşyayı yine satabilir, sahte altınla günlük sınır içinde
+alım yapabilir ve birden fazla anonim hesap açarak sınırları çoğaltabilir. Bunları ancak sunucu tarafında tutulan
+envanter ve altın (bulut kayıt) kapatır.
 
 Kurulum adımları: [server/README.md](../server/README.md).

@@ -24,6 +24,8 @@ var dungeons: Dictionary = {}         # dungeon_id -> {runs, cleared}
 var run_state: Dictionary = {}        # DungeonRun.to_dict() between rooms, or {}
 var market: Dictionary = {}           # offline marketplace: board, own listings, mailbox (LocalMarket)
 var player_name: String = ""          # shown on the player's market listings
+var save_id: String = ""              # random per new game; the online market keys listed items by it
+var online_claims: Dictionary = {}    # online mailbox id -> claim op id, until the reward is applied
 var next_uid: int = 1
 
 
@@ -45,6 +47,7 @@ static func new_game(p_data: Dictionary, rng: RandomNumberGenerator = null) -> P
 	var r := rng if rng != null else RandomNumberGenerator.new()
 	p.restock_shop(r)
 	p.player_name = "Maceracı %04d" % r.randi_range(1, 9999)
+	p.save_id = _new_save_id()
 	LocalMarket.new(p)._turn_over_board(r)
 	return p
 
@@ -295,6 +298,8 @@ func to_dict() -> Dictionary:
 		"run_state": run_state.duplicate(true),
 		"market": market.duplicate(true),
 		"player_name": player_name,
+		"save_id": save_id,
+		"online_claims": online_claims.duplicate(),
 		"next_uid": next_uid,
 	}
 
@@ -323,7 +328,19 @@ static func from_dict(p_data: Dictionary, d: Dictionary) -> Profile:
 	p.next_uid = int(d.get("next_uid", p.inventory.size() + 1))
 	p.player_name = str(d.get("player_name", "Maceracı"))
 	p.market = _clean_market(d.get("market", {}), p_data)
+	p.save_id = str(d.get("save_id", ""))
+	if p.save_id == "":
+		p.save_id = _new_save_id()
+	var claims: Variant = d.get("online_claims", {})
+	if claims is Dictionary:
+		for id in claims:
+			p.online_claims[str(id)] = str(claims[id])
 	return p
+
+
+## Its own random source, so seeded game rolls stay the same.
+static func _new_save_id() -> String:
+	return Crypto.new().generate_random_bytes(8).hex_encode()
 
 
 static func _clean_market(m: Variant, p_data: Dictionary) -> Dictionary:
@@ -346,7 +363,8 @@ static func _clean_market(m: Variant, p_data: Dictionary) -> Dictionary:
 	return out
 
 
-## Drops items whose base no longer exists and restores int fields.
+## Drops items whose base no longer exists and affixes without a proper value, and
+## restores int fields.
 static func _clean_items(items: Array, p_data: Dictionary) -> Array:
 	var out: Array = []
 	for i in items:
@@ -356,5 +374,10 @@ static func _clean_items(items: Array, p_data: Dictionary) -> Array:
 		i["upgrade"] = int(i.get("upgrade", 0))
 		if not p_data["items"]["rarities"].has(i.get("rarity", "")):
 			i["rarity"] = "common"
+		var affixes: Variant = i.get("affixes", [])
+		i["affixes"] = (affixes as Array).filter(func(a: Variant) -> bool:
+				return Items.is_valid_affix(a, p_data["items"])) if affixes is Array else []
+		for a in i["affixes"]:
+			a["value"] = float(a["value"])
 		out.append(i)
 	return out

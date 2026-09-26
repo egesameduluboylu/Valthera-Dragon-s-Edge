@@ -28,18 +28,21 @@ kullanır (kurgusal maceracılar); doldurulunca aynı ekran gerçek oyuncularla 
 ## Testler
 
 - `server/tests/run.sh`: migrasyonları geçici bir yerel PostgreSQL'e kurar ve iki oyuncuyla
-  ilan verme, satın alma, vergi, posta, süre dolması, hileli eşya reddi ve doğrudan tablo
-  yazma engelini dener.
+  ilan verme, satın alma, vergi, posta (tekrarlanan alma), süre dolması, hileli eşya reddi,
+  günlük sınırlar, `anon` erişim engeli ve doğrudan tablo yazma engelini dener; sonra aynı
+  anda gönderilen 20 ilan isteğinin 5 ilan sınırını aşmadığını kontrol eder.
 - `server/tests/run_client_check.sh <godot>`: oyunun `SupabaseMarket` istemcisini,
   Supabase API'sini taklit eden `mock_gateway.py` üzerinden aynı veritabanına bağlayıp uçtan
-  uca dener (anonim giriş, jeton yenileme, alım-satım, posta).
+  uca dener (anonim giriş, süresi dolmuş kayıtlı jetonla yeniden bağlanma, alım-satım, cevabı
+  kaybolan posta almanın tamamlanması).
 
 İkisi de GitHub Actions'ta her PR'da çalışır.
 
 ## Bilinen sınır
 
 Altın ve çanta şimdilik cihazdaki kayıtta duruyor. Sunucu, satılan her eşyanın oyun
-kurallarına uygun olduğunu kontrol eder (taban, nadirlik, seviye, güçlendirme, ek özellik
-aralıkları), ama kayıt dosyasını düzenleyen biri kendine altın yazabilir. Tam hile koruması
-için kayıt da sunucuya taşınmalı (bulut kayıt); bu, yayın öncesi kilometre taşında
-(docs/12, M6) planlı.
+kurallarına uygun olduğunu kontrol eder, aynı eşyanın ikinci kez satılmasını engeller ve
+günlük ilan/alım sınırları koyar, ama kayıt dosyasını düzenleyen biri kendine altın
+yazabilir. Ayrıntılar: `docs/13-pazar.md` → "Güvenlik sınırları". Tam hile koruması için
+kayıt da sunucuya taşınmalı (bulut kayıt); bu, yayın öncesi kilometre taşında (docs/12, M6)
+planlı.
