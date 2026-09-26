@@ -1,0 +1,15 @@
+{
+  "warrior": {
+    "name_key": "class.warrior",
+    "resource": "rage",
+    "resource_start": 20,
+    "resource_max": 100,
+    "resource_per_turn": 0,
+    "resource_on_hit": 10,
+    "resource_on_damaged": 15,
+    "resource_on_defend": 20,
+    "base": {"hp": 120, "atk": 12, "def": 15, "spd": 8, "crit": 0.05, "dodge": 0.0},
+    "per_level": {"hp": 12, "atk": 2, "def": 2, "spd": 0.5, "crit": 0.0, "dodge": 0.0},
+    "prototype_skills": ["warrior_slash", "warrior_shield_break", "warrior_heavy_strike", "warrior_execute"]
+  }
+}

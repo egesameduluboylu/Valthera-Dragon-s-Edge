@@ -1,0 +1,39 @@
+{
+  "cellar_rat": {
+    "name_key": "enemy.cellar_rat",
+    "base": {"hp": 30, "atk": 8, "def": 5, "spd": 12, "crit": 0.05, "dodge": 0.05},
+    "elements": {"fire": 1.5},
+    "immune": [],
+    "xp": 10, "gold": [3, 6],
+    "moves": {
+      "bite": {"type": "attack", "power": 1.0},
+      "gnaw": {"type": "attack", "power": 0.8, "apply_status": [{"id": "bleed", "turns": 3}]}
+    },
+    "ai": {"type": "pattern", "pattern": ["bite", "bite", "gnaw"]}
+  },
+  "skeleton_guard": {
+    "name_key": "enemy.skeleton_guard",
+    "base": {"hp": 45, "atk": 10, "def": 20, "spd": 6, "crit": 0.05, "dodge": 0.0},
+    "elements": {"fire": 1.5, "shadow": 0.5},
+    "immune": ["poison", "bleed"],
+    "xp": 10, "gold": [4, 8],
+    "moves": {
+      "raise_shield": {"type": "shield", "amount": 15},
+      "sword_swing": {"type": "attack", "power": 1.0}
+    },
+    "ai": {"type": "pattern", "pattern": ["raise_shield", "sword_swing", "sword_swing"]}
+  },
+  "mushroom_mage": {
+    "name_key": "enemy.mushroom_mage",
+    "base": {"hp": 35, "atk": 12, "def": 8, "spd": 9, "crit": 0.05, "dodge": 0.0},
+    "elements": {"fire": 1.5},
+    "immune": ["poison"],
+    "xp": 10, "gold": [4, 8],
+    "moves": {
+      "empower": {"type": "buff_ally", "apply_status": [{"id": "strengthened", "turns": 2}]},
+      "spore_cloud": {"type": "attack", "power": 0.5, "element": "shadow",
+                      "apply_status": [{"id": "poison", "turns": 4, "stacks": 2}]}
+    },
+    "ai": {"type": "support", "buff_move": "empower", "solo_move": "spore_cloud"}
+  }
+}

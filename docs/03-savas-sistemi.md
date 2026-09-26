@@ -46,13 +46,17 @@ Zayıflıklar düşman bilgi panelinde ilk karşılaşmadan sonra görünür hâ
 | Kanama | Tur başında SAL'ın %30'u kadar fiziksel hasar | 3 tur |
 | Yanma | Tur başında maks. CAN'ın %5'i kadar ateş hasarı | 3 tur |
 | Donma | Hedefin HIZ'ı yarıya iner, 3 yığında 1 tur dondurur | 2 tur |
-| Sersem | Hedef bir sonraki turunu kaçırır | 1 tur |
+| Sersem | Hedef bir sonraki hamlesini kaçırır; durum bir tur daha görünür kalır, böylece bitiriciler (ör. İnfaz) onu kullanabilir | 2 tur |
 | Zırh Kırık | Hedefin SAV'ı %50 azalır | 2 tur |
 | Zehir | Tur başında yığın başına 3 hasar, en fazla 5 yığın | 4 tur |
 | Kalkan | Belirtilen miktarda hasarı emer | Tur sonuna / kırılana kadar |
 | Güçlenmiş | SAL %25 artar | 2 tur |
 
 Aynı durum tekrar uygulanırsa süre yenilenir (Zehir ve Donma hariç, onlar yığılır).
+
+**Süre kuralı:** Süre, durumun sahibinin kendi turu bittiğinde 1 azalır. Sahip durumu kendi turunda
+kazandıysa (ör. Savaş Narası) o turun sonunda azalmaz. Hasar veren durumlar (Kanama, Yanma, Zehir)
+sahibinin turu başında işler. Kalkan, sahibinin bir sonraki turu başında sıfırlanır.
 
 ## Kombo Sistemi: Hazırlayıcı ve Bitirici
 

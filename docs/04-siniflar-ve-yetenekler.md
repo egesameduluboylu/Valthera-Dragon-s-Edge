@@ -12,7 +12,7 @@
 
 | Sınıf | Kaynak | Başlangıç | Maks | Nasıl kazanılır |
 |-------|--------|-----------|------|-----------------|
-| Savaşçı | Öfke | 0 | 100 | Vurunca +10, hasar alınca +15, Savun +20 |
+| Savaşçı | Öfke | 20 | 100 | Vurunca +10, hasar alınca +15, Savun +20 |
 | Büyücü | Mana | 100 | 100 | Her tur +15, Savun +30 |
 | Haydut | Enerji | 60 | 100 | Her tur +25, Savun +40 |
 
@@ -37,7 +37,7 @@ Dayanıklı, Öfke biriktirip büyük vuruşlar yapan sınıf. Kombosu: Zırh K�
 | 2 | Ağır Vuruş | Bitirici (Zırh Kırık) | 30 Öfke | 0 | 1.4 | Kombo: 1.8 kat ve Sersem |
 | 4 | Savaş Narası | Nötr | 20 Öfke | 4 | - | 2 tur Güçlenmiş |
 | 6 | Kanatan Kesik | Hazırlayıcı | 0 | 1 | 0.8 | Kanama uygular |
-| 9 | İnfaz | Bitirici (Sersem) | 50 Öfke | 3 | 1.6 | Kombo: 2 kat; hedef %25 canın altındaysa 3 kat |
+| 9 | İnfaz | Bitirici (Sersem) | 40 Öfke | 3 | 1.6 | Kombo: 2 kat; hedef %25 canın altındaysa 3 kat |
 | 12 | Demir Duvar | Nötr | 0 | 4 | - | Maks. CAN'ın %25'i kadar Kalkan |
 | 16 | Kasırga | Bitirici (Kanama) | 60 Öfke | 3 | 0.9 | Tüm düşmanlara; kanayanlara 1.7 kat |
 
