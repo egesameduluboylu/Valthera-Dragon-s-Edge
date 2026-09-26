@@ -7,5 +7,6 @@
   "armor_break":   {"name_key": "status.armor_break", "def_mult": 0.5},
   "strengthened":  {"name_key": "status.strengthened", "atk_mult": 1.25},
   "enraged":       {"name_key": "status.enraged", "atk_mult": 1.3},
-  "evasive":       {"name_key": "status.evasive", "dodge_add": 0.4}
+  "evasive":       {"name_key": "status.evasive", "dodge_add": 0.4},
+  "chill":         {"name_key": "status.chill", "spd_mult": 0.7, "def_mult": 0.85}
 }

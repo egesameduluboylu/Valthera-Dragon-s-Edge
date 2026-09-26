@@ -16,13 +16,28 @@
 | Büyücü | Mana | 100 | 100 | Her tur +15, Savun +30 |
 | Haydut | Enerji | 60 | 100 | Her tur +25, Savun +40 |
 
+Kaynaklar savaşın ilk turunda artmaz; başlangıç değeri ilk tur için geçerlidir.
+
+## Yetenek Açılışı ve Seçimi (M5)
+
+- Her sınıfın **4 başlangıç yeteneği** seviye 1'de açıktır; kombo döngüsü ilk savaştan oynanabilsin diye.
+- Diğer 4 yetenek seviye **3, 6, 9 ve 12**'de açılır. Aşağıdaki tablolardaki "Açılış Sv." ilk taslaktır; güncel değerler `data/skills.json` içinde.
+- Sınıf Ustası (Yaşlı Kaan) ekranında bir yuvaya dokunup açık bir yeteneği oraya takarsın. Her sınıf kendi 4'lü seçimini ve seviyesini saklar.
+- Büyücü ve Haydut, Çürük Mahzen ilk kez temizlenince Sınıf Ustası'ndan bedava öğrenilir ve başlangıç silahı (Çırak Asası, Paslı Hançer) çantaya gelir. Sınıf değiştirince zırh, kask ve aksesuar aynı kalır, silah sınıfınkiyle değişir.
+
+| Sınıf | Başlangıç yetenekleri | Sv. 3 | Sv. 6 | Sv. 9 | Sv. 12 |
+|---|---|---|---|---|---|
+| Savaşçı | Kılıç Darbesi, Kalkan Kır, Ağır Vuruş, İnfaz | Savaş Narası | Kanatan Kesik | Demir Duvar | Kasırga |
+| Büyücü | Büyü Oku, Ateş Topu, Alev Patlaması, Buz Mızrağı | Mana Kalkanı | Paramparça | Zincirleme Şimşek | Meteor |
+| Haydut | Hançer Darbesi, Zehirli Bıçak, Sırttan Bıçak, Göz Boyama | Duman Bombası | Zehir Patlaması | Bıçak Yağmuru | Gölge Adım |
+
 ## Başlangıç İstatistikleri (Seviye 1) ve Seviye Başına Artış
 
 | Sınıf | CAN | SAL | SAV | HIZ | KRT |
 |-------|-----|-----|-----|-----|-----|
 | Savaşçı | 120 (+12) | 12 (+2) | 15 (+2) | 8 (+0.5) | %5 |
 | Büyücü | 80 (+8) | 15 (+2.5) | 6 (+1) | 10 (+0.5) | %8 |
-| Haydut | 95 (+9) | 13 (+2) | 9 (+1.5) | 14 (+1) | %15 |
+| Haydut | 100 (+9) | 13 (+2) | 9 (+1.5) | 14 (+1) | %15 |
 
 ---
 
@@ -60,7 +75,9 @@ Kırılgan ama yüksek hasarlı. Element zayıflıklarını en iyi kullanan sın
 
 Hızlı, kritik ağırlıklı. Birden fazla yetenek kullanabilen tek sınıf. Kombosu: Zehir yığınları ve kritik.
 
-Özel mekanik: **Seri.** Haydut bir turda Enerjisi yettiği sürece **2 yetenek** kullanabilir (ikinci yeteneğin maliyeti +10 Enerji).
+Özel mekanik: **Seri.** Haydut bir turda Enerjisi yettiği sürece **2 yetenek** kullanabilir (ikinci yeteneğin maliyeti +10 Enerji). İlk yetenekten sonra "Savun" düğmesi "Turu Bitir" olur. Bekleme süresi olan bir yetenek aynı turda iki kez kullanılamaz.
+
+M5 denge değişiklikleri (bot testleriyle): Hançer Darbesi gücü 1.0, Sırttan Bıçak gücü 1.5. Sırttan Bıçak **Zehir ya da Sersem** hedefe kesin kritik vurur, çünkü iskeletler ve Kemik Kral zehre bağışık. Zehrin yığın başına hasarı, zehirleyenin SAL'ının %25'i (en az 3).
 
 | Açılış Sv. | Yetenek | Rol | Maliyet | Bekleme | Güç | Etki |
 |---|---|---|---|---|---|---|

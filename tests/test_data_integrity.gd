@@ -2,7 +2,7 @@ extends TestCase
 ## Catches broken references in the JSON data: missing text, art or ids.
 
 const TEXT_KEYS := ["name_key", "desc_key", "title_key", "text_key", "label_key", "line_key"]
-const PATH_KEYS := ["sprite", "icon", "background"]
+const PATH_KEYS := ["sprite", "icon", "background", "map_background"]
 
 
 func test_every_text_key_and_asset_exists() -> void:

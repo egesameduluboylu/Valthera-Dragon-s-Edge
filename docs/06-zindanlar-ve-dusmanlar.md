@@ -37,7 +37,18 @@ Odalar arasında oyuncu bir sonraki odanın **tipini görür** ve iki kapıdan b
 | 4 | Yanık Kale | 11-15 | Kültistler, ateş iblisleri | Kor Rahibe |
 | 5 | Ejder Yuvası | 16-20 | Ejder tarikatı, ejderler | Kül Kanat |
 
-Demo sadece **Çürük Mahzen**'i içerir.
+M5 ile beş zindanın hepsi oyunda. Her zindan bir öncekinin temizlenmesiyle açılır; Zindan Kapısı'nda liste, yıldızlar ve Zor mod düğmesi görünür.
+
+| Zindan | Sıradan düşmanlar | Elit | Patron (fazlar) | Benzersiz eşyalar |
+|---|---|---|---|---|
+| Mantar Mağarası | Mağara Sümüklüsü (asit: Zırh Kırık), Zehirli Kurbağa, Işıltı Yarasası, Mantar Büyücü | Mantar Dev | Ana Spor (2 faz, mantar çağırır, zehir) | Spor Kalbi, Mantar Miğfer, Ana Spor'un Pelerini |
+| Buzlu Geçit | Ayaz Kurdu (uluma: Güçlenmiş), Buz Ruhu, Yeti Yavrusu | Buz Trolü | Soğuk Nefes (2 faz, Üşüme, kurt çağırır) | Ayaz Yüzüğü, Yeti Postu, Soğuk Nefes Pulu |
+| Yanık Kale | Tarikat Çömezi (destek), Ateş İfriti, Kor Tazısı | Alev Şövalyesi | Kor Rahibe (2 faz, çömez çağırır, Yanma) | İfrit Boynuzu, Alev Şövalyesi Miğferi, Rahibenin Buhurdanı |
+| Ejder Yuvası | Ejder Muhafızı, Ejder Yavrusu, Kül Hayaleti | Yaşlı Ejder | Kül Kanat (3 faz, yavru çağırır) | Yavru Dişi, Ejder Pulu Zırh, Kül Kanat'ın Kalbi |
+
+- Yeni durum **Üşüme**: HIZ ×0.7, SAV ×0.85 (oyuncuya uygulanır; oyuncuyu sersemletmez).
+- Ejder Yuvası ilk kez temizlenince hikâye ödülü olarak efsanevi **Ejder Yumurtası** verilir.
+- Tüm değerler `data/enemies.json` ve `data/dungeons.json` içinde. Sayılar, seviyesinin alt sınırındaki ve her yuvada Nadir eşya taşıyan bir kahramanın koşuların yaklaşık yarısından fazlasını bitireceği şekilde bot testleriyle ayarlandı (`tests/test_dungeons.gd`).
 
 ## Düşman Tasarımı Kuralları
 
@@ -91,4 +102,4 @@ Değerler seviye 1 içindir. Seviye başına: CAN +%15, SAL +%10, SAV +%10.
 ## Zorluk Ölçekleme
 
 - Zindan düşmanlarının seviyesi: zindan aralığında, oda numarasıyla artar (Oda 1 = alt sınır, patron = üst sınır).
-- Zor mod: tüm düşmanlar +3 seviye, düşme oranları: Nadir %40, Epik %15.
+- Zor mod: tüm düşmanlar +3 seviye, altın ×1.5, benzersiz eşya şansı ×1.5 ve savaş ganimeti en az Nadir. Zor mod, zindanın 3 yıldızı alınınca açılır.

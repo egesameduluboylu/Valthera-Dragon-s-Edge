@@ -1,6 +1,6 @@
 class_name ClassMasterPanel
 extends Control
-## Bilge Yaren, the Class Master (docs/04): learn the other classes once the first
+## Yaşlı Kaan, the Class Master (docs/04): learn the other classes once the first
 ## dungeon is cleared, switch the active class, and pick the 4 skills taken into battle.
 
 signal closed

@@ -46,6 +46,16 @@ var xp_earned: int = 0
 var gold_lost: int = 0
 var kills: int = 0
 
+## Hard mode (docs/06): enemies +3 levels, more gold, rarer loot.
+var hard: bool = false
+## For the dungeon stars (docs/05): potions drunk, and HP left when the boss fell.
+var potions_used: int = 0
+var end_hp_ratio: float = 0.0
+
+const HARD_LEVELS := 3
+const HARD_GOLD_MULT := 1.5
+const HARD_UNIQUE_MULT := 1.5
+
 
 func _init(p_data: Dictionary, p_dungeon_id: String, p_class_id: String, p_level: int,
 		p_class_xp: int = 0, p_rng: RandomNumberGenerator = null, p_equipment: Array = [],
@@ -120,6 +130,7 @@ func make_battle() -> CombatEngine:
 
 ## Takes the result of a finished battle. Returns {xp, gold, levels, healed, items, scales}.
 func finish_battle(engine: CombatEngine) -> Dictionary:
+	potions_used += maxi(0, potions - engine.potions)
 	potions = engine.potions
 	player.statuses.clear()
 	player.shield = 0
@@ -134,10 +145,14 @@ func finish_battle(engine: CombatEngine) -> Dictionary:
 			kills += 1
 	var xp := engine.reward_xp
 	var gold := engine.reward_gold
+	if hard:
+		gold = roundi(gold * HARD_GOLD_MULT)
 	gold_earned += gold
 	var levels := _gain_xp(xp)
 	var kind: String = "mimic" if room.get("mimic", false) else room["type"]
 	var drops := _drop(kind)
+	if room["type"] == "boss":
+		end_hp_ratio = player.hp_ratio()
 	# Catching your breath after a won fight (docs/06); the boss room ends the run anyway.
 	var healed := _heal(roundi(player.max_hp() * float(def.get("victory_heal_percent", 0.0))))
 	room["done"] = true
@@ -160,7 +175,8 @@ func open_treasure() -> Dictionary:
 		room["enemies"] = t.get("mimic", ["mimic"])
 		return {"mimic": true}
 	var range_: Array = t.get("gold", [0, 0])
-	var gold := roundi(rng.randi_range(int(range_[0]), int(range_[1])) * (1.0 + float(player.perks.get("gold_find", 0))))
+	var gold := roundi(rng.randi_range(int(range_[0]), int(range_[1])) * (1.0 + float(player.perks.get("gold_find", 0)))
+			* (HARD_GOLD_MULT if hard else 1.0))
 	var potion := rng.randf() < float(t.get("potion_chance", 0.0))
 	gold_earned += gold
 	if potion:
@@ -244,7 +260,7 @@ func to_dict() -> Dictionary:
 		"room_number": room_number, "choices": choices.duplicate(true), "history": history.duplicate(),
 		"equipment": equipment.duplicate(true), "loot": loot.duplicate(true),
 		"scales_earned": scales_earned, "gold_earned": gold_earned, "xp_earned": xp_earned,
-		"kills": kills,
+		"kills": kills, "hard": hard, "potions_used": potions_used,
 		# Strings keep the 64-bit values exact through JSON.
 		"rng_seed": str(rng.seed), "rng_state": str(rng.state),
 	}
@@ -288,6 +304,8 @@ static func from_dict(p_data: Dictionary, d: Dictionary) -> DungeonRun:
 	run.gold_earned = int(d.get("gold_earned", 0))
 	run.xp_earned = int(d.get("xp_earned", 0))
 	run.kills = int(d.get("kills", 0))
+	run.hard = bool(d.get("hard", false))
+	run.potions_used = int(d.get("potions_used", 0))
 	run.state = State.CHOOSING
 	return run
 
@@ -299,7 +317,8 @@ func _roll_choices() -> void:
 	room = {}
 	choices = []
 	if is_boss_room():
-		choices.append({"type": "boss", "enemies": def.get("boss", []), "level": int(def.get("level_max", 1))})
+		choices.append({"type": "boss", "enemies": def.get("boss", []),
+				"level": int(def.get("level_max", 1)) + (HARD_LEVELS if hard else 0)})
 		return
 	var first := _roll_type([])
 	var second := _roll_type([first])
@@ -354,7 +373,7 @@ func room_level() -> int:
 	var lo := int(def.get("level_min", 1))
 	var hi := int(def.get("level_max", lo))
 	var t := float(room_number - 1) / float(maxi(room_count() - 1, 1))
-	return lo + floori((hi - lo) * t)
+	return lo + floori((hi - lo) * t) + (HARD_LEVELS if hard else 0)
 
 
 func _weighted(items: Array) -> Dictionary:
@@ -416,11 +435,15 @@ func _drop(kind: String) -> Dictionary:
 	# Named unique items have their own small chance on top of the normal drop.
 	for u in rule.get("uniques", []):
 		var base: Dictionary = data["items"]["bases"].get(u["base"], {})
-		if base.get("class", class_id) == class_id and rng.randf() < float(u.get("chance", 0)):
+		var chance := float(u.get("chance", 0)) * (HARD_UNIQUE_MULT if hard else 1.0)
+		if base.get("class", class_id) == class_id and rng.randf() < chance:
 			out["items"].append(Items.roll(data["items"], room_level(), rng, {"base": u["base"]}))
 	if rng.randf() < float(rule.get("chance", 0)):
+		var min_rarity: String = rule.get("min_rarity", "common")
+		if hard and min_rarity == "common":
+			min_rarity = "rare"
 		out["items"].append(Items.roll(data["items"], room_level(), rng, {"class_id": class_id,
-				"min_rarity": rule.get("min_rarity", "common"), "legendary": rule.get("legendary", false)}))
+				"min_rarity": min_rarity, "legendary": rule.get("legendary", false)}))
 	loot.append_array(out["items"])
 	return out
 
@@ -432,3 +455,10 @@ func _finish(result: String) -> void:
 		# Death costs half the gold found on this run; XP is kept (docs/02).
 		gold_lost = gold_earned / 2
 		gold_earned -= gold_lost
+
+
+## Stars this run earned (docs/05): cleared, cleared without potions, cleared above
+## half HP.
+func stars() -> Array:
+	var cleared := outcome == "cleared"
+	return [cleared, cleared and potions_used == 0, cleared and end_hp_ratio > 0.5]

@@ -5,7 +5,6 @@ extends Control
 
 const BATTLE_SCENE := preload("res://src/scenes/battle/battle.tscn")
 const TOWN_SCENE := "res://src/scenes/town/town.tscn"
-const DUNGEON_ID := "rotten_cellar"
 const ROOM_ICON := "res://assets/icons/rooms/%s.png"
 const ITEM_ICON := "res://assets/icons/items/%s.png"
 const EVENT_ART := "res://assets/events/%s.png"
@@ -40,13 +39,25 @@ func _ready() -> void:
 
 
 func _new_run() -> void:
-	run = GameState.run if GameState.run != null else GameState.start_run(DUNGEON_ID)
+	run = GameState.run if GameState.run != null else GameState.start_run(GameState.next_dungeon, GameState.next_hard)
 	run.leveled_up.connect(_on_level_up)
 	if run.room_number == 0:
 		run.start()
 	_close_modal()
 	_refresh()
 	_show_doors()
+	if run.history.is_empty():
+		await _play_story(run.dungeon_id + "_intro")
+
+
+## Plays a story scene once per save (docs/07) and waits for it to end.
+func _play_story(scene_id: String) -> void:
+	if not StoryDialog.has_scene(scene_id) or not GameState.profile.take_story(scene_id):
+		return
+	GameState.changed()
+	var dlg := StoryDialog.new(scene_id)
+	add_child(dlg)
+	await dlg.finished
 
 
 # ---------------------------------------------------------------- flow
@@ -210,9 +221,17 @@ func _show_rest() -> void:
 
 func _show_summary() -> void:
 	var banked := GameState.apply_run(run)
+	if banked.get("first_clear", false):
+		await _play_story(run.dungeon_id + "_outro")
+		if not banked.get("reward", {}).is_empty():
+			await _show_ending(banked["reward"])
 	var colors := {"cleared": UITheme.GOLD, "escaped": Color("8fc4ff"), "died": UITheme.HP}
 	var art := "chest" if run.outcome == "cleared" else ("campfire" if run.outcome == "escaped" else "skull")
-	var body := _modal(DataDB.t("run." + run.outcome), EVENT_ART % art, DataDB.t("run.%s_hint" % run.outcome))
+	var hint := DataDB.t("run.%s_hint" % run.outcome)
+	if run.outcome == "cleared":
+		hint = DataDB.t("run.cleared_hint." + run.dungeon_id)
+	var body := _modal(DataDB.t("run." + run.outcome) + ("  ·  " + DataDB.t("run.hard") if run.hard else ""),
+			EVENT_ART % art, hint)
 	_modal_layer.get_meta("title").add_theme_color_override("font_color", colors[run.outcome])
 	var grid := GridContainer.new()
 	grid.columns = 2
@@ -237,6 +256,8 @@ func _show_summary() -> void:
 		var v := _label(row[1], 28, UITheme.TEXT)
 		v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		grid.add_child(v)
+	if run.outcome == "cleared":
+		body.add_child(_stars_line(run.stars(), banked.get("new_stars", [])))
 	body.add_child(UIKit.label(UITheme.caps(DataDB.t("run.loot")), 24, UITheme.GOLD))
 	if run.loot.is_empty():
 		body.add_child(_label(DataDB.t("run.no_loot"), 22, UITheme.TEXT_MUTED))
@@ -383,14 +404,14 @@ func _door_card(room: Dictionary, index: int) -> Control:
 		tw.tween_property(medal, "position:y", medal.position.y - 6, 0.8).set_trans(Tween.TRANS_SINE).set_delay(0.3 * index)
 		tw.tween_property(medal, "position:y", medal.position.y, 0.8).set_trans(Tween.TRANS_SINE)
 
-	var name_key := "enemy.bone_king" if boss else "room." + type
+	var name_key: String = "enemy." + String(run.def.get("boss", [""])[0]) if boss else "room." + type
 	var title := _label(UITheme.caps(DataDB.t(name_key)), 34 if boss else 30, Color("ff8070") if boss else UITheme.GOLD)
 	title.add_theme_font_override("font", UITheme.title_font())
 	title.add_theme_color_override("font_outline_color", UITheme.INK)
 	title.add_theme_constant_override("outline_size", 8)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(title)
-	var hint := _label(DataDB.t("room.%s.hint" % type), 21, UITheme.TEXT)
+	var hint := _label(DataDB.t("room.boss.hint." + run.dungeon_id) if boss else DataDB.t("room.%s.hint" % type), 21, UITheme.TEXT)
 	hint.add_theme_color_override("font_outline_color", UITheme.INK)
 	hint.add_theme_constant_override("outline_size", 6)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -585,7 +606,7 @@ func _fade_to(alpha: float) -> void:
 func _build_ui() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var bg := TextureRect.new()
-	bg.texture = load("res://assets/backgrounds/rotten_cellar_map.png")
+	bg.texture = load(run.def.get("map_background", "res://assets/backgrounds/rotten_cellar_map.png"))
 	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -712,7 +733,7 @@ func _build_ui() -> void:
 
 
 func run_def_name() -> String:
-	return DataDB.data["dungeons"][DUNGEON_ID].get("name_key", DUNGEON_ID)
+	return run.def.get("name_key", run.dungeon_id)
 
 
 func _button(text: String, icon_path: String, on_press: Callable) -> Button:
@@ -760,3 +781,42 @@ func _label(text: String, font_size: int, color: Color) -> Label:
 	l.add_theme_color_override("font_color", color)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
+
+
+## "Yıldızlar ★ ★ ☆", with stars earned for the first time on this run shown bigger.
+func _stars_line(stars: Array, new_stars: Array) -> HBoxContainer:
+	var h := HBoxContainer.new()
+	h.alignment = BoxContainer.ALIGNMENT_CENTER
+	h.add_theme_constant_override("separation", 10)
+	h.add_child(_label(DataDB.t("run.stars"), 24, UITheme.TEXT_MUTED))
+	for i in stars.size():
+		var star := _label("★" if stars[i] else "☆", 44 if new_stars.has(i) else 32,
+				UITheme.GOLD if stars[i] else UITheme.TEXT_MUTED)
+		h.add_child(star)
+		if new_stars.has(i):
+			star.pivot_offset = Vector2(16, 22)
+			var tw := star.create_tween().set_loops(3)
+			tw.tween_property(star, "scale", Vector2(1.25, 1.25), 0.25)
+			tw.tween_property(star, "scale", Vector2.ONE, 0.25)
+	if not new_stars.is_empty():
+		h.add_child(_label(DataDB.t("run.new_star"), 22, UITheme.GOLD))
+	return h
+
+
+## The end of the story (docs/07): the dragon egg, then the usual summary.
+func _show_ending(reward: Dictionary) -> void:
+	var body := _modal(DataDB.t("ending.title"), EVENT_ART % "dragon_egg", DataDB.t("ending.text"))
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 16)
+	body.add_child(row)
+	row.add_child(ItemUI.tile(reward, 110))
+	var info := VBoxContainer.new()
+	info.add_child(UIKit.label(DataDB.t("run.reward"), 22, UITheme.TEXT_MUTED))
+	info.add_child(UIKit.label(ItemUI.item_name(reward), 28, ItemUI.color(reward)))
+	row.add_child(info)
+	var done := [false]
+	var go := UIKit.primary(_button(DataDB.t("story.continue"), "", func() -> void: done[0] = true))
+	body.add_child(go)
+	while not done[0]:
+		await get_tree().process_frame

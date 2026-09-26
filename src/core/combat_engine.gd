@@ -37,6 +37,13 @@ const LOW_LEVEL_GAP := 5
 const LOW_LEVEL_XP_MULT := 0.2
 ## low_hp_damage gear perk works below this share of max HP.
 const LOW_HP_THRESHOLD := 0.3
+## Gear perks that give each hit a chance to apply a status.
+const ON_HIT_PERKS := {
+	"bleed_on_hit": {"id": "bleed", "turns": 3},
+	"poison_on_hit": {"id": "poison", "turns": 3, "stacks": 1},
+	"burn_on_hit": {"id": "burn", "turns": 2},
+	"freeze_on_hit": {"id": "freeze", "turns": 2},
+}
 
 var skill_defs: Dictionary
 var status_defs: Dictionary
@@ -429,8 +436,10 @@ func _perform_skill(def: Dictionary, targets: Array[Combatant], cost_paid: int =
 				_apply_status(t, spec, player)
 		for spec in def.get("apply_status", []):
 			_apply_status(t, spec, player)
-		if power > 0.0 and rng.randf() < float(player.perks.get("bleed_on_hit", 0)):
-			_apply_status(t, {"id": "bleed", "turns": 3}, player)
+		if power > 0.0:
+			for perk in ON_HIT_PERKS:
+				if player.perks.has(perk) and rng.randf() < float(player.perks[perk]):
+					_apply_status(t, ON_HIT_PERKS[perk], player)
 
 	if power > 0.0:
 		_first_strike_used = true

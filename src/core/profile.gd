@@ -22,10 +22,11 @@ var potions: int = FREE_POTIONS
 var inventory: Array = []             # item dictionaries, see Items
 var equipment: Dictionary = {}        # slot -> item uid or ""
 var shop: Array = []                  # items for sale at the merchant
-var dungeons: Dictionary = {}         # dungeon_id -> {runs, cleared}
+var dungeons: Dictionary = {}         # dungeon_id -> {runs, cleared, stars: [3 bools], hard_cleared}
 var run_state: Dictionary = {}        # DungeonRun.to_dict() between rooms, or {}
 var market: Dictionary = {}           # offline marketplace: board, own listings, mailbox (LocalMarket)
 var player_name: String = ""          # shown on the player's market listings
+var story_seen: Array = []            # story.json scene ids already shown
 var next_uid: int = 1
 
 
@@ -61,6 +62,14 @@ func defs() -> Dictionary:
 
 
 # ---------------------------------------------------------------- classes and skills
+
+## True the first time a story scene should play; marks it as seen.
+func take_story(scene_id: String) -> bool:
+	if story_seen.has(scene_id):
+		return false
+	story_seen.append(scene_id)
+	return true
+
 
 func is_unlocked(class_id: String) -> bool:
 	return classes.has(class_id)
@@ -348,18 +357,38 @@ func buy_shop_item(index: int) -> bool:
 
 # ---------------------------------------------------------------- dungeon runs
 
+## Dungeons open one after another: each needs the one before it cleared.
+func dungeon_unlocked(dungeon_id: String) -> bool:
+	var need: String = data["dungeons"][dungeon_id].get("unlock_after", "")
+	return need == "" or dungeon_cleared(need)
+
+
+func dungeon_cleared(dungeon_id: String) -> bool:
+	return dungeons.get(dungeon_id, {}).get("cleared", false)
+
+
+func dungeon_stars(dungeon_id: String) -> Array:
+	return dungeons.get(dungeon_id, {}).get("stars", [false, false, false])
+
+
+## Hard mode opens once all three stars are earned (docs/05).
+func hard_unlocked(dungeon_id: String) -> bool:
+	return not dungeon_stars(dungeon_id).has(false)
+
+
 ## Starts a run with the worn gear and the potion stock.
-func start_run(dungeon_id: String, rng: RandomNumberGenerator = null) -> DungeonRun:
+func start_run(dungeon_id: String, rng: RandomNumberGenerator = null, hard: bool = false) -> DungeonRun:
 	var gear: Array = []
 	for item in equipped_items():
 		gear.append(item.duplicate(true))
 	var run := DungeonRun.new(data, dungeon_id, active_class, level(), class_xp(), rng, gear, loadout())
 	run.potions = potions
+	run.hard = hard and hard_unlocked(dungeon_id)
 	return run
 
 
-## Banks a finished run. Returns what happened to the loot:
-## {added: [items], salvaged: {gold, scales, count}}.
+## Banks a finished run. Returns what happened to the loot and the stars:
+## {added: [items], salvaged: {gold, scales, count}, new_stars: [indexes], reward: item or {}}.
 func apply_run(run: DungeonRun, rng: RandomNumberGenerator = null) -> Dictionary:
 	set_progress(run.level, run.class_xp)
 	gold += run.gold_earned
@@ -377,12 +406,30 @@ func apply_run(run: DungeonRun, rng: RandomNumberGenerator = null) -> Dictionary
 	potions = maxi(run.potions, FREE_POTIONS)   # Nara refills the basics in town
 	var d: Dictionary = dungeons.get(run.dungeon_id, {"runs": 0, "cleared": false})
 	d["runs"] = int(d["runs"]) + 1
+	var first_clear: bool = run.outcome == "cleared" and not d.get("cleared", false)
 	if run.outcome == "cleared":
 		d["cleared"] = true
+		if run.hard:
+			d["hard_cleared"] = true
+	var stars: Array = d.get("stars", [false, false, false]).duplicate()
+	var new_stars: Array = []
+	var earned := run.stars()
+	for i in 3:
+		if earned[i] and not stars[i]:
+			stars[i] = true
+			new_stars.append(i)
+	d["stars"] = stars
 	dungeons[run.dungeon_id] = d
+	# The story's last gift (docs/07): the dragon egg on the first clear of the lair.
+	var reward := {}
+	var spec: Dictionary = data["dungeons"][run.dungeon_id].get("first_clear_reward", {})
+	if first_clear and not spec.is_empty():
+		reward = Items.roll(defs(), int(data["dungeons"][run.dungeon_id].get("level_max", 1)),
+				rng if rng != null else RandomNumberGenerator.new(), {"base": spec["base"]})
+		add_item(reward)
 	run_state = {}
 	restock_shop(rng if rng != null else RandomNumberGenerator.new())
-	return {"added": added, "salvaged": salvaged}
+	return {"added": added, "salvaged": salvaged, "new_stars": new_stars, "first_clear": first_clear, "reward": reward}
 
 
 # ---------------------------------------------------------------- save format
@@ -401,6 +448,7 @@ func to_dict() -> Dictionary:
 		"run_state": run_state.duplicate(true),
 		"market": market.duplicate(true),
 		"player_name": player_name,
+		"story_seen": story_seen.duplicate(),
 		"next_uid": next_uid,
 	}
 
@@ -434,11 +482,19 @@ static func from_dict(p_data: Dictionary, d: Dictionary) -> Profile:
 	if dungeons_ is Dictionary:
 		for id in dungeons_:
 			if p_data["dungeons"].has(id) and dungeons_[id] is Dictionary:
+				var stars_: Variant = dungeons_[id].get("stars", [])
+				var stars: Array = []
+				for i in 3:
+					stars.append(stars_ is Array and i < stars_.size() and bool(stars_[i]))
 				p.dungeons[id] = {"runs": int(dungeons_[id].get("runs", 0)),
-						"cleared": bool(dungeons_[id].get("cleared", false))}
+						"cleared": bool(dungeons_[id].get("cleared", false)), "stars": stars,
+						"hard_cleared": bool(dungeons_[id].get("hard_cleared", false))}
 	p.run_state = d.get("run_state", {}) if d.get("run_state") is Dictionary else {}
 	p.next_uid = int(d.get("next_uid", p.inventory.size() + 1))
 	p.player_name = str(d.get("player_name", "Maceracı"))
+	var seen: Variant = d.get("story_seen", [])
+	if seen is Array:
+		p.story_seen = seen.map(func(x: Variant) -> String: return str(x))
 	p.market = _clean_market(d.get("market", {}), p_data)
 	return p
 

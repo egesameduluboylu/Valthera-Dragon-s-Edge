@@ -72,8 +72,13 @@ func add_rewards(xp_amount: int, gold_amount: int) -> void:
 
 # ---------------------------------------------------------------- dungeon runs
 
-func start_run(dungeon_id: String) -> DungeonRun:
-	run = profile.start_run(dungeon_id, rng)
+## The dungeon the gate picked, started when the dungeon scene opens.
+var next_dungeon: String = "rotten_cellar"
+var next_hard: bool = false
+
+
+func start_run(dungeon_id: String, hard: bool = false) -> DungeonRun:
+	run = profile.start_run(dungeon_id, rng, hard)
 	return run
 
 

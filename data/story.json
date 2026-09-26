@@ -1,0 +1,25 @@
+{
+  "speakers": {
+    "nara":    {"name_key": "npc.nara",    "portrait": "res://assets/town/npc_nara.png"},
+    "keeper":  {"name_key": "town.gate.keeper", "portrait": "res://assets/town/npc_keeper.png"},
+    "kaan":    {"name_key": "class_master.npc", "portrait": "res://assets/town/npc_class_master.png"},
+    "bone_king":       {"name_key": "enemy.bone_king",       "portrait": "res://assets/sprites/enemies/bone_king.png"},
+    "spore_mother":    {"name_key": "enemy.spore_mother",    "portrait": "res://assets/sprites/enemies/spore_mother.png"},
+    "frostbreath":     {"name_key": "enemy.frostbreath",     "portrait": "res://assets/sprites/enemies/frostbreath.png"},
+    "ember_priestess": {"name_key": "enemy.ember_priestess", "portrait": "res://assets/sprites/enemies/ember_priestess.png"},
+    "ashwing":         {"name_key": "enemy.ashwing",         "portrait": "res://assets/sprites/enemies/ashwing.png"}
+  },
+  "scenes": {
+    "game_intro":             [["nara", 1], ["nara", 2], ["keeper", 1], ["nara", 3]],
+    "rotten_cellar_intro":    [["nara", 1], ["nara", 2]],
+    "rotten_cellar_outro":    [["bone_king", 1], ["nara", 1], ["nara", 2]],
+    "mushroom_cave_intro":    [["nara", 1], ["nara", 2]],
+    "mushroom_cave_outro":    [["spore_mother", 1], ["nara", 1], ["nara", 2]],
+    "frozen_pass_intro":      [["nara", 1], ["keeper", 1]],
+    "frozen_pass_outro":      [["frostbreath", 1], ["frostbreath", 2], ["nara", 1]],
+    "burnt_keep_intro":       [["nara", 1], ["nara", 2]],
+    "burnt_keep_outro":       [["ember_priestess", 1], ["nara", 1], ["nara", 2]],
+    "dragon_lair_intro":      [["nara", 1], ["kaan", 1], ["nara", 2]],
+    "dragon_lair_outro":      [["ashwing", 1], ["ashwing", 2], ["ashwing", 3], ["nara", 1], ["nara", 2]]
+  }
+}

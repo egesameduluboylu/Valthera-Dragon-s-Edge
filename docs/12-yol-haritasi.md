@@ -47,23 +47,23 @@ Hedef: Savaşçı, 2 fareye karşı, düz renkli kutularla bile eğlenceli mi?
 - [x] Savaş ekranı görselleri: karakterler, düşmanlar, arka plan, ikonlar, arayüz teması
 - [x] Temel animasyonlar: bekleme salınımı, saldırı atılması, vurulma, ölüm
 - [x] Zindan haritası, kapılar, oda ikonları, olay çizimleri, Bekçi / Taklitçi / Kemik Kral
-- [ ] Diğer zindanlar ve ekranlar için görseller
+- [x] Diğer zindanlar ve ekranlar için görseller
 - [ ] Ses ve müzik
 - [x] Ekran titremesi, kombo efektleri
 - [ ] Titreşim
 - [ ] Yönlendirmeli ilk savaş (tutorial)
-- [ ] Giriş ve Kemik Kral diyalogları
+- [x] Giriş ve Kemik Kral diyalogları (tüm zindanların giriş ve bitiş sahneleri)
 - **DEMO:** 1 sınıf, 1 zindan, 3 düşman + elit + patron. 5-10 kişiye test ettir.
 
 ## M5: İçerik Genişlemesi
-- [ ] Büyücü ve Haydut (Seri mekaniği dahil)
-- [ ] Sınıf Ustası: sınıf değiştirme, yetenek seçme
-- [ ] Zindan 2 ve 3 (Mantar Mağarası, Buzlu Geçit)
-- [ ] Zindan yıldızları ve Zor mod
-- [ ] Denge turu (test verilerine göre `data/` ayarları)
+- [x] Büyücü ve Haydut (Seri mekaniği dahil)
+- [x] Sınıf Ustası: sınıf değiştirme, yetenek seçme
+- [x] Zindan 2 ve 3 (Mantar Mağarası, Buzlu Geçit)
+- [x] Zindan yıldızları ve Zor mod
+- [x] Denge turu (bot testleriyle `data/` ayarları)
 
 ## M6: Yayın
-- [ ] Zindan 4 ve 5, hikâyenin sonu
+- [x] Zindan 4 ve 5, hikâyenin sonu
 - [ ] Ayarlar, dil altyapısı, erişilebilirlik (yazı boyutu)
 - [ ] Google Play kapalı test, geri bildirim
 - [ ] Gelir modeli (bkz. 11-gelir-modeli.md)

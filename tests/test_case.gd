@@ -98,18 +98,23 @@ static func _mage_bot_turn(engine: CombatEngine) -> void:
 	if engine.alive_enemies().is_empty():
 		return
 	var t := _bot_target(engine)
-	for s in ["mage_flame_burst", "mage_shatter"]:
+	for s in ["mage_meteor", "mage_flame_burst", "mage_shatter"]:
 		if engine.can_use(s) and engine.combo_ready(s, t):
 			engine.use_skill(s, t.uid)
 			return
+	var fire_ok := t.element_mult("fire") >= 1.0 and not t.immune.has("burn")
 	if engine.can_use("mage_mana_shield") and engine.player.hp_ratio() < 0.6:
 		engine.use_skill("mage_mana_shield")
-	elif not t.has_status("burn") and engine.can_use("mage_fireball"):
+	elif engine.can_use("mage_chain_lightning") and engine.alive_enemies().size() >= 2:
+		engine.use_skill("mage_chain_lightning")
+	elif fire_ok and not t.has_status("burn") and engine.can_use("mage_fireball"):
 		engine.use_skill("mage_fireball", t.uid)
-	elif engine.player.resource >= 50 and engine.can_use("mage_ice_lance"):
+	elif (not fire_ok or engine.player.resource >= 50) and not t.immune.has("freeze") and engine.can_use("mage_ice_lance"):
 		engine.use_skill("mage_ice_lance", t.uid)
-	else:
+	elif engine.can_use("mage_arcane_bolt"):
 		engine.use_skill("mage_arcane_bolt", t.uid)
+	else:
+		engine.defend()
 
 
 static func _rogue_bot_turn(engine: CombatEngine) -> void:

@@ -39,7 +39,7 @@
     "resource_color": "#e0b53a",
     "resource_start": 60,
     "resource_max": 100,
-    "resource_per_turn": 30,
+    "resource_per_turn": 25,
     "resource_on_hit": 0,
     "resource_on_damaged": 0,
     "resource_on_defend": 40,
