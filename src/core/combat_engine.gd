@@ -52,8 +52,8 @@ var victory: bool = false
 var reward_xp: int = 0
 var reward_gold: int = 0
 
-## Gear perks (docs/05 "Benzersiz Eşyalar"): the first damaging hit of a battle gets
-## first_strike once.
+## Gear perks (docs/05 "Benzersiz Eşyalar"): the first damaging hit of a battle that
+## lands (not a miss, one target only) gets first_strike once.
 var _first_strike_used: bool = false
 var _acting: Combatant = null
 var _events: Array = []
@@ -319,7 +319,9 @@ func _perform_skill(def: Dictionary, targets: Array[Combatant]) -> void:
 				mult = float(combo.get("low_hp_multiplier", mult))
 			mult *= 1.0 + COMBO_CHAIN_BONUS * combo_count
 			mult *= 1.0 + float(player.perks.get("combo_damage", 0))
-		if power > 0.0 and not _first_strike_used:
+		# first_strike boosts only the first damaging hit that lands, not every target.
+		var first_strike := power > 0.0 and not _first_strike_used
+		if first_strike:
 			mult *= 1.0 + float(player.perks.get("first_strike", 0))
 		if player.hp_ratio() < LOW_HP_THRESHOLD:
 			mult *= 1.0 + float(player.perks.get("low_hp_damage", 0))
@@ -331,6 +333,8 @@ func _perform_skill(def: Dictionary, targets: Array[Combatant]) -> void:
 				hit = false
 				_emit({"type": "miss", "source": player.uid, "target": t.uid})
 			else:
+				if first_strike:
+					_first_strike_used = true
 				_deal_damage(player, t, r["amount"], r["crit"], is_combo, false)
 		if not hit:
 			continue
@@ -349,8 +353,6 @@ func _perform_skill(def: Dictionary, targets: Array[Combatant]) -> void:
 		if power > 0.0 and rng.randf() < float(player.perks.get("bleed_on_hit", 0)):
 			_apply_status(t, {"id": "bleed", "turns": 3}, player)
 
-	if power > 0.0:
-		_first_strike_used = true
 	if power > 0.0 and any_hit:
 		_gain_resource(int(player.resource_rules.get("resource_on_hit", 0)))
 	if any_combo:
@@ -493,8 +495,9 @@ func _deal_damage(source: Combatant, target: Combatant, amount: int, crit: bool,
 		var steal := roundi(dealt * float(player.perks.get("lifesteal", 0)))
 		if steal > 0:
 			_heal(player, steal)
-	if not dot and target.is_player and source != null and not source.is_player and source.is_alive():
-		var thorns := roundi(amount * float(player.perks.get("thorns", 0)))
+	if not dot and target.is_player and dealt > 0 and source != null and not source.is_player and source.is_alive():
+		# Only what got through the shield is reflected.
+		var thorns := roundi(dealt * float(player.perks.get("thorns", 0)))
 		if thorns > 0:
 			# Reflected as a "dot" so it ignores shields and can't bounce back again.
 			_deal_damage(player, source, thorns, false, false, true)
