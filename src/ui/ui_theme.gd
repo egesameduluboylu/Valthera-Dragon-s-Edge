@@ -63,7 +63,7 @@ static func title_font() -> Font:
 static func build() -> Theme:
 	var t := Theme.new()
 	t.default_font = body_font()
-	t.default_font_size = 26
+	t.default_font_size = fs(26)
 
 	t.set_color("font_color", "Label", TEXT)
 	t.set_color("font_outline_color", "Label", INK)
@@ -290,6 +290,11 @@ static func _skin(file: String, key: String) -> StyleBoxTexture:
 	return s
 
 
+## A font size scaled by the player's text size setting (docs/08, Erişilebilirlik).
+static func fs(size: int) -> int:
+	return roundi(size * Settings.text_scale)
+
+
 ## Upper-cases text for Cinzel titles. Cinzel draws lowercase as small caps, which
 ## turns "i" into a dotless "I", so Turkish titles are upper-cased with the i -> İ rule.
 ## English keeps a plain I ("UNFINISHED", not "UNFİNİSHED").
@@ -301,7 +306,7 @@ static func caps(text: String) -> String:
 
 ## Outline + size overrides so stage text stays readable over the background.
 static func stage_label(l: Label, font_size: int, color: Color = TEXT) -> Label:
-	l.add_theme_font_size_override("font_size", font_size)
+	l.add_theme_font_size_override("font_size", UITheme.fs(font_size))
 	l.add_theme_color_override("font_color", color)
 	l.add_theme_color_override("font_outline_color", INK)
 	l.add_theme_constant_override("outline_size", maxi(4, font_size / 5))

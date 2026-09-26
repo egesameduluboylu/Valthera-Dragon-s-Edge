@@ -8,7 +8,7 @@ const ITEM_ICON := "res://assets/icons/items/%s.png"
 static func label(text: String, font_size: int = 26, color: Color = UITheme.TEXT) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", font_size)
+	l.add_theme_font_size_override("font_size", UITheme.fs(font_size))
 	l.add_theme_color_override("font_color", color)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
@@ -33,7 +33,7 @@ static func button(text: String, icon_path: String, on_press: Callable, font_siz
 	var b := Button.new()
 	b.text = text
 	b.custom_minimum_size.y = 80
-	b.add_theme_font_size_override("font_size", font_size)
+	b.add_theme_font_size_override("font_size", UITheme.fs(font_size))
 	if icon_path != "":
 		b.icon = load(icon_path)
 		b.add_theme_constant_override("icon_max_width", 42)

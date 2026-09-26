@@ -65,13 +65,15 @@ Hedef: Savaşçı, 2 fareye karşı, düz renkli kutularla bile eğlenceli mi?
 ## M6: Yayın
 - [x] Zindan 4 ve 5, hikâyenin sonu
 - [x] Ayarlar: ses, titreşim, savaş hızı, dil (Türkçe ve İngilizce)
-- [ ] Erişilebilirlik (yazı boyutu)
+- [x] Erişilebilirlik (yazı boyutu)
+- [x] Ejder yoldaş: hikâye sonundaki yumurtadan çıkan, büyüyen ve savaşta nefes üfleyen ejder (bkz. 15-ejder-yoldas.md)
+- [x] Duman testi: her ekranı gerçek dokunuşlarla baştan sona oynayan CI testi (`tests/smoke`)
 - [ ] Google Play kapalı test, geri bildirim
 - [ ] Gelir modeli (bkz. 11-gelir-modeli.md)
 - [ ] Google Play yayını, ardından iOS
 
 ## Sonrası (Sezon 2 Fikirleri)
-- Ejder yoldaş: hikâye sonundaki yumurtadan çıkan ve savaşta yardım eden ejder
+
 - 4. sınıf: Ejder Şövalyesi
 - Haftalık meydan okuma zindanları
 - Yetenek kademe geliştirmeleri

@@ -10,6 +10,8 @@ signal finished(engine: CombatEngine)
 const STAGE_HEIGHT := 700
 const EVENT_DELAY := 0.35
 const PLAYER_RECT := Rect2(20, 360, 270, 270)
+## The companion dragon (docs/15) hovers behind the player, above their left shoulder.
+const DRAGON_RECT := Rect2(6, 150, 190, 190)
 ## Enemy sprite rects on the stage for 1, 2 and 3 enemies.
 const ENEMY_SLOTS := {
 	1: [Rect2(400, 330, 240, 240)],
@@ -33,6 +35,7 @@ var _combo_label: Label
 var _log_label: Label
 var _enemy_views: Dictionary = {}   # uid -> view dictionary, see _build_enemy_view
 var _player_view: Dictionary = {}
+var _dragon_view: Dictionary = {}  # root, sprite, pips (Array of Panel)
 var _skill_grid: GridContainer
 var _skill_buttons: Dictionary = {} # skill_id -> Button
 var _defend_button: Button
@@ -88,6 +91,7 @@ func _start_battle() -> void:
 	_result_layer.visible = false
 	_combo_label.modulate.a = 0.0
 	_build_player_view()
+	_build_dragon_view()
 	_build_enemy_views()
 	_build_skill_buttons()
 	_play(engine.start())
@@ -173,6 +177,8 @@ func _next_hint() -> Array:
 				return ["tut_intent", view["intent"]]
 	if want.call("tut_skills"):
 		return ["tut_skills", _skill_grid]
+	if want.call("tut_dragon") and not _dragon_view.is_empty():
+		return ["tut_dragon", _dragon_view["root"]]
 	var class_hint := "tut_class_" + engine.player.def_id
 	if want.call(class_hint) and Tutorial.FLAGS.has(class_hint):
 		return [class_hint, _player_view["res_bar"]]
@@ -237,6 +243,9 @@ func _sfx(ev: Dictionary) -> void:
 			Audio.vibrate(50)
 		"flurry":
 			Audio.play("star")
+		"companion_breath":
+			Audio.play({"fire": "magic_fire", "frost": "magic_ice", "venom": "poison"}.get(ev["element"], "magic_fire"), 0.0)
+			Audio.vibrate(45)
 		"battle_end":
 			Audio.play("victory" if ev["victory"] else "defeat", 0.0)
 
@@ -356,6 +365,21 @@ func _apply_event(ev: Dictionary) -> float:
 				# Body font: Cinzel has no dotted capital İ for Turkish lines.
 				_show_banner(DataDB.t(ev["line_key"]), Color("ff7060"), 40, UITheme.body_font())
 			return 1.1
+		"companion_charge":
+			_paint_pips(ev["charge"])
+			if ev["charge"] > 0 and not _dragon_view.is_empty():
+				_pulse(_dragon_view["pips"][ev["charge"] - 1])
+				return 0.12
+			return 0.0
+		"companion_breath":
+			var color := Color(DataDB.data["companion"]["elements"][ev["element"]].get("color", "#ffcc66"))
+			_paint_pips(engine.companion_charge_needed())
+			_lunge(_dragon_view["sprite"], 1.0)
+			_screen_flash(Color(color, 0.4))
+			_show_banner(DataDB.tf("dragon.breath_banner", {"name": DataDB.dragon_name(GameState.profile.companion)}),
+					color.lightened(0.3), 46, UITheme.body_font())
+			_log(DataDB.t("dragon.breath_log"))
+			return 0.45
 		"battle_end":
 			_show_result(ev)
 			return 0.0
@@ -564,7 +588,7 @@ func _show_banner(text: String, color: Color, font_size: int, font: Font) -> voi
 	_combo_label.text = text
 	_combo_label.add_theme_font_override("font", font)
 	_combo_label.add_theme_color_override("font_color", color)
-	_combo_label.add_theme_font_size_override("font_size", font_size)
+	_combo_label.add_theme_font_size_override("font_size", UITheme.fs(font_size))
 	_combo_label.size = Vector2.ZERO
 	_combo_label.reset_size()
 	_combo_label.position.x = (_stage.size.x - _combo_label.size.x) * 0.5
@@ -642,7 +666,7 @@ func _build_ui() -> void:
 	top.add_child(spacer)
 	_restart_button = Button.new()
 	_restart_button.text = DataDB.t("ui.restart")
-	_restart_button.add_theme_font_size_override("font_size", 22)
+	_restart_button.add_theme_font_size_override("font_size", UITheme.fs(22))
 	_restart_button.pressed.connect(func() -> void:
 		if not busy:
 			_new_battle())
@@ -680,12 +704,12 @@ func _build_ui() -> void:
 	name_col.custom_minimum_size.x = 170
 	var name_label := _label(UITheme.caps(DataDB.t("class." + GameState.active_class)))
 	name_label.add_theme_font_override("font", UITheme.title_font())
-	name_label.add_theme_font_size_override("font_size", 28)
+	name_label.add_theme_font_size_override("font_size", UITheme.fs(28))
 	name_label.add_theme_color_override("font_color", UITheme.GOLD)
 	name_col.add_child(name_label)
 	_level_label = _label("")
 	_level_label.add_theme_color_override("font_color", UITheme.TEXT_MUTED)
-	_level_label.add_theme_font_size_override("font_size", 20)
+	_level_label.add_theme_font_size_override("font_size", UITheme.fs(20))
 	name_col.add_child(_level_label)
 	info.add_child(name_col)
 	var bars := VBoxContainer.new()
@@ -705,7 +729,7 @@ func _build_ui() -> void:
 
 	_log_label = _label("")
 	_log_label.add_theme_color_override("font_color", UITheme.TEXT_MUTED)
-	_log_label.add_theme_font_size_override("font_size", 20)
+	_log_label.add_theme_font_size_override("font_size", UITheme.fs(20))
 	_log_label.clip_text = true
 	bcol.add_child(_log_label)
 
@@ -724,14 +748,14 @@ func _build_ui() -> void:
 	_defend_button.custom_minimum_size.y = 84
 	_defend_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_defend_button.size_flags_stretch_ratio = 1.4
-	_defend_button.add_theme_font_size_override("font_size", 28)
+	_defend_button.add_theme_font_size_override("font_size", UITheme.fs(28))
 	_defend_button.pressed.connect(_on_defend_pressed)
 	actions.add_child(_defend_button)
 	_potion_button = Button.new()
 	_potion_button.icon = load("res://assets/icons/items/potion.png")
 	_potion_button.custom_minimum_size.y = 84
 	_potion_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_potion_button.add_theme_font_size_override("font_size", 26)
+	_potion_button.add_theme_font_size_override("font_size", UITheme.fs(26))
 	_potion_button.pressed.connect(_on_potion_pressed)
 	actions.add_child(_potion_button)
 
@@ -763,11 +787,11 @@ func _build_result_layer() -> void:
 	v.add_child(_result_title)
 	_result_body = _label("")
 	_result_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_result_body.add_theme_font_size_override("font_size", 30)
+	_result_body.add_theme_font_size_override("font_size", UITheme.fs(30))
 	v.add_child(_result_body)
 	_result_button = Button.new()
 	_result_button.custom_minimum_size.y = 84
-	_result_button.add_theme_font_size_override("font_size", 30)
+	_result_button.add_theme_font_size_override("font_size", UITheme.fs(30))
 	_result_button.pressed.connect(_on_result_pressed)
 	v.add_child(_result_button)
 	_result_layer.visible = false
@@ -787,6 +811,57 @@ func _build_player_view() -> void:
 	_stage.move_child(root, 1)
 	_player_view["root"] = root
 	_player_view["sprite"] = sprite
+
+
+func _build_dragon_view() -> void:
+	if _dragon_view.has("root"):
+		_dragon_view["root"].queue_free()
+	_dragon_view = {}
+	if engine.companion == null:
+		return
+	var defs: Dictionary = DataDB.data["companion"]
+	var root := Control.new()
+	root.position = DRAGON_RECT.position
+	root.size = DRAGON_RECT.size
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sprite := _sprite(Companion.sprite(engine.companion.def_id, engine.companion.level, defs), DRAGON_RECT.size)
+	root.add_child(sprite)
+	var pips := HBoxContainer.new()
+	pips.add_theme_constant_override("separation", 8)
+	pips.alignment = BoxContainer.ALIGNMENT_CENTER
+	pips.position = Vector2(0, DRAGON_RECT.size.y - 22)
+	pips.size = Vector2(DRAGON_RECT.size.x, 22)
+	# the dragon sits behind the hero, but its meter must stay readable
+	pips.z_index = 5
+	root.add_child(pips)
+	var list: Array = []
+	for i in engine.companion_charge_needed():
+		var pip := Panel.new()
+		pip.custom_minimum_size = Vector2(20, 20)
+		pips.add_child(pip)
+		list.append(pip)
+	_stage.add_child(root)
+	# behind the player, so the hero stays in front
+	_stage.move_child(root, 1)
+	_dragon_view = {"root": root, "sprite": sprite, "pips": list}
+	_paint_pips(engine.companion_charge)
+	_idle_bob(sprite, 0.45)
+
+
+func _paint_pips(charge: int) -> void:
+	if _dragon_view.is_empty():
+		return
+	var color := Color(DataDB.data["companion"]["elements"][engine.companion.def_id].get("color", "#ffcc66"))
+	for i in _dragon_view["pips"].size():
+		var st := StyleBoxFlat.new()
+		st.set_corner_radius_all(10)
+		st.set_border_width_all(3)
+		st.border_color = UITheme.GOLD if i < charge else UITheme.GOLD_DARK
+		st.bg_color = color if i < charge else Color("2a2226")
+		if i < charge:
+			st.shadow_color = Color(color, 0.6)
+			st.shadow_size = 6
+		_dragon_view["pips"][i].add_theme_stylebox_override("panel", st)
 
 
 func _build_enemy_views() -> void:
@@ -939,7 +1014,7 @@ func _build_skill_buttons() -> void:
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(0, 116)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.add_theme_font_size_override("font_size", 24)
+		b.add_theme_font_size_override("font_size", UITheme.fs(24))
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.icon = load(def.get("icon", "res://assets/icons/skills/slash.png"))
 		b.expand_icon = false

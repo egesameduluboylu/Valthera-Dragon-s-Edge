@@ -28,4 +28,5 @@ static func load_game_data(root: String = "res://data") -> Dictionary:
 		"items": load_json(root + "/items.json"),
 		"market": load_json(root + "/market.json"),
 		"story": load_json(root + "/story.json"),
+		"companion": load_json(root + "/companion.json"),
 	}

@@ -82,6 +82,7 @@ Kasaba başlığındaki dişli butonuyla açılır:
 - Müzik ve efekt ses seviyesi (kaydırıcı), titreşim (açık / kapalı).
 - Savaş hızı: 1x / 1.5x / 2x (savaş açıkken `Engine.time_scale`).
 - Dil: Türkçe / English. Eksik İngilizce metinler Türkçeye düşer.
+- Yazı boyutu: Normal / Büyük / Daha büyük (1x / 1.12x / 1.25x). Bütün yazı boyutları `UITheme.fs()` üzerinden geçer; değişince ekran yeniden kurulur.
 - Rehberi tekrar göster, oyunu sıfırla (onay ister).
 
 Ayarlar kayıttan ayrı bir dosyada (`user://settings.json`) durur; oyunu sıfırlamak onları silmez.

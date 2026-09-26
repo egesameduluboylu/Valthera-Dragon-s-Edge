@@ -51,6 +51,8 @@ var hard: bool = false
 ## For the dungeon stars (docs/05): potions drunk, and HP left when the boss fell.
 var potions_used: int = 0
 var end_hp_ratio: float = 0.0
+## The companion dragon fighting along (docs/15): {element, level} or {}.
+var companion: Dictionary = {}
 
 const HARD_LEVELS := 3
 const HARD_GOLD_MULT := 1.5
@@ -125,6 +127,8 @@ func can_escape() -> bool:
 func make_battle() -> CombatEngine:
 	var engine := CombatEngine.for_enemies(data, player, room.get("enemies", []), int(room.get("level", 1)), rng)
 	engine.potions = potions
+	if not companion.is_empty():
+		engine.set_companion(Companion.combatant(data["companion"], companion), data["companion"])
 	return engine
 
 
@@ -260,7 +264,7 @@ func to_dict() -> Dictionary:
 		"room_number": room_number, "choices": choices.duplicate(true), "history": history.duplicate(),
 		"equipment": equipment.duplicate(true), "loot": loot.duplicate(true),
 		"scales_earned": scales_earned, "gold_earned": gold_earned, "xp_earned": xp_earned,
-		"kills": kills, "hard": hard, "potions_used": potions_used,
+		"kills": kills, "hard": hard, "potions_used": potions_used, "companion": companion.duplicate(),
 		# Strings keep the 64-bit values exact through JSON.
 		"rng_seed": str(rng.seed), "rng_state": str(rng.state),
 	}
@@ -315,6 +319,9 @@ static func from_dict(p_data: Dictionary, d: Dictionary) -> DungeonRun:
 	run.kills = int(d.get("kills", 0))
 	run.hard = bool(d.get("hard", false))
 	run.potions_used = int(d.get("potions_used", 0))
+	var dragon: Variant = d.get("companion", {})
+	if dragon is Dictionary and not dragon.is_empty():
+		run.companion = Companion.battle_spec(Companion.clean(p_data["companion"], dragon.merged({"state": "hatched"})))
 	run.state = State.CHOOSING
 	return run
 

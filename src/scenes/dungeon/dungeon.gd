@@ -232,6 +232,12 @@ func _show_rest() -> void:
 
 func _show_summary() -> void:
 	var banked := GameState.apply_run(run)
+	var dragon: Dictionary = GameState.profile.companion
+	if banked.get("egg_warmed", false):
+		_toast(DataDB.tf("dragon.egg_warmed", {"n": dragon["warmth"], "max": DataDB.data["companion"]["hatch_runs"]}),
+				Color("ffb46a"))
+	if banked.get("dragon_levels", 0) > 0:
+		_toast(DataDB.tf("dragon.leveled", {"name": DataDB.dragon_name(dragon), "n": dragon["level"]}), UITheme.COMBO)
 	if banked.get("first_clear", false):
 		await _play_story(run.dungeon_id + "_outro")
 		if not banked.get("reward", {}).is_empty():
@@ -751,7 +757,7 @@ func _button(text: String, icon_path: String, on_press: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.custom_minimum_size.y = 84
-	b.add_theme_font_size_override("font_size", 28)
+	b.add_theme_font_size_override("font_size", UITheme.fs(28))
 	if icon_path != "":
 		b.icon = load(icon_path)
 		b.add_theme_constant_override("icon_max_width", 44)
@@ -788,7 +794,7 @@ func _bar(color: Color, height: int) -> Array:
 func _label(text: String, font_size: int, color: Color) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", font_size)
+	l.add_theme_font_size_override("font_size", UITheme.fs(font_size))
 	l.add_theme_color_override("font_color", color)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l

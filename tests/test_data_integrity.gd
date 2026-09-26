@@ -139,3 +139,16 @@ func test_every_played_sound_exists() -> void:
 		assert_true(ResourceLoader.exists("res://assets/audio/sfx/%s.wav" % n), n)
 	for track in ["town", "dungeon", "battle", "boss", "ending"]:
 		assert_true(ResourceLoader.exists("res://assets/audio/music/%s.wav" % track), track)
+
+
+func test_every_companion_sprite_exists() -> void:
+	var defs: Dictionary = game_data()["companion"]
+	for element in defs["elements"]:
+		for stage in defs["stages"]:
+			var path := Companion.SPRITE % [element, stage["id"]]
+			assert_true(ResourceLoader.exists(path), path)
+	for path in ["res://assets/sprites/companion/egg_nest.png", "res://assets/sprites/companion/egg_nest_cracked.png"]:
+		assert_true(ResourceLoader.exists(path), path)
+	for element in defs["elements"]:
+		var status: String = defs["elements"][element]["status"]["id"]
+		assert_true(game_data()["statuses"].has(status), "%s: status %s" % [element, status])
