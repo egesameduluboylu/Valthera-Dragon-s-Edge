@@ -10,16 +10,22 @@ Her zindan 5 odadan oluşur. Oda 5 her zaman patrondur; ilk 4 oda aşağıdaki t
 | Elit | %15 | 1 elit düşman (daha güçlü, Ejder Pulu düşürür). Oda 3 veya 4'te çıkabilir |
 | Hazine | %10 | Sandık: altın ve bir eşya; %20 ihtimalle Taklitçi (sandık canavarı) |
 | Olay | %12 | Metin tabanlı seçim (aşağıda) |
-| Dinlenme | %8 | Canın %30'unu yenile veya bir yeteneğin bekleme süresini sıfırla |
+| Dinlenme | %8 | Canın %30'unu yenile veya +1 iksir hazırla |
 
-Odalar arasında oyuncu bir sonraki odanın **tipini görür** ve iki kapıdan birini seçebilir (dallanma). Bu, risk ve ödül seçimini oyuncuya bırakır.
+Odalar arasında oyuncu bir sonraki odanın **tipini görür** ve iki kapıdan birini seçebilir (dallanma). Bu, risk ve ödül seçimini oyuncuya bırakır. İki kapı farklı tipte olur; en az 2 savaş garantisi gerektiğinde iki kapı da savaş olabilir.
+
+- Koşuya 3 iksirle başlanır. İksir canın %35'ini yeniler ve turu harcar.
+- Kazanılan her savaştan sonra canın %20'si yenilenir ("nefeslenme"). Can dışında her şey (öfke, durumlar, bekleme süreleri) savaş sonunda sıfırlanır.
+- Seviye atlama koşu içinde hemen olur; maks. can artışı mevcut cana da eklenir.
+- Veriler: `data/dungeons.json` (oda ağırlıkları, düşman grupları, hazine ve dinlenme değerleri) ve `data/events.json`.
 
 ## Olay Odası Örnekleri
 
-- **Şüpheli Çeşme:** İç → %60 canın tamamı yenilenir, %40 Zehir. / Geç.
-- **Kayıp Tüccar:** 50 altına rastgele bir iksir satar.
-- **Konuşan Kurukafa:** Bir bilmece sorar; doğru cevap bir Nadir eşya verir. (Esprili diyalog.)
+- **Şüpheli Çeşme:** İç → %60 canın tamamı yenilenir, %40 canın %15'i gider. / Geç.
+- **Kayıp Tüccar:** 50 altına bir iksir satar (bu koşuda bulunan altınla).
+- **Konuşan Kurukafa:** Bir bilmece sorar ("Ne kadar çok olursa o kadar az görürsün?" Cevap: Karanlık). Doğru cevap 60 altın verir (ekipman gelince Nadir eşya olacak), yanlış cevap canın %10'unu götürür.
 - **Lanetli Sunak:** 20 CAN ver → bu koşu boyunca SAL +%15.
+- Olaylar kimseyi öldürmez: can en az 1'de kalır.
 
 ## Zindan Listesi (İlk Sürüm)
 
@@ -66,16 +72,19 @@ Değerler seviye 1 içindir. Seviye başına: CAN +%15, SAL +%10, SAV +%10.
 
 ### Taklitçi (sürpriz)
 - CAN 60, SAL 14, SAV 15, HIZ 10
-- Davranış: İlk tur her zaman Yut (büyük saldırı). Yenilirse 2 kat ganimet verir.
+- Davranış: İlk tur her zaman Yut (büyük saldırı). Yenilirse 2 kat ganimet verir (40-60 altın).
 
 ## Patron: Kemik Kral
 
-- CAN 300, SAL 16, SAV 22, HIZ 8, Seviye 3
+- Seviye 1 değerleri: CAN 160, SAL 11, SAV 16, HIZ 8. Patron odasında seviye 3 olur: CAN 208, SAL ~13, SAV ~19.
+- Denge hedefi: canının %70'i ve 2 iksirle gelen seviye 2 bir Savaşçı, kombo yaparak çoğunlukla (~%70) kazanır. `tests/test_boss_and_items.gd` ve `tests/test_dungeon_run.gd` bunu simülasyonla denetler.
 - Zayıf: Ateş, Fiziksel ezici. Dirençli: Zehir (bağışık), Gölge
 - **Faz 1 (CAN %100-50):**
   - Desen: Asa Vuruşu, Kemik Çağır (1 İskelet Muhafız çağırır, sahada en fazla 2), Asa Vuruşu, Taç Işığı (kendine 30 Kalkan).
+  - Çağrılan iskeletler XP ve altın vermez; Kral ölünce onlar da toz olur.
 - **Faz 2 (CAN %50 altı):** "Yeter! Artık ciddiyim... sanırım."
-  - SAL +%30. Yeni hamle: **Kemik Fırtınası** (1 tur önceden ünlemle uyarır, oyuncuya 3 vuruş).
+  - SAL +%30 (Öfkeli durumu). Yeni hamle: **Kemik Fırtınası** (1 tur önceden ünlemle uyarır, oyuncuya 0.6 güçte 3 vuruş).
+  - Faza geçtiği turda zaten gösterdiği hamleyi yapar; yeni desen bir sonraki turdan başlar, böylece Fırtına her zaman önceden görünür.
   - Çağırdığı iskeletler öldüğünde Kral'a 20 CAN verir (öncelik sorusu yaratır).
 - Ödül: 100 XP, 150 altın, garanti Nadir eşya, %5 Kemik Kral'ın Tacı.
 

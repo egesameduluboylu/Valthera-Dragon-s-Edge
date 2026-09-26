@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Valthera: Dragon's Edge"
-run/main_scene="res://src/scenes/battle/battle.tscn"
+run/main_scene="res://src/scenes/dungeon/dungeon.tscn"
 config/features=PackedStringArray("4.5", "GL Compatibility")
 
 [autoload]
