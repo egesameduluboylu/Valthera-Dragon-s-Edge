@@ -99,3 +99,20 @@ func test_every_tutorial_hint_has_text() -> void:
 		assert_true(text.has(key), key)
 	assert_true(ResourceLoader.exists("res://assets/ui/skin/gear_normal.png"), "gear button")
 	assert_true(ResourceLoader.exists("res://assets/ui/skin/knob.png"), "slider knob")
+
+
+## Every language file has the Turkish keys and the same {placeholders} and % tokens.
+func test_translations_match_turkish() -> void:
+	var tr_text := DataLoader.load_json("res://data/text/tr.json")
+	var re := RegEx.create_from_string("\\{[a-z_0-9]+\\}|%[ds%]")
+	for lang in ["en"]:
+		var other := DataLoader.load_json("res://data/text/%s.json" % lang)
+		for key in tr_text:
+			if not other.has(key):
+				assert_true(false, "%s missing %s" % [lang, key])
+				continue
+			var a: Array = re.search_all(tr_text[key]).map(func(m: RegExMatch) -> String: return m.get_string())
+			var b: Array = re.search_all(other[key]).map(func(m: RegExMatch) -> String: return m.get_string())
+			a.sort()
+			b.sort()
+			assert_eq(b, a, "%s %s placeholders" % [lang, key])
