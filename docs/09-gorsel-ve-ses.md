@@ -3,7 +3,7 @@
 ## Sanat Yönü
 
 - **2D, yandan görünüm, çizgi film (flash cartoon) stili:** Kalın mürekkep çizgileri, düz renkler ve hücre gölgelendirme. DragonFable'ın Flash dönemi görünümüne en yakın stil bu.
-- Oyuncu sağa, düşmanlar sola bakar. Karakterler 256x256 çiziliyor, ekranda 200-270 px boyutunda gösteriliyor.
+- Oyuncu sağa, düşmanlar sola bakar. Kahramanlar, düşmanlar ve kasaba NPC'leri 512x512 (patronlar 768x768) çiziliyor, ekranda 200-270 px boyutunda gösteriliyor. Büyük çizim telefonun yüksek çözünürlüklü ekranında keskin kalıyor.
 - Sıcak ve doygun renk paleti. Her zindanın kendi baskın rengi var (Mahzen: gri taş ve meşale turuncusu, Mağara: mor, Geçit: buz mavisi...).
 - Arayüz: koyu ahşap paneller, altın çerçeveler. Butonlar kabarık görünüyor; basınca içe göçüyor.
 - Yazı tipleri (ikisi de OFL lisanslı, Türkçe karakterleri destekliyor):
@@ -23,11 +23,16 @@ python3 tools/art/generate.py sprites  # sadece karakterler
 | Dosya | İçerik |
 |-------|--------|
 | `tools/art/painter.py` | Çizim altyapısı: süper örnekleme, otomatik gölge ve ışık, mürekkep çizgisi |
-| `tools/art/characters.py` | Savaşçı, Mahzen Faresi, İskelet Muhafız, Mantar Büyücü |
+| `tools/art/characters.py` | İlk 256 px karakterler ve ortak çizim yardımcıları |
+| `tools/art/heroes.py` | Savaşçı, Büyücü, Haydut (512 px) |
+| `tools/art/enemies_a.py` | Zindan 1-3 düşmanları ve patronları (512 / 768 px) |
+| `tools/art/enemies_b.py` | Zindan 4-5 düşmanları, Kor Rahibe ve Kül Kanat (512 / 768 px) |
+| `tools/art/npcs.py` | Kasaba NPC portreleri (512 px) |
+| `tools/art/brand.py` | Uygulama simgesi ve açılış ekranı (Kül Kanat'tan kırpılır) |
 | `tools/art/backgrounds.py` | Çürük Mahzen arka planı (tuğla duvar, kemer, meşaleler, fıçılar) |
 | `tools/art/icons.py` | Yetenek, niyet ve durum ikonları |
 
-Yeni bir düşman eklemek için `characters.py` içine bir fonksiyon yazıp `SPRITES` sözlüğüne eklemek yeterli. Oyuna sonradan elle çizilmiş veya satın alınmış assetler eklenirse aynı dosya yollarına konabilir. Bu durumda `assets/CREDITS.md` dosyasına lisanslarıyla birlikte yazılmalı.
+Yeni bir düşman eklemek için `enemies_b.py` içine bir fonksiyon yazıp `SPRITES` sözlüğüne eklemek yeterli; `generate.py` yeni modüllerin çizimlerini `characters.py`'deki eskilerin yerine koyar. Oyuna sonradan elle çizilmiş veya satın alınmış assetler eklenirse aynı dosya yollarına konabilir. Bu durumda `assets/CREDITS.md` dosyasına lisanslarıyla birlikte yazılmalı.
 
 ## Animasyon Listesi (Karakter Başına)
 

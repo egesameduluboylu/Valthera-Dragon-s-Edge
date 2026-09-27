@@ -18,8 +18,12 @@ ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 
 import backgrounds  # noqa: E402
 import characters  # noqa: E402
+import enemies_a  # noqa: E402
+import enemies_b  # noqa: E402
 import gear  # noqa: E402
+import heroes  # noqa: E402
 import icons  # noqa: E402
+import npcs  # noqa: E402
 import scenes  # noqa: E402
 import town  # noqa: E402
 import ui_skin  # noqa: E402
@@ -32,9 +36,19 @@ def save(img, rel):
     print("wrote", os.path.relpath(path, ROOT))
 
 
+def sprites():
+    """Every character sprite: the 512 px redraws (heroes, enemies_a/b) replace the
+    256 px originals in characters.py, which still draws anything not redrawn."""
+    out = dict(characters.SPRITES)
+    out.update({f"player/{k}": fn for k, fn in heroes.HEROES.items()})
+    out.update(enemies_a.SPRITES)
+    out.update(enemies_b.SPRITES)
+    return out
+
+
 def main(groups):
     if "sprites" in groups:
-        for name, fn in characters.SPRITES.items():
+        for name, fn in sprites().items():
             save(fn(), f"sprites/{name}.png")
     if "backgrounds" in groups:
         save(backgrounds.rotten_cellar(), "backgrounds/rotten_cellar.png")
@@ -63,7 +77,10 @@ def main(groups):
             save(scenes.event_art(k), f"events/{k}.png")
     if "town" in groups:
         for name, fn in town.TOWN.items():
-            save(fn(), f"town/{name}.png")
+            if not name.startswith("npc_"):
+                save(fn(), f"town/{name}.png")
+        for name, fn in npcs.NPCS.items():
+            save(fn(), f"town/npc_{name}.png")
     if "skin" in groups:
         ui_skin.write_all(save)
 
