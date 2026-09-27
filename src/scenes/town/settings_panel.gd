@@ -9,7 +9,7 @@ signal reload
 
 ## Language names are shown in their own language.
 const LANGUAGE_NAMES := {"tr": "Türkçe", "en": "English"}
-const VERSION := "0.6"
+const VERSION := "0.7"
 
 
 func _ready() -> void:

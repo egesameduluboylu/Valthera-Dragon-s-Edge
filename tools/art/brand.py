@@ -8,7 +8,7 @@ icon.png (512) is the project icon; icon_192.png and the adaptive layers
 """
 import os
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
@@ -40,8 +40,21 @@ def radial(size, inner, outer, center=(0.5, 0.45)):
 def dragon(px):
     """Ashwing's head and wings, cropped from the boss sprite."""
     sp = Image.open(A("sprites", "enemies", "ashwing.png")).convert("RGBA")
-    crop = sp.crop((10, 20, 340, 350))
-    return crop.resize((px, px), Image.LANCZOS)
+    crop = sp.crop((40, 40, 560, 560)).resize((px, px), Image.LANCZOS)
+    # the body runs on past the right and bottom edges of the crop: fade it out there
+    fade = Image.new("L", (px, px), 255)
+    band = px // 6
+    d = ImageDraw.Draw(fade)
+    for i in range(band):
+        v = round(255 * i / band)
+        d.line([(px - 1 - i, 0), (px - 1 - i, px)], fill=v)
+    edge = Image.new("L", (px, px), 255)
+    d = ImageDraw.Draw(edge)
+    for i in range(band):
+        d.line([(0, px - 1 - i), (px, px - 1 - i)], fill=round(255 * i / band))
+    mask = ImageChops.multiply(ImageChops.multiply(fade, edge), crop.getchannel("A"))
+    crop.putalpha(mask)
+    return crop
 
 
 def embers(img, n, seed, area):
