@@ -798,7 +798,7 @@ func _build_ui() -> void:
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top.z_index = 30
 	var turn_badge := PanelContainer.new()
-	turn_badge.add_theme_stylebox_override("panel", UITheme.v2_box("turn_badge", [24, 16, 24, 16], [18, 4, 18, 6], UITheme.badge()))
+	turn_badge.add_theme_stylebox_override("panel", UITheme.v2_box("turn_badge", [26, 6, 26, 8], UITheme.badge(), 0.5))
 	_turn_label = UITheme.stage_label(_label(""), 24, UITheme.GOLD)
 	_turn_label.add_theme_font_override("font", UITheme.title_font())
 	turn_badge.add_child(_turn_label)
@@ -852,7 +852,7 @@ func _build_hud() -> void:
 	var bar := Panel.new()
 	var fallback := UITheme.slate(0, 0, Color(0.07, 0.065, 0.08, 0.97))
 	fallback.border_width_top = 3
-	bar.add_theme_stylebox_override("panel", UITheme.v2_box("hud_bar", [120, 60, 120, 40], [0, 0, 0, 0], fallback))
+	bar.add_theme_stylebox_override("panel", UITheme.v2_box("hud_bar", [0, 0, 0, 0], fallback))
 	bar.position = Vector2(0, HUD_TOP)
 	bar.size = Vector2(w, _stage_size.y - HUD_TOP)
 	bar.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -865,8 +865,8 @@ func _build_hud() -> void:
 	hud.add_child(medallion["root"])
 	_level_label = medallion["level"]
 	var info := VBoxContainer.new()
-	info.position = Vector2(172, HUD_TOP + 10)
-	info.size = Vector2(clampf(w * 0.5 - 190.0 - 186.0, 250.0, 340.0), 140)
+	info.position = Vector2(172, HUD_TOP + 20)
+	info.size = Vector2(clampf(w * 0.2, 240.0, 320.0), 140)
 	info.add_theme_constant_override("separation", 5)
 	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(info)
@@ -892,10 +892,11 @@ func _build_hud() -> void:
 			"statuses": player_statuses}
 
 	# ---- skills: the first skill is the big attack ribbon, the rest are numbered slots
+	# (as in the reference: the red attack banner, then the numbered squares, all in the bar)
 	_skill_grid = Control.new()
-	var mid := w * 0.5 + (w - 1280.0) * 0.02
-	_skill_grid.position = Vector2(mid - 190, HUD_TOP - 46)
-	_skill_grid.size = Vector2(380, _stage_size.y - HUD_TOP + 40)
+	var grid_x := info.position.x + info.size.x + 14
+	_skill_grid.position = Vector2(grid_x, HUD_TOP + 24)
+	_skill_grid.size = Vector2(w - 190 - grid_x, _stage_size.y - HUD_TOP - 14)
 	_skill_grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(_skill_grid)
 
@@ -905,10 +906,10 @@ func _build_hud() -> void:
 	_plate["root"].position = Vector2(right - 430, HUD_TOP - 50)
 	hud.add_child(_plate["root"])
 	var actions := HBoxContainer.new()
-	actions.add_theme_constant_override("separation", 22)
+	actions.add_theme_constant_override("separation", 10)
 	actions.alignment = BoxContainer.ALIGNMENT_END
-	actions.position = Vector2(right - 300, HUD_TOP + 34)
-	actions.size = Vector2(300, 120)
+	actions.position = Vector2(right - 170, HUD_TOP + 22)
+	actions.size = Vector2(170, 120)
 	hud.add_child(actions)
 	_defend_button = _round_button("icon_defend", "res://assets/icons/intents/shield.png")
 	_defend_button.pressed.connect(_on_defend_pressed)
@@ -1004,7 +1005,7 @@ func _nameplate() -> Dictionary:
 	root.size = Vector2(430, 96)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UITheme.v2_box("nameplate", [40, 20, 40, 20], [22, 6, 22, 8], UITheme.slate(10, 2)))
+	panel.add_theme_stylebox_override("panel", UITheme.v2_box("nameplate", [24, 8, 22, 10], UITheme.slate(10, 2), 0.5))
 	panel.position = Vector2(0, 14)
 	panel.size = Vector2(350, 66)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1369,10 +1370,13 @@ func _build_skill_buttons() -> void:
 	_player_view["hp_bar"].max_value = engine.player.max_hp()
 	_player_view["res_bar"].max_value = engine.player.resource_max
 	var skills: Array = engine.player.skills
-	var slot := 88.0
-	var gap := 14.0
 	var rest := maxi(0, skills.size() - 1)
-	var row_w := rest * slot + maxi(0, rest - 1) * gap
+	var ribbon_w := 270.0
+	var gap := 10.0
+	# the squares share what the banner leaves, up to 84 px each
+	var slot := clampf((_skill_grid.size.x - ribbon_w - 18 - maxi(0, rest - 1) * gap) / maxf(1, rest), 60.0, 84.0)
+	var row_w := ribbon_w + 18 + rest * slot + maxi(0, rest - 1) * gap
+	var x0 := maxf(0.0, (_skill_grid.size.x - row_w) * 0.5)
 	for i in skills.size():
 		var id: String = skills[i]
 		var def := DataDB.skill(id)
@@ -1400,9 +1404,12 @@ func _build_skill_buttons() -> void:
 		_idle_tweens.append(gtw)
 		if i == 0:
 			_ribbon(b, def)
+			b.size = Vector2(ribbon_w, 84)
+			b.custom_minimum_size = b.size
+			b.position = Vector2(x0, (slot - 84) * 0.5 + 4)
 		else:
 			_slot(b, def, i)
-			b.position = Vector2((_skill_grid.size.x - row_w) * 0.5 + (i - 1) * (slot + gap), 70)
+			b.position = Vector2(x0 + ribbon_w + 18 + (i - 1) * (slot + gap), 4)
 			b.size = Vector2(slot, slot)
 		b.add_child(glow)
 		_skill_grid.add_child(b)
@@ -1410,15 +1417,13 @@ func _build_skill_buttons() -> void:
 
 
 ## The big crimson "attack" banner for the class's first skill.
-func _ribbon(b: Button, def: Dictionary) -> void:
-	b.custom_minimum_size = Vector2(340, 58)
-	b.size = Vector2(340, 58)
-	b.position = Vector2((_skill_grid.size.x - 340) * 0.5, 0)
-	b.icon = load(def.get("icon", "res://assets/icons/skills/slash.png"))
-	b.expand_icon = false
-	b.add_theme_constant_override("icon_max_width", 42)
+func _ribbon(b: Button, _def: Dictionary) -> void:
+	# the reference's banner carries only its word, the skill icon would crowd it
+	b.expand_icon = true
+	b.add_theme_constant_override("icon_max_width", 30)
 	b.add_theme_font_override("font", UITheme.title_font())
-	b.add_theme_font_size_override("font_size", UITheme.fs(24))
+	b.add_theme_font_size_override("font_size", UITheme.fs(20))
+	b.clip_text = true
 	b.add_theme_color_override("font_color", Color("fff1d6"))
 	b.add_theme_color_override("font_outline_color", Color("3a0c08"))
 	b.add_theme_constant_override("outline_size", 6)
@@ -1434,13 +1439,12 @@ func _ribbon(b: Button, def: Dictionary) -> void:
 	var disabled_fb: StyleBoxFlat = fallback.duplicate()
 	disabled_fb.bg_color = Color("4a2826")
 	disabled_fb.border_color = UITheme.GOLD_DARK
-	var m := [110, 30, 110, 30]
-	var c := [70, 6, 70, 8]
-	b.add_theme_stylebox_override("normal", UITheme.v2_box("ribbon_button", m, c, fallback))
-	b.add_theme_stylebox_override("hover", UITheme.v2_box("ribbon_button", m, c, fallback))
-	b.add_theme_stylebox_override("pressed", UITheme.v2_box("ribbon_button_pressed", m, c, pressed_fb))
-	b.add_theme_stylebox_override("hover_pressed", UITheme.v2_box("ribbon_button_pressed", m, c, pressed_fb))
-	b.add_theme_stylebox_override("disabled", UITheme.v2_box("ribbon_button_disabled", m, c, disabled_fb))
+	var c := [28, 6, 28, 8]
+	b.add_theme_stylebox_override("normal", UITheme.v2_box("ribbon_button", c, fallback, 0.5))
+	b.add_theme_stylebox_override("hover", UITheme.v2_box("ribbon_button", c, fallback, 0.5))
+	b.add_theme_stylebox_override("pressed", UITheme.v2_box("ribbon_button_pressed", c, pressed_fb, 0.5))
+	b.add_theme_stylebox_override("hover_pressed", UITheme.v2_box("ribbon_button_pressed", c, pressed_fb, 0.5))
+	b.add_theme_stylebox_override("disabled", UITheme.v2_box("ribbon_button_disabled", c, disabled_fb, 0.5))
 	b.set_meta("ribbon", true)
 
 
@@ -1555,27 +1559,19 @@ func _labeled_bar(color: Color, height: int, kind: String = "") -> Array:
 	var fill := UITheme.skin_bar_fill_tinted(color)
 	var fill_tex := UITheme.v2("bar_fill_" + kind) if kind != "" else null
 	if fill_tex != null:
-		var f := StyleBoxTexture.new()
-		f.texture = fill_tex
-		for side in 4:
-			f.set_texture_margin(side as Side, 8.0 if side % 2 == 0 else 0.0)
-		fill = f
+		fill = UITheme.v2_box("bar_fill_" + kind, [0, 0, 0, 0], fill, 0.5)
 	bar.add_theme_stylebox_override("fill", fill)
 	var back_tex := UITheme.v2("bar_back")
 	if back_tex != null:
-		var b := StyleBoxTexture.new()
-		b.texture = back_tex
-		for side in 4:
-			b.set_texture_margin(side as Side, 8.0 if side % 2 == 0 else 0.0)
-		bar.add_theme_stylebox_override("background", b)
+		bar.add_theme_stylebox_override("background", UITheme.v2_box("bar_back", [0, 0, 0, 0], null, 0.5))
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.add_child(bar)
 	var frame_tex := UITheme.v2("bar_frame")
 	if frame_tex != null:
 		var frame := NinePatchRect.new()
-		frame.texture = frame_tex
-		frame.patch_margin_left = 12
-		frame.patch_margin_right = 12
+		frame.texture = UITheme.v2_scaled("bar_frame", 0.5)
+		frame.patch_margin_left = 10
+		frame.patch_margin_right = 10
 		frame.patch_margin_top = 8
 		frame.patch_margin_bottom = 8
 		frame.set_anchors_preset(Control.PRESET_FULL_RECT)

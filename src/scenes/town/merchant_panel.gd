@@ -6,41 +6,49 @@ extends Control
 signal closed
 
 var _content: VBoxContainer
-var _list: VBoxContainer
+var _side: VBoxContainer       # left column: Madam Pırıl, the potion stall and the restock note
+var _list: VBoxContainer       # right column: this run's items, scrolling
 var _npc_line: String = ""
 
 
+## Landscape: Madam Pırıl and the potions on the left, the three items for sale on the right.
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var parts := UIKit.sheet(DataDB.t("merchant.title"), func() -> void: closed.emit())
 	add_child(parts[0])
 	_content = parts[1]
 	_npc_line = DataDB.t("merchant.line")
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_content.add_child(scroll)
-	_list = VBoxContainer.new()
-	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_list.add_theme_constant_override("separation", 12)
-	scroll.add_child(_list)
+	var cols := UIKit.split(_content, 0.38)
+	_side = cols[0]
+	_list = UIKit.scroll_list(cols[1], 12)
 	refresh()
 
 
 func refresh() -> void:
+	for c in _side.get_children():
+		c.queue_free()
 	for c in _list.get_children():
 		c.queue_free()
 	var p := GameState.profile
-	_list.add_child(UIKit.npc_row("res://assets/town/npc_merchant.png", DataDB.t("merchant.npc"), _npc_line))
+	_side.add_child(UIKit.npc_row("res://assets/town/npc_merchant.png", DataDB.t("merchant.npc"), _npc_line))
 
-	# potions
-	var pot := _row()
-	var ph: HBoxContainer = pot.get_child(0)
-	ph.add_child(UIKit.icon("res://assets/icons/items/potion.png", 96))
+	# potions: a tall card under the NPC, its button along the bottom
+	var pot := _card()
+	_side.add_child(pot)
 	var pv := VBoxContainer.new()
-	pv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ph.add_child(pv)
-	pv.add_child(UIKit.label("%s  (%d/%d)" % [DataDB.t("merchant.potion"), p.potions, Profile.MAX_POTIONS], 26, UITheme.TEXT))
+	pv.add_theme_constant_override("separation", 10)
+	pot.add_child(pv)
+	var ph := HBoxContainer.new()
+	ph.add_theme_constant_override("separation", 12)
+	pv.add_child(ph)
+	ph.add_child(UIKit.icon("res://assets/icons/items/potion.png", 88))
+	var pt := VBoxContainer.new()
+	pt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pt.alignment = BoxContainer.ALIGNMENT_CENTER
+	ph.add_child(pt)
+	pt.add_child(UIKit.label(DataDB.t("merchant.potion"), 26, UITheme.TEXT))
+	pt.add_child(UIKit.counter("res://assets/icons/items/potion.png", "%d/%d" % [p.potions, Profile.MAX_POTIONS],
+			UITheme.TEXT if p.potions < Profile.MAX_POTIONS else UITheme.GOLD, 30))
 	pv.add_child(UIKit.wrapped(DataDB.tf("merchant.potion_desc", {"max": Profile.MAX_POTIONS}), 20, UITheme.TEXT_MUTED))
 	var buy_pot := _price_button(Profile.POTION_PRICE, func() -> void:
 		if p.buy_potion():
@@ -51,14 +59,26 @@ func refresh() -> void:
 	if p.potions >= Profile.MAX_POTIONS:
 		buy_pot.text = DataDB.t("merchant.too_many")
 		buy_pot.icon = null
-	ph.add_child(buy_pot)
+	buy_pot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pv.add_child(buy_pot)
+	var gap := Control.new()
+	gap.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_side.add_child(gap)
+	var note := UIKit.wrapped(DataDB.t("merchant.restock"), 20, UITheme.TEXT_MUTED)
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_side.add_child(note)
 
 	# items
 	for i in p.shop.size():
 		var item: Dictionary = p.shop[i]
-		var r := _row()
-		var h: HBoxContainer = r.get_child(0)
-		h.add_child(ItemUI.tile(item, 104))
+		var r := _card()
+		_list.add_child(r)
+		var h := HBoxContainer.new()
+		h.add_theme_constant_override("separation", 14)
+		r.add_child(h)
+		var t := ItemUI.tile(item, 100)
+		t.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		h.add_child(t)
 		var d := ItemUI.details(item, p.equipped(p.slot_of(item)) if p.can_equip(item) else null)
 		d.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		h.add_child(d)
@@ -73,10 +93,9 @@ func refresh() -> void:
 	if p.shop.is_empty():
 		var sold := UIKit.label(DataDB.t("merchant.sold_out"), 26, UITheme.TEXT_MUTED)
 		sold.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sold.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		sold.custom_minimum_size.y = 200
 		_list.add_child(sold)
-	var note := UIKit.wrapped(DataDB.t("merchant.restock"), 20, UITheme.TEXT_MUTED)
-	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_list.add_child(note)
 
 
 func _buy(index: int) -> void:
@@ -90,15 +109,10 @@ func _buy(index: int) -> void:
 	refresh()
 
 
-## A wooden row card holding an HBoxContainer.
-func _row() -> PanelContainer:
+## A dark card for one thing on sale.
+func _card() -> PanelContainer:
 	var card := PanelContainer.new()
-	var st := UITheme.skin_panel("dark")
-	card.add_theme_stylebox_override("panel", st)
-	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 12)
-	card.add_child(h)
-	_list.add_child(card)
+	card.add_theme_stylebox_override("panel", UITheme.skin_panel("dark"))
 	return card
 
 

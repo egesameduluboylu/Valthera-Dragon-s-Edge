@@ -23,29 +23,28 @@ func _ready() -> void:
 	var parts := UIKit.sheet(DataDB.t("class_master.title"), func() -> void: closed.emit())
 	add_child(parts[0])
 	_content = parts[1]
+	# landscape: the master and the three classes on the left, the battle loadout on the right
+	var cols := UIKit.split(_content, 0.48)
+	var left: VBoxContainer = cols[0]
+	var right: VBoxContainer = cols[1]
 	_npc_holder = VBoxContainer.new()
-	_content.add_child(_npc_holder)
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_content.add_child(scroll)
-	var v := VBoxContainer.new()
-	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	v.add_theme_constant_override("separation", 12)
-	scroll.add_child(v)
-	_classes = VBoxContainer.new()
-	_classes.add_theme_constant_override("separation", 10)
-	v.add_child(_classes)
-	v.add_child(UITheme.divider())
-	v.add_child(UIKit.title(DataDB.t("class_master.loadout"), 28))
-	v.add_child(UIKit.wrapped(DataDB.t("class_master.loadout_hint"), 20, UITheme.TEXT_MUTED))
+	left.add_child(_npc_holder)
+	_classes = UIKit.scroll_list(left, 8)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 12)
+	right.add_child(head)
+	var loadout_title := UIKit.title(DataDB.t("class_master.loadout"), 28)
+	loadout_title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(loadout_title)
+	var hint := UIKit.wrapped(DataDB.t("class_master.loadout_hint"), 19, UITheme.TEXT_MUTED)
+	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(hint)
 	_slots = HBoxContainer.new()
 	_slots.add_theme_constant_override("separation", 12)
 	_slots.alignment = BoxContainer.ALIGNMENT_CENTER
-	v.add_child(_slots)
-	_skills = VBoxContainer.new()
-	_skills.add_theme_constant_override("separation", 8)
-	v.add_child(_skills)
+	right.add_child(_slots)
+	_skills = UIKit.scroll_list(right, 8)
 	_line = DataDB.t("class_master.line")
 	refresh()
 
@@ -81,7 +80,7 @@ func _class_card(id: String) -> PanelContainer:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 12)
 	card.add_child(h)
-	var portrait := UIKit.icon(def.get("sprite", ""), 96)
+	var portrait := UIKit.icon(def.get("sprite", ""), 76)
 	var block := p.class_unlock_block(id)
 	if block == "locked":
 		portrait.modulate = Color(0.35, 0.32, 0.35)
@@ -93,11 +92,18 @@ func _class_card(id: String) -> PanelContainer:
 	var title := DataDB.t("class." + id)
 	if p.is_unlocked(id):
 		title += "  ·  " + DataDB.t("ui.level") % int(p.classes[id]["level"])
-	v.add_child(UIKit.label(title, 26, UITheme.GOLD if id == p.active_class else UITheme.TEXT))
-	v.add_child(UIKit.wrapped(DataDB.t("class_master.motto." + id), 19, UITheme.TEXT_MUTED))
+	# name and level with the class resource on the same line, the motto under them
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 10)
+	v.add_child(top)
+	var name_ := UIKit.label(title, 24, UITheme.GOLD if id == p.active_class else UITheme.TEXT)
+	name_.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(name_)
 	var res := UIKit.label(DataDB.t("resource." + String(def.get("resource", ""))), 19,
 			Color(def.get("resource_color", "#c8412f")))
-	v.add_child(res)
+	res.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	top.add_child(res)
+	v.add_child(UIKit.wrapped(DataDB.t("class_master.motto." + id), 18, UITheme.TEXT_MUTED))
 	var action: Button
 	if id == p.active_class:
 		action = UIKit.button(DataDB.t("class_master.active"), "", func() -> void: pass, 22)
@@ -109,7 +115,7 @@ func _class_card(id: String) -> PanelContainer:
 	else:
 		action = UIKit.button(DataDB.t("class_master.locked"), "", func() -> void: pass, 18)
 		action.disabled = true
-	action.custom_minimum_size = Vector2(170, 64)
+	action.custom_minimum_size = Vector2(132, 64)
 	action.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(action)
 	return card
@@ -136,7 +142,7 @@ func _on_switch(id: String) -> void:
 
 func _slot_button(i: int, skill_id: String) -> Button:
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(120, 120)
+	b.custom_minimum_size = Vector2(104, 104)
 	b.icon = load(DataDB.skill(skill_id).get("icon", ""))
 	b.expand_icon = true
 	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -185,7 +191,7 @@ func _skill_row(id: String, loadout: Array) -> PanelContainer:
 		b.disabled = true
 	else:
 		b = UIKit.button(DataDB.t("class_master.take"), "", _on_take.bind(id), 20)
-	b.custom_minimum_size = Vector2(130, 60)
+	b.custom_minimum_size = Vector2(130, 64)
 	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(b)
 	return card

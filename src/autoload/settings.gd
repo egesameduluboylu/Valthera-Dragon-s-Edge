@@ -40,6 +40,8 @@ func set_value(key: String, value: Variant) -> void:
 			value = str(value) if LANGUAGES.has(str(value)) else LANGUAGES[0]
 		"text_scale":
 			value = float(value) if TEXT_SCALES.has(float(value)) else 1.0
+		"vibration", "effects", "animations":
+			value = bool(value)
 	set(key, value)
 	save_file()
 	changed.emit(key)
