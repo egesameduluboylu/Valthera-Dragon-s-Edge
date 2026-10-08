@@ -469,6 +469,8 @@ func _refresh_buttons() -> void:
 			elif cost > 0:
 				line += "  %d" % cost
 			b.text = line
+			# long names with a cost or cooldown get a smaller font so the banner never clips them
+			b.add_theme_font_size_override("font_size", UITheme.fs(20 if line.length() <= 13 else (18 if line.length() <= 17 else 16)))
 		else:
 			var cd: Label = b.get_meta("cd")
 			cd.text = str(engine.player.cooldowns[id]) if reason == "cooldown" else ""
@@ -1371,7 +1373,7 @@ func _build_skill_buttons() -> void:
 	_player_view["res_bar"].max_value = engine.player.resource_max
 	var skills: Array = engine.player.skills
 	var rest := maxi(0, skills.size() - 1)
-	var ribbon_w := 270.0
+	var ribbon_w := 290.0
 	var gap := 10.0
 	# the squares share what the banner leaves, up to 84 px each
 	var slot := clampf((_skill_grid.size.x - ribbon_w - 18 - maxi(0, rest - 1) * gap) / maxf(1, rest), 60.0, 84.0)

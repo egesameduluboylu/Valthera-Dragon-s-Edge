@@ -155,9 +155,24 @@ func _add_particles() -> void:
 	for r in _rects("drips"):
 		_emitter(Rect2(r.position, Vector2(4, 4)), 2, 1.6, Color(0.7, 0.9, 1.0, 0.8), Vector2(0, 260), 0.0, 1.5, 2.5)
 	for r in _rects("smoke"):
-		_emitter(Rect2(r.position - Vector2(10, 0), Vector2(20, 10)), 8, 6.0, Color(0.45, 0.45, 0.5, 0.35), Vector2(6, -30), 8.0, 14.0, 30.0)
+		if r.has_area():
+			# a smoky area: big slow puffs rising over it
+			_emitter(r, maxi(6, int(r.size.x * r.size.y / 9000.0)), 7.0, Color(0.42, 0.4, 0.42, 0.28), Vector2(8, -24), 6.0, 18.0, 40.0)
+		else:
+			_emitter(Rect2(r.position - Vector2(10, 0), Vector2(20, 10)), 8, 6.0, Color(0.45, 0.45, 0.5, 0.35), Vector2(6, -30), 8.0, 14.0, 30.0)
 	for r in _rects("torches"):
 		_emitter(Rect2(r.position - Vector2(6, 10), Vector2(12, 10)), 10, 1.2, Color(2.4, 1.3, 0.45, 1.0), Vector2(0, -50), 20.0, 1.5, 3.5)
+	for r in _rects("fires"):
+		_emitter(Rect2(r.position - Vector2(14, 12), Vector2(28, 12)), 16, 1.0, Color(2.6, 1.2, 0.35, 1.0), Vector2(0, -70), 25.0, 2.5, 6.0)
+	for r in _rects("bubbles"):
+		_emitter(r, 12, 0.8, Color(2.6, 1.5, 0.4, 1.0), Vector2(0, -18), 6.0, 2.0, 5.0)
+	for r in _rects("glints"):
+		_emitter(r, 8, 0.6, Color(2.4, 2.1, 1.3, 1.0), Vector2(0, -2), 2.0, 1.0, 3.5)
+	var fall: Array = _fx.get("lava_fall", [])
+	if fall.size() >= 4 and not (fall[0] is Array):
+		var top := to_view(Vector2(fall[0], fall[1]))
+		_emitter(Rect2(top, Vector2(fall[2], 20) * _scale), 16, 1.6, Color(2.6, 1.4, 0.4, 1.0),
+				Vector2(0, float(fall[3]) * _scale / 1.4), 10.0, 2.0, 5.0)
 	# scene-wide sparkle of dust in the air, so every scene breathes a little
 	if not _fx.has("dust"):
 		_emitter(Rect2(Vector2(0, view_size.y * 0.15), Vector2(view_size.x, view_size.y * 0.6)), 14, 10.0,
