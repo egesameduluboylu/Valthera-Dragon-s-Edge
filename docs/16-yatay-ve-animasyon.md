@@ -53,6 +53,7 @@ Parçalar `assets/rigs/<id>/` altında PNG olarak durur, `rig.json` nasıl birle
 - `role` hareketi seçer: `root torso head jaw hair cape arm_front_upper arm_front_lower weapon
   arm_back_upper arm_back_lower offhand leg_* tail wing_front wing_back float extra fx`.
 - `blend: add` olan parçalar (göz ışığı, alev, büyü küresi) nabız gibi parlar.
+- Adı `breath` ile başlayan parçalar (ejderlerin nefesi) yalnızca saldırı ve büyü sırasında görünür.
 
 Oyun bu parçaları kodla oynatır; ayrı kare kare animasyon çizmeye gerek yoktur:
 

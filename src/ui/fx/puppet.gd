@@ -49,6 +49,7 @@ var _weight := 0.0            # how much the action pose applies (tweened)
 var _blend := 0.0             # 0 = pose a, 1 = pose b (tweened)
 var _action_tween: Tween
 var _dead := false
+var _action := ""
 
 
 static func has_rig(id: String) -> bool:
@@ -202,6 +203,9 @@ func _update() -> void:
 		s.transform = xforms[i] * Transform2D(0.0, part["rect_pos"])
 		if part["add"] or part["role"] == "fx":
 			s.self_modulate = Color(1, 1, 1, 0.7 + 0.3 * sin(_t * 3.1 + part["phase"])) * (1.0 + 0.35 * _weight)
+		# breath parts (a dragon's frost or fire breath) show only while it attacks or casts
+		if part["name"].begins_with("breath"):
+			s.modulate.a = clampf(_weight, 0.0, 1.0) if _action in ["attack", "cast"] else 0.0
 
 
 ## Plays an action pose on top of the idle motion. Returns its length in seconds.
@@ -213,6 +217,7 @@ func play(action: String) -> float:
 	var tw := create_tween()
 	_action_tween = tw
 	var length := 0.0
+	_action = action
 	match action:
 		"attack":
 			_pose_a = POSES["windup"]
