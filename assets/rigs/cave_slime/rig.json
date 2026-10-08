@@ -1,0 +1,249 @@
+{
+ "id": "cave_slime",
+ "canvas": [
+  1024,
+  1024
+ ],
+ "feet": [
+  512,
+  972
+ ],
+ "facing": "left",
+ "kind": "blob",
+ "parts": [
+  {
+   "name": "body",
+   "png": "body.png",
+   "parent": "",
+   "role": "root",
+   "pivot": [
+    520,
+    940
+   ],
+   "rect": [
+    55,
+    471,
+    926,
+    532
+   ],
+   "z": 10,
+   "blend": "normal"
+  },
+  {
+   "name": "skull",
+   "png": "skull.png",
+   "parent": "body",
+   "role": "float",
+   "pivot": [
+    646,
+    682
+   ],
+   "rect": [
+    575,
+    610,
+    149,
+    151
+   ],
+   "z": 14,
+   "blend": "normal"
+  },
+  {
+   "name": "bones",
+   "png": "bones.png",
+   "parent": "body",
+   "role": "float",
+   "pivot": [
+    520,
+    870
+   ],
+   "rect": [
+    279,
+    801,
+    501,
+    145
+   ],
+   "z": 13,
+   "blend": "normal"
+  },
+  {
+   "name": "sword",
+   "png": "sword.png",
+   "parent": "body",
+   "role": "float",
+   "pivot": [
+    760,
+    640
+   ],
+   "rect": [
+    679,
+    356,
+    225,
+    509
+   ],
+   "z": 12,
+   "blend": "normal"
+  },
+  {
+   "name": "membrane",
+   "png": "membrane.png",
+   "parent": "body",
+   "role": "extra",
+   "pivot": [
+    520,
+    940
+   ],
+   "rect": [
+    75,
+    471,
+    883,
+    514
+   ],
+   "z": 20,
+   "blend": "normal"
+  },
+  {
+   "name": "tip",
+   "png": "tip.png",
+   "parent": "body",
+   "role": "hair",
+   "pivot": [
+    556,
+    540
+   ],
+   "rect": [
+    361,
+    198,
+    327,
+    381
+   ],
+   "z": 22,
+   "blend": "normal"
+  },
+  {
+   "name": "drip_tip",
+   "png": "drip_tip.png",
+   "parent": "tip",
+   "role": "float",
+   "pivot": [
+    384,
+    262
+   ],
+   "rect": [
+    362,
+    240,
+    40,
+    132
+   ],
+   "z": 23,
+   "blend": "normal"
+  },
+  {
+   "name": "face",
+   "png": "face.png",
+   "parent": "body",
+   "role": "head",
+   "pivot": [
+    390,
+    720
+   ],
+   "rect": [
+    208,
+    535,
+    345,
+    303
+   ],
+   "z": 30,
+   "blend": "normal"
+  },
+  {
+   "name": "eye_glow",
+   "png": "eye_glow.png",
+   "parent": "face",
+   "role": "fx",
+   "pivot": [
+    310,
+    650
+   ],
+   "rect": [
+    200,
+    526,
+    341,
+    400
+   ],
+   "z": 31,
+   "blend": "add"
+  },
+  {
+   "name": "drool",
+   "png": "drool.png",
+   "parent": "face",
+   "role": "float",
+   "pivot": [
+    384,
+    820
+   ],
+   "rect": [
+    369,
+    803,
+    32,
+    132
+   ],
+   "z": 32,
+   "blend": "normal"
+  },
+  {
+   "name": "run_1",
+   "png": "run_1.png",
+   "parent": "body",
+   "role": "float",
+   "pivot": [
+    170,
+    740
+   ],
+   "rect": [
+    135,
+    730,
+    48,
+    165
+   ],
+   "z": 24,
+   "blend": "normal"
+  },
+  {
+   "name": "run_2",
+   "png": "run_2.png",
+   "parent": "body",
+   "role": "float",
+   "pivot": [
+    868,
+    690
+   ],
+   "rect": [
+    857,
+    681,
+    55,
+    152
+   ],
+   "z": 24,
+   "blend": "normal"
+  },
+  {
+   "name": "core_glow",
+   "png": "core_glow.png",
+   "parent": "body",
+   "role": "fx",
+   "pivot": [
+    560,
+    780
+   ],
+   "rect": [
+    121,
+    341,
+    878,
+    683
+   ],
+   "z": 25,
+   "blend": "add"
+  }
+ ]
+}

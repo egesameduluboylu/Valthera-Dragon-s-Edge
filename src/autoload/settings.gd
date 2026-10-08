@@ -1,6 +1,7 @@
 extends Node
-## The player's settings (docs/08): sound, vibration, battle speed, language and text size. They live
-## in their own file, so wiping the save keeps them. Loaded before DataDB and Audio.
+## The player's settings (docs/08): sound, vibration, battle speed, language, text size and
+## effects. They live in their own file, so wiping the save keeps them. Loaded before DataDB
+## and Audio.
 
 signal changed(key: String)
 
@@ -17,6 +18,10 @@ var vibration: bool = true
 var battle_speed: float = 1.0
 var language: String = ""
 var text_scale: float = 1.0
+## Bloom, light and particles on the battle stage (docs/16); off for weak phones.
+var effects: bool = true
+## Animated cut-out characters; off shows still pictures.
+var animations: bool = true
 
 
 func _ready() -> void:
@@ -53,6 +58,8 @@ func load_file() -> void:
 	battle_speed = speed if SPEEDS.has(speed) else 1.0
 	var scale := float(d.get("text_scale", text_scale))
 	text_scale = scale if TEXT_SCALES.has(scale) else 1.0
+	effects = bool(d.get("effects", effects))
+	animations = bool(d.get("animations", animations))
 	var lang := str(d.get("language", ""))
 	language = lang if LANGUAGES.has(lang) else ""
 
@@ -61,4 +68,5 @@ func save_file() -> void:
 	var f := FileAccess.open(PATH, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify({"music": music, "sfx": sfx, "vibration": vibration,
-				"battle_speed": battle_speed, "language": language, "text_scale": text_scale}))
+				"battle_speed": battle_speed, "language": language, "text_scale": text_scale,
+				"effects": effects, "animations": animations}))

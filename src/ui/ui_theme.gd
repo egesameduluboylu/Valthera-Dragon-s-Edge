@@ -290,6 +290,39 @@ static func _skin(file: String, key: String) -> StyleBoxTexture:
 	return s
 
 
+## The ornate landscape kit (docs/16): assets/ui/v2/<name>.png, or null while it is missing.
+static func v2(name: String) -> Texture2D:
+	var path := "res://assets/ui/v2/%s.png" % name
+	return load(path) if ResourceLoader.exists(path) else null
+
+
+## A 9-slice style from the landscape kit with texture margins [l, t, r, b] and content
+## margins [l, t, r, b]; `fallback` when the texture is missing.
+static func v2_box(name: String, margins: Array, content: Array, fallback: StyleBox) -> StyleBox:
+	var tex := v2(name)
+	if tex == null:
+		return fallback
+	var s := StyleBoxTexture.new()
+	s.texture = tex
+	for i in 4:
+		s.set_texture_margin(i as Side, margins[i])
+		s.set_content_margin(i as Side, content[i])
+	return s
+
+
+## Dark slate with a gold rim, the landscape kit's look without its textures.
+static func slate(radius: int = 12, border: int = 3, bg: Color = Color(0.08, 0.08, 0.1, 0.94)) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.border_color = GOLD
+	s.set_border_width_all(border)
+	s.set_corner_radius_all(radius)
+	s.set_content_margin_all(10)
+	s.shadow_color = Color(0, 0, 0, 0.5)
+	s.shadow_size = 8
+	return s
+
+
 ## A font size scaled by the player's text size setting (docs/08, Erişilebilirlik).
 static func fs(size: int) -> int:
 	return roundi(size * Settings.text_scale)

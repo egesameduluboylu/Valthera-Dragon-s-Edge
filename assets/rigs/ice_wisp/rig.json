@@ -1,0 +1,285 @@
+{
+ "id": "ice_wisp",
+ "canvas": [
+  1024,
+  1024
+ ],
+ "feet": [
+  512,
+  966
+ ],
+ "facing": "left",
+ "kind": "floater",
+ "parts": [
+  {
+   "name": "core",
+   "png": "core.png",
+   "parent": "",
+   "role": "root",
+   "pivot": [
+    492,
+    425
+   ],
+   "rect": [
+    336,
+    227,
+    327,
+    390
+   ],
+   "z": 10,
+   "blend": "normal"
+  },
+  {
+   "name": "crown",
+   "png": "crown.png",
+   "parent": "core",
+   "role": "hair",
+   "pivot": [
+    492,
+    425
+   ],
+   "rect": [
+    189,
+    18,
+    618,
+    572
+   ],
+   "z": 4,
+   "blend": "normal"
+  },
+  {
+   "name": "wisp_a_1",
+   "png": "wisp_a_1.png",
+   "parent": "core",
+   "role": "tail",
+   "pivot": [
+    495,
+    565
+   ],
+   "rect": [
+    395,
+    478,
+    216,
+    317
+   ],
+   "z": 6,
+   "blend": "normal"
+  },
+  {
+   "name": "wisp_a_2",
+   "png": "wisp_a_2.png",
+   "parent": "wisp_a_1",
+   "role": "tail",
+   "pivot": [
+    556,
+    760
+   ],
+   "rect": [
+    508,
+    694,
+    227,
+    212
+   ],
+   "z": 7,
+   "blend": "normal"
+  },
+  {
+   "name": "wisp_b_1",
+   "png": "wisp_b_1.png",
+   "parent": "core",
+   "role": "tail",
+   "pivot": [
+    455,
+    545
+   ],
+   "rect": [
+    352,
+    468,
+    179,
+    304
+   ],
+   "z": 6,
+   "blend": "normal"
+  },
+  {
+   "name": "wisp_b_2",
+   "png": "wisp_b_2.png",
+   "parent": "wisp_b_1",
+   "role": "tail",
+   "pivot": [
+    420,
+    750
+   ],
+   "rect": [
+    380,
+    694,
+    168,
+    231
+   ],
+   "z": 7,
+   "blend": "normal"
+  },
+  {
+   "name": "wisp_c_1",
+   "png": "wisp_c_1.png",
+   "parent": "core",
+   "role": "tail",
+   "pivot": [
+    545,
+    535
+   ],
+   "rect": [
+    478,
+    455,
+    233,
+    232
+   ],
+   "z": 6,
+   "blend": "normal"
+  },
+  {
+   "name": "wisp_c_2",
+   "png": "wisp_c_2.png",
+   "parent": "wisp_c_1",
+   "role": "tail",
+   "pivot": [
+    684,
+    650
+   ],
+   "rect": [
+    637,
+    581,
+    222,
+    117
+   ],
+   "z": 7,
+   "blend": "normal"
+  },
+  {
+   "name": "shard_1",
+   "png": "shard_1.png",
+   "parent": "core",
+   "role": "float",
+   "pivot": [
+    265,
+    300
+   ],
+   "rect": [
+    188,
+    220,
+    142,
+    173
+   ],
+   "z": 12,
+   "blend": "normal"
+  },
+  {
+   "name": "shard_2",
+   "png": "shard_2.png",
+   "parent": "core",
+   "role": "float",
+   "pivot": [
+    735,
+    290
+   ],
+   "rect": [
+    665,
+    204,
+    154,
+    187
+   ],
+   "z": 3,
+   "blend": "normal"
+  },
+  {
+   "name": "shard_3",
+   "png": "shard_3.png",
+   "parent": "core",
+   "role": "float",
+   "pivot": [
+    770,
+    520
+   ],
+   "rect": [
+    704,
+    466,
+    144,
+    119
+   ],
+   "z": 3,
+   "blend": "normal"
+  },
+  {
+   "name": "shard_4",
+   "png": "shard_4.png",
+   "parent": "core",
+   "role": "float",
+   "pivot": [
+    240,
+    560
+   ],
+   "rect": [
+    157,
+    506,
+    154,
+    115
+   ],
+   "z": 12,
+   "blend": "normal"
+  },
+  {
+   "name": "shard_5",
+   "png": "shard_5.png",
+   "parent": "core",
+   "role": "float",
+   "pivot": [
+    640,
+    150
+   ],
+   "rect": [
+    593,
+    85,
+    98,
+    141
+   ],
+   "z": 3,
+   "blend": "normal"
+  },
+  {
+   "name": "aura",
+   "png": "aura.png",
+   "parent": "core",
+   "role": "fx",
+   "pivot": [
+    492,
+    425
+   ],
+   "rect": [
+    317,
+    225,
+    335,
+    430
+   ],
+   "z": 1,
+   "blend": "add"
+  },
+  {
+   "name": "eye_glow",
+   "png": "eye_glow.png",
+   "parent": "core",
+   "role": "fx",
+   "pivot": [
+    480,
+    400
+   ],
+   "rect": [
+    399,
+    365,
+    159,
+    63
+   ],
+   "z": 20,
+   "blend": "add"
+  }
+ ]
+}

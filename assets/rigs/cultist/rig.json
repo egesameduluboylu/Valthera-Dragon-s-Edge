@@ -1,0 +1,357 @@
+{
+ "id": "cultist",
+ "canvas": [
+  1024,
+  1024
+ ],
+ "feet": [
+  512,
+  972
+ ],
+ "facing": "left",
+ "kind": "humanoid",
+ "parts": [
+  {
+   "name": "hips",
+   "png": "hips.png",
+   "parent": "",
+   "role": "root",
+   "pivot": [
+    520,
+    560
+   ],
+   "rect": [
+    380,
+    504,
+    317,
+    272
+   ],
+   "z": 50,
+   "blend": "normal"
+  },
+  {
+   "name": "robe_back",
+   "png": "robe_back.png",
+   "parent": "hips",
+   "role": "cape",
+   "pivot": [
+    560,
+    552
+   ],
+   "rect": [
+    451,
+    517,
+    368,
+    458
+   ],
+   "z": 10,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back_upper",
+   "png": "leg_back_upper.png",
+   "parent": "hips",
+   "role": "leg_back_upper",
+   "pivot": [
+    560,
+    585
+   ],
+   "rect": [
+    503,
+    503,
+    155,
+    287
+   ],
+   "z": 22,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_front_upper",
+   "png": "leg_front_upper.png",
+   "parent": "hips",
+   "role": "leg_front_upper",
+   "pivot": [
+    486,
+    585
+   ],
+   "rect": [
+    379,
+    501,
+    158,
+    286
+   ],
+   "z": 42,
+   "blend": "normal"
+  },
+  {
+   "name": "torso",
+   "png": "torso.png",
+   "parent": "hips",
+   "role": "torso",
+   "pivot": [
+    520,
+    540
+   ],
+   "rect": [
+    408,
+    281,
+    238,
+    282
+   ],
+   "z": 60,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back_lower",
+   "png": "leg_back_lower.png",
+   "parent": "leg_back_upper",
+   "role": "leg_back_lower",
+   "pivot": [
+    618,
+    748
+   ],
+   "rect": [
+    583,
+    699,
+    125,
+    274
+   ],
+   "z": 20,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_back_upper",
+   "png": "arm_back_upper.png",
+   "parent": "torso",
+   "role": "arm_back_upper",
+   "pivot": [
+    582,
+    340
+   ],
+   "rect": [
+    530,
+    268,
+    161,
+    205
+   ],
+   "z": 30,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_front_lower",
+   "png": "leg_front_lower.png",
+   "parent": "leg_front_upper",
+   "role": "leg_front_lower",
+   "pivot": [
+    418,
+    745
+   ],
+   "rect": [
+    329,
+    692,
+    127,
+    282
+   ],
+   "z": 40,
+   "blend": "normal"
+  },
+  {
+   "name": "head",
+   "png": "head.png",
+   "parent": "torso",
+   "role": "head",
+   "pivot": [
+    500,
+    318
+   ],
+   "rect": [
+    398,
+    108,
+    218,
+    251
+   ],
+   "z": 70,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_front_upper",
+   "png": "arm_front_upper.png",
+   "parent": "torso",
+   "role": "arm_front_upper",
+   "pivot": [
+    444,
+    352
+   ],
+   "rect": [
+    353,
+    277,
+    146,
+    222
+   ],
+   "z": 67,
+   "blend": "normal"
+  },
+  {
+   "name": "talisman_fx",
+   "png": "talisman_fx.png",
+   "parent": "torso",
+   "role": "fx",
+   "pivot": [
+    495,
+    484
+   ],
+   "rect": [
+    468,
+    457,
+    63,
+    107
+   ],
+   "z": 94,
+   "blend": "add"
+  },
+  {
+   "name": "arm_back_lower",
+   "png": "arm_back_lower.png",
+   "parent": "arm_back_upper",
+   "role": "arm_back_lower",
+   "pivot": [
+    652,
+    434
+   ],
+   "rect": [
+    621,
+    372,
+    177,
+    189
+   ],
+   "z": 32,
+   "blend": "normal"
+  },
+  {
+   "name": "hood_tip",
+   "png": "hood_tip.png",
+   "parent": "head",
+   "role": "hair",
+   "pivot": [
+    552,
+    168
+   ],
+   "rect": [
+    507,
+    94,
+    219,
+    116
+   ],
+   "z": 66,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_front_lower",
+   "png": "arm_front_lower.png",
+   "parent": "arm_front_upper",
+   "role": "arm_front_lower",
+   "pivot": [
+    396,
+    458
+   ],
+   "rect": [
+    302,
+    414,
+    137,
+    149
+   ],
+   "z": 82,
+   "blend": "normal"
+  },
+  {
+   "name": "eyes_fx",
+   "png": "eyes_fx.png",
+   "parent": "head",
+   "role": "fx",
+   "pivot": [
+    460,
+    236
+   ],
+   "rect": [
+    405,
+    198,
+    112,
+    81
+   ],
+   "z": 95,
+   "blend": "add"
+  },
+  {
+   "name": "palm_flame",
+   "png": "palm_flame.png",
+   "parent": "arm_back_lower",
+   "role": "hair",
+   "pivot": [
+    742,
+    420
+   ],
+   "rect": [
+    651,
+    228,
+    189,
+    204
+   ],
+   "z": 34,
+   "blend": "normal"
+  },
+  {
+   "name": "dagger",
+   "png": "dagger.png",
+   "parent": "arm_front_lower",
+   "role": "weapon",
+   "pivot": [
+    340,
+    505
+   ],
+   "rect": [
+    200,
+    316,
+    173,
+    248
+   ],
+   "z": 78,
+   "blend": "normal"
+  },
+  {
+   "name": "flame_fx",
+   "png": "flame_fx.png",
+   "parent": "arm_back_lower",
+   "role": "fx",
+   "pivot": [
+    742,
+    420
+   ],
+   "rect": [
+    554,
+    166,
+    368,
+    368
+   ],
+   "z": 96,
+   "blend": "add"
+  },
+  {
+   "name": "dagger_fx",
+   "png": "dagger_fx.png",
+   "parent": "dagger",
+   "role": "fx",
+   "pivot": [
+    340,
+    505
+   ],
+   "rect": [
+    193,
+    323,
+    155,
+    155
+   ],
+   "z": 93,
+   "blend": "add"
+  }
+ ]
+}

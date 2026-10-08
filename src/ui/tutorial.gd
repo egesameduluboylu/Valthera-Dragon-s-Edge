@@ -34,7 +34,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	var hole := Rect2(_target.get_global_rect()).grow(PAD) if _target != null else Rect2()
 	# four dark strips around the hole, so the target stays bright
-	var view := Rect2(Vector2.ZERO, Vector2(720, 1280))
+	var view := Rect2(Vector2.ZERO, get_viewport_rect().size)
 	for r in _around(view, hole):
 		var dim := ColorRect.new()
 		dim.color = Color(0, 0, 0, 0.62)
@@ -73,7 +73,7 @@ func _build_bubble(hole: Rect2) -> void:
 	h.add_theme_constant_override("separation", 12)
 	box.add_child(h)
 	if ResourceLoader.exists(PORTRAIT):
-		var face := UIKit.icon(PORTRAIT, 120)
+		var face := UIKit.icon(PORTRAIT, 104)
 		face.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		h.add_child(face)
 	var v := VBoxContainer.new()
@@ -82,7 +82,7 @@ func _build_bubble(hole: Rect2) -> void:
 	h.add_child(v)
 	v.add_child(UIKit.label(DataDB.t("npc.nara"), 26, Color("7a3a1a")))
 	var text := UIKit.wrapped(DataDB.t("tut." + _id.trim_prefix("tut_")), 24, UITheme.INK)
-	text.custom_minimum_size.x = 480
+	text.custom_minimum_size.x = 440
 	v.add_child(text)
 	var bottom := HBoxContainer.new()
 	v.add_child(bottom)
@@ -97,20 +97,24 @@ func _build_bubble(hole: Rect2) -> void:
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bottom.add_child(hint)
-	box.size = Vector2(688, 0)
-	box.position.x = 16
+	box.size = Vector2(minf(640.0, get_viewport_rect().size.x - 32.0), 0)
 	_place.call_deferred(box, hole)
 
 
 ## Puts the bubble on the far side of the hole, so it never covers the target.
 ## Deferred, because the wrapped text only knows its height after a layout pass.
 func _place(box: Control, hole: Rect2) -> void:
+	var view := get_viewport_rect().size
 	var h := box.get_combined_minimum_size().y
 	box.size.y = h
-	if hole.has_area() and hole.get_center().y > 640:
-		box.position.y = maxf(20.0, hole.position.y - 30 - h)
+	var cx := hole.get_center().x if hole.has_area() else view.x * 0.5
+	box.position.x = clampf(cx - box.size.x * 0.5, 16.0, view.x - 16.0 - box.size.x)
+	if not hole.has_area():
+		box.position.y = (view.y - h) * 0.5
+	elif hole.get_center().y > view.y * 0.5:
+		box.position.y = maxf(16.0, hole.position.y - 24 - h)
 	else:
-		box.position.y = minf(1280.0 - 20 - h, (hole.end.y + 30) if hole.has_area() else 400.0)
+		box.position.y = minf(view.y - 16 - h, hole.end.y + 24)
 
 
 func _around(view: Rect2, hole: Rect2) -> Array[Rect2]:

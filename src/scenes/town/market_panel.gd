@@ -11,7 +11,8 @@ const FILTERS := [["", "market.all"], ["weapon", "slot.weapon"], ["armor", "slot
 		["helm", "slot.helm"], ["accessory", "slot.accessory"], ["unique", "market.uniques"]]
 
 var _content: VBoxContainer
-var _tabs_row: HBoxContainer
+var _tabs_row: GridContainer
+## Right column: each tab builds its own lists (in scroll containers) in here.
 var _body: VBoxContainer
 var _npc_holder: VBoxContainer
 var _tab: String = "buy"
@@ -28,20 +29,22 @@ func _ready() -> void:
 	var parts := UIKit.sheet(DataDB.t("market.title"), func() -> void: closed.emit())
 	add_child(parts[0])
 	_content = parts[1]
+	# landscape: the innkeeper and the tabs on the left, the open tab on the right
+	var cols := UIKit.split(_content, 0.33)
+	var left: VBoxContainer = cols[0]
+	left.add_theme_constant_override("separation", 14)
 	_npc_holder = VBoxContainer.new()
-	_content.add_child(_npc_holder)
+	left.add_child(_npc_holder)
 	_say(DataDB.t("market.line_online" if _market().is_online() else "market.line_offline"))
-	_tabs_row = HBoxContainer.new()
-	_tabs_row.add_theme_constant_override("separation", 8)
-	_content.add_child(_tabs_row)
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_content.add_child(scroll)
-	_body = VBoxContainer.new()
-	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_body.add_theme_constant_override("separation", 12)
-	scroll.add_child(_body)
+	left.add_child(UIKit.spacer(0))
+	left.get_child(-1).size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_tabs_row = GridContainer.new()
+	_tabs_row.columns = 2
+	_tabs_row.add_theme_constant_override("h_separation", 8)
+	_tabs_row.add_theme_constant_override("v_separation", 8)
+	left.add_child(_tabs_row)
+	_body = cols[1]
+	_body.add_theme_constant_override("separation", 10)
 	_refresh_mail_count()
 	show_tab("buy")
 
@@ -68,7 +71,7 @@ func _draw_tabs() -> void:
 		if id == "mail" and _mail_count > 0:
 			text += " (%d)" % _mail_count
 		var b := UIKit.button(text, "", show_tab.bind(id), 22)
-		b.custom_minimum_size.y = 64
+		b.custom_minimum_size.y = 72
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		if id == _tab:
 			UIKit.primary(b)
@@ -131,12 +134,13 @@ func _draw_buy() -> void:
 	chips.add_theme_constant_override("h_separation", 8)
 	chips.add_theme_constant_override("v_separation", 8)
 	_body.add_child(chips)
+	var list := UIKit.scroll_list(_body)
 	for f in FILTERS:
 		var id: String = f[0]
 		var b := UIKit.button(DataDB.t(f[1]), "", func() -> void:
 			_filter = id
 			_draw_buy(), 20)
-		b.custom_minimum_size = Vector2(0, 56)
+		b.custom_minimum_size = Vector2(0, 64)
 		if id == _filter:
 			UIKit.primary(b)
 		chips.add_child(b)
@@ -144,16 +148,16 @@ func _draw_buy() -> void:
 			func() -> void:
 				_sort = "price_desc" if _sort == "price" else "price"
 				_draw_buy(), 20)
-	sort.custom_minimum_size = Vector2(0, 56)
+	sort.custom_minimum_size = Vector2(0, 64)
 	chips.add_child(sort)
 	if not r.get("ok", false):
 		_error(r)
 		return
 	var listings: Array = r["listings"]
 	if listings.is_empty():
-		_body.add_child(_muted(DataDB.t("market.empty")))
+		list.add_child(_muted(DataDB.t("market.empty")))
 	for l in listings:
-		_body.add_child(_listing_row(l))
+		list.add_child(_listing_row(l))
 
 
 func _listing_row(l: Dictionary) -> PanelContainer:
@@ -169,11 +173,15 @@ func _listing_row(l: Dictionary) -> PanelContainer:
 	var d := ItemUI.details(item, p.equipped(p.slot_of(item)) if p.equip_block_reason(item) != "class" else null)
 	d.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(d)
-	var foot := HBoxContainer.new()
-	v.add_child(foot)
-	var seller := UIKit.label(DataDB.tf("market.seller", {"name": l.get("seller", "?")}), 20, UITheme.TEXT_MUTED)
-	seller.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	foot.add_child(seller)
+	# price button with the seller under it, on the right of the row
+	var foot := VBoxContainer.new()
+	foot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	foot.add_theme_constant_override("separation", 6)
+	h.add_child(foot)
+	var seller := UIKit.label(DataDB.tf("market.seller", {"name": l.get("seller", "?")}), 19, UITheme.TEXT_MUTED)
+	seller.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	seller.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	seller.custom_minimum_size.x = 220
 	var price := int(l["price"])
 	var id := str(l["id"])
 	var b := UIKit.primary(UIKit.button("%s  %d" % [DataDB.t("market.buy"), price], ItemUI.ITEM_GOLD, func() -> void:
@@ -181,6 +189,7 @@ func _listing_row(l: Dictionary) -> PanelContainer:
 	b.custom_minimum_size = Vector2(220, 64)
 	b.disabled = p.gold < price or l.get("mine", false)
 	foot.add_child(b)
+	foot.add_child(seller)
 	return card
 
 
@@ -205,20 +214,38 @@ func _draw_sell() -> void:
 	_clear_body()
 	var p := _profile()
 	var sel := p.get_item(_selected)
-	if sel.is_empty():
-		_body.add_child(_muted(DataDB.t("market.sell_pick")))
-	else:
-		_body.add_child(_sell_card(sel))
-	var grid := GridContainer.new()
-	grid.columns = 5
+	# the bag on the left, the chosen item and its price on the right
+	var row := HBoxContainer.new()
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 14)
+	_body.add_child(row)
+	var bag := ScrollContainer.new()
+	bag.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bag.size_flags_stretch_ratio = 0.9
+	bag.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	row.add_child(bag)
+	var grid := HFlowContainer.new()
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 10)
-	_body.add_child(grid)
+	bag.add_child(grid)
+	var side := ScrollContainer.new()
+	side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	side.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	row.add_child(side)
+	if sel.is_empty():
+		var hint := _muted(DataDB.t("market.sell_pick"))
+		hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		side.add_child(hint)
+	else:
+		var card := _sell_card(sel)
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		side.add_child(card)
 	var items := p.bag_items()
 	items.reverse()
 	for item in items:
 		var uid: String = item["uid"]
-		var b := ItemUI.tile_button(item, 112, func() -> void:
+		var b := ItemUI.tile_button(item, 100, func() -> void:
 			_selected = uid
 			_price = Market.fair_value(p.get_item(uid), DataDB.data)
 			_draw_sell())
@@ -240,24 +267,26 @@ func _sell_card(item: Dictionary) -> PanelContainer:
 	h.add_child(d)
 	var fair := Market.fair_value(item, data)
 	_price = clampi(_price, Market.min_price(item, data), Market.max_price(data))
-	v.add_child(UIKit.label(DataDB.tf("market.fair", {"v": fair}), 20, UITheme.TEXT_MUTED))
-	# price stepper
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 10)
-	v.add_child(row)
-	for step in [-0.25, -0.05]:
-		row.add_child(_step_button(step, item))
+	v.add_child(UITheme.divider())
+	# price: the amount with the fair value beside it, then the stepper
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	v.add_child(head)
 	var price := UIKit.counter(ItemUI.ITEM_GOLD, str(_price), UITheme.GOLD, 44)
-	price.custom_minimum_size.x = 170
-	price.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_child(price)
-	for step in [0.05, 0.25]:
+	head.add_child(price)
+	var fair_l := UIKit.label(DataDB.tf("market.fair", {"v": fair}), 20, UITheme.TEXT_MUTED)
+	fair_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fair_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	head.add_child(fair_l)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	v.add_child(row)
+	for step in [-0.25, -0.05, 0.05, 0.25]:
 		row.add_child(_step_button(step, item))
 	var fee := Market.listing_fee(_price, data)
 	var tax := roundi(float(data["market"]["tax_percent"]) * 100)
-	v.add_child(UIKit.label(DataDB.tf("market.fee", {"v": fee}), 20, UITheme.TEXT if _profile().gold >= fee else ItemUI.DOWN))
-	v.add_child(UIKit.label(DataDB.tf("market.you_get", {"v": Market.seller_gets(_price, data), "tax": tax}), 20, ItemUI.UP))
+	v.add_child(UIKit.wrapped(DataDB.tf("market.fee", {"v": fee}), 20, UITheme.TEXT if _profile().gold >= fee else ItemUI.DOWN))
+	v.add_child(UIKit.wrapped(DataDB.tf("market.you_get", {"v": Market.seller_gets(_price, data), "tax": tax}), 20, ItemUI.UP))
 	var uid: String = item["uid"]
 	var go := UIKit.primary(UIKit.button(DataDB.t("market.list"), "", func() -> void: _list(uid, item)))
 	go.disabled = _profile().gold < fee
@@ -270,7 +299,8 @@ func _step_button(step: float, item: Dictionary) -> Button:
 		var fair := Market.fair_value(item, DataDB.data)
 		_price = maxi(1, _price + roundi(fair * step))
 		_draw_sell(), 20)
-	b.custom_minimum_size = Vector2(84, 60)
+	b.custom_minimum_size = Vector2(72, 64)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return b
 
 
@@ -303,6 +333,7 @@ func _draw_mine() -> void:
 	var listings: Array = r["listings"]
 	if listings.is_empty():
 		_body.add_child(_muted(DataDB.t("market.no_listings")))
+	var list := UIKit.scroll_list(_body)
 	for l in listings:
 		var item: Dictionary = l["item"]
 		_fix(item)
@@ -325,7 +356,7 @@ func _draw_mine() -> void:
 		cancel.custom_minimum_size = Vector2(160, 64)
 		cancel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		h.add_child(cancel)
-		_body.add_child(card)
+		list.add_child(card)
 
 
 func _hours_left(iso: String) -> int:
@@ -367,6 +398,7 @@ func _draw_mail() -> void:
 		return
 	var all := UIKit.primary(UIKit.button(DataDB.t("market.claim_all"), "", func() -> void: _claim_all(entries)))
 	_body.add_child(all)
+	var list := UIKit.scroll_list(_body)
 	for e in entries:
 		var item: Dictionary = e.get("item", {}) if e.get("item") is Dictionary else {}
 		if not item.is_empty():
@@ -388,10 +420,10 @@ func _draw_mail() -> void:
 			info.add_child(UIKit.counter(ItemUI.ITEM_GOLD, "+%d" % int(e.get("gold", 0)), UITheme.GOLD, 30))
 		var id := str(e["id"])
 		var take := UIKit.button(DataDB.t("market.claim"), "", func() -> void: _claim(id), 22)
-		take.custom_minimum_size = Vector2(120, 64)
+		take.custom_minimum_size = Vector2(150, 64)
 		take.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		h.add_child(take)
-		_body.add_child(card)
+		list.add_child(card)
 
 
 func _claim(id: String) -> void:

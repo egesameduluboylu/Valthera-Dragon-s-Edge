@@ -1,0 +1,339 @@
+{
+ "id": "mushroom_mage",
+ "canvas": [
+  1024,
+  1024
+ ],
+ "feet": [
+  512,
+  972
+ ],
+ "facing": "left",
+ "kind": "humanoid",
+ "parts": [
+  {
+   "name": "robe",
+   "png": "robe.png",
+   "parent": "",
+   "role": "root",
+   "pivot": [
+    522,
+    720
+   ],
+   "rect": [
+    283,
+    655,
+    456,
+    313
+   ],
+   "z": 12,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back_upper",
+   "png": "leg_back_upper.png",
+   "parent": "robe",
+   "role": "leg_back_upper",
+   "pivot": [
+    580,
+    770
+   ],
+   "rect": [
+    539,
+    729,
+    86,
+    178
+   ],
+   "z": 6,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back_lower",
+   "png": "leg_back_lower.png",
+   "parent": "leg_back_upper",
+   "role": "leg_back_lower",
+   "pivot": [
+    590,
+    872
+   ],
+   "rect": [
+    523,
+    842,
+    131,
+    135
+   ],
+   "z": 7,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_front_upper",
+   "png": "leg_front_upper.png",
+   "parent": "robe",
+   "role": "leg_front_upper",
+   "pivot": [
+    450,
+    770
+   ],
+   "rect": [
+    393,
+    729,
+    98,
+    180
+   ],
+   "z": 8,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_front_lower",
+   "png": "leg_front_lower.png",
+   "parent": "leg_front_upper",
+   "role": "leg_front_lower",
+   "pivot": [
+    428,
+    874
+   ],
+   "rect": [
+    323,
+    844,
+    147,
+    137
+   ],
+   "z": 9,
+   "blend": "normal"
+  },
+  {
+   "name": "torso",
+   "png": "torso.png",
+   "parent": "robe",
+   "role": "torso",
+   "pivot": [
+    522,
+    720
+   ],
+   "rect": [
+    381,
+    500,
+    288,
+    319
+   ],
+   "z": 14,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_back_upper",
+   "png": "arm_back_upper.png",
+   "parent": "torso",
+   "role": "arm_back_upper",
+   "pivot": [
+    612,
+    560
+   ],
+   "rect": [
+    563,
+    511,
+    164,
+    176
+   ],
+   "z": 4,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_back_lower",
+   "png": "arm_back_lower.png",
+   "parent": "arm_back_upper",
+   "role": "arm_back_lower",
+   "pivot": [
+    686,
+    646
+   ],
+   "rect": [
+    647,
+    589,
+    178,
+    120
+   ],
+   "z": 5,
+   "blend": "normal"
+  },
+  {
+   "name": "staff",
+   "png": "staff.png",
+   "parent": "arm_back_lower",
+   "role": "offhand",
+   "pivot": [
+    788,
+    636
+   ],
+   "rect": [
+    752,
+    106,
+    91,
+    868
+   ],
+   "z": 3,
+   "blend": "normal"
+  },
+  {
+   "name": "staff_glow",
+   "png": "staff_glow.png",
+   "parent": "staff",
+   "role": "fx",
+   "pivot": [
+    786,
+    188
+   ],
+   "rect": [
+    613,
+    15,
+    347,
+    347
+   ],
+   "z": 26,
+   "blend": "add"
+  },
+  {
+   "name": "head",
+   "png": "head.png",
+   "parent": "torso",
+   "role": "head",
+   "pivot": [
+    502,
+    540
+   ],
+   "rect": [
+    250,
+    69,
+    508,
+    536
+   ],
+   "z": 16,
+   "blend": "normal"
+  },
+  {
+   "name": "cap_tip",
+   "png": "cap_tip.png",
+   "parent": "head",
+   "role": "hair",
+   "pivot": [
+    566,
+    180
+   ],
+   "rect": [
+    495,
+    44,
+    282,
+    142
+   ],
+   "z": 17,
+   "blend": "normal"
+  },
+  {
+   "name": "beard",
+   "png": "beard.png",
+   "parent": "head",
+   "role": "hair",
+   "pivot": [
+    450,
+    550
+   ],
+   "rect": [
+    379,
+    515,
+    138,
+    218
+   ],
+   "z": 23,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_front_upper",
+   "png": "arm_front_upper.png",
+   "parent": "torso",
+   "role": "arm_front_upper",
+   "pivot": [
+    452,
+    580
+   ],
+   "rect": [
+    317,
+    529,
+    186,
+    170
+   ],
+   "z": 20,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_front_lower",
+   "png": "arm_front_lower.png",
+   "parent": "arm_front_upper",
+   "role": "arm_front_lower",
+   "pivot": [
+    360,
+    656
+   ],
+   "rect": [
+    198,
+    562,
+    203,
+    188
+   ],
+   "z": 21,
+   "blend": "normal"
+  },
+  {
+   "name": "spores",
+   "png": "spores.png",
+   "parent": "arm_front_lower",
+   "role": "weapon",
+   "pivot": [
+    250,
+    610
+   ],
+   "rect": [
+    108,
+    432,
+    248,
+    248
+   ],
+   "z": 22,
+   "blend": "normal"
+  },
+  {
+   "name": "spores_glow",
+   "png": "spores_glow.png",
+   "parent": "spores",
+   "role": "fx",
+   "pivot": [
+    232,
+    546
+   ],
+   "rect": [
+    47,
+    361,
+    371,
+    371
+   ],
+   "z": 27,
+   "blend": "add"
+  },
+  {
+   "name": "cap_glow",
+   "png": "cap_glow.png",
+   "parent": "head",
+   "role": "fx",
+   "pivot": [
+    502,
+    300
+   ],
+   "rect": [
+    259,
+    153,
+    462,
+    460
+   ],
+   "z": 25,
+   "blend": "add"
+  }
+ ]
+}

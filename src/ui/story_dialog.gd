@@ -34,18 +34,21 @@ func _ready() -> void:
 	_portrait = TextureRect.new()
 	_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	# landscape (docs/16): the speaker stands at the left, the bubble runs beside them
 	_portrait.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	_portrait.position = Vector2(10, 1280 - 690)
-	_portrait.size = Vector2(360, 360)
+	_portrait.offset_left = 8
+	_portrait.offset_right = 348
+	_portrait.offset_top = -380
+	_portrait.offset_bottom = -20
 	_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_portrait)
 	var box := PanelContainer.new()
 	box.add_theme_stylebox_override("panel", UITheme.skin_panel("parchment"))
 	box.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	box.offset_left = 16
-	box.offset_right = -16
-	box.offset_top = -350
-	box.offset_bottom = -40
+	box.offset_left = 330
+	box.offset_right = -24
+	box.offset_top = -230
+	box.offset_bottom = -24
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(box)
 	var v := VBoxContainer.new()
@@ -61,8 +64,10 @@ func _ready() -> void:
 	v.add_child(hint)
 	var skip := UIKit.button(DataDB.t("story.skip"), "", func() -> void: _end(), 22)
 	skip.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	skip.position = Vector2(720 - 150, 30)
-	skip.size = Vector2(130, 60)
+	skip.offset_left = -170
+	skip.offset_right = -24
+	skip.offset_top = 20
+	skip.offset_bottom = 76
 	add_child(skip)
 	_advance()
 

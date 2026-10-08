@@ -1,0 +1,321 @@
+{
+ "id": "cellar_rat",
+ "canvas": [
+  1024,
+  1024
+ ],
+ "feet": [
+  560,
+  968
+ ],
+ "facing": "left",
+ "kind": "beast",
+ "parts": [
+  {
+   "name": "hips",
+   "png": "hips.png",
+   "parent": "",
+   "role": "root",
+   "pivot": [
+    630,
+    800
+   ],
+   "rect": [
+    445,
+    601,
+    376,
+    369
+   ],
+   "z": 10,
+   "blend": "normal"
+  },
+  {
+   "name": "chest",
+   "png": "chest.png",
+   "parent": "hips",
+   "role": "torso",
+   "pivot": [
+    620,
+    720
+   ],
+   "rect": [
+    410,
+    320,
+    417,
+    482
+   ],
+   "z": 12,
+   "blend": "normal"
+  },
+  {
+   "name": "head",
+   "png": "head.png",
+   "parent": "chest",
+   "role": "head",
+   "pivot": [
+    474,
+    474
+   ],
+   "rect": [
+    26,
+    251,
+    507,
+    313
+   ],
+   "z": 20,
+   "blend": "normal"
+  },
+  {
+   "name": "jaw",
+   "png": "jaw.png",
+   "parent": "head",
+   "role": "jaw",
+   "pivot": [
+    398,
+    512
+   ],
+   "rect": [
+    132,
+    447,
+    319,
+    228
+   ],
+   "z": 18,
+   "blend": "normal"
+  },
+  {
+   "name": "ear",
+   "png": "ear.png",
+   "parent": "head",
+   "role": "hair",
+   "pivot": [
+    424,
+    342
+   ],
+   "rect": [
+    328,
+    167,
+    146,
+    212
+   ],
+   "z": 22,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_back_upper",
+   "png": "arm_back_upper.png",
+   "parent": "chest",
+   "role": "arm_back_upper",
+   "pivot": [
+    540,
+    486
+   ],
+   "rect": [
+    382,
+    355,
+    203,
+    177
+   ],
+   "z": 6,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_back_lower",
+   "png": "arm_back_lower.png",
+   "parent": "arm_back_upper",
+   "role": "arm_back_lower",
+   "pivot": [
+    430,
+    402
+   ],
+   "rect": [
+    148,
+    164,
+    316,
+    270
+   ],
+   "z": 7,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back_upper",
+   "png": "leg_back_upper.png",
+   "parent": "hips",
+   "role": "leg_back_upper",
+   "pivot": [
+    726,
+    812
+   ],
+   "rect": [
+    637,
+    757,
+    171,
+    179
+   ],
+   "z": 4,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back_lower",
+   "png": "leg_back_lower.png",
+   "parent": "leg_back_upper",
+   "role": "leg_back_lower",
+   "pivot": [
+    700,
+    890
+   ],
+   "rect": [
+    620,
+    854,
+    196,
+    126
+   ],
+   "z": 5,
+   "blend": "normal"
+  },
+  {
+   "name": "tail_1",
+   "png": "tail_1.png",
+   "parent": "hips",
+   "role": "tail",
+   "pivot": [
+    752,
+    884
+   ],
+   "rect": [
+    711,
+    847,
+    184,
+    129
+   ],
+   "z": 3,
+   "blend": "normal"
+  },
+  {
+   "name": "tail_2",
+   "png": "tail_2.png",
+   "parent": "tail_1",
+   "role": "tail",
+   "pivot": [
+    872,
+    944
+   ],
+   "rect": [
+    850,
+    848,
+    130,
+    118
+   ],
+   "z": 2,
+   "blend": "normal"
+  },
+  {
+   "name": "tail_3",
+   "png": "tail_3.png",
+   "parent": "tail_2",
+   "role": "tail",
+   "pivot": [
+    952,
+    864
+   ],
+   "rect": [
+    872,
+    738,
+    100,
+    142
+   ],
+   "z": 1,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_front_upper",
+   "png": "leg_front_upper.png",
+   "parent": "hips",
+   "role": "leg_front_upper",
+   "pivot": [
+    650,
+    800
+   ],
+   "rect": [
+    512,
+    708,
+    245,
+    233
+   ],
+   "z": 26,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_front_lower",
+   "png": "leg_front_lower.png",
+   "parent": "leg_front_upper",
+   "role": "leg_front_lower",
+   "pivot": [
+    560,
+    884
+   ],
+   "rect": [
+    410,
+    837,
+    258,
+    147
+   ],
+   "z": 25,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_front_upper",
+   "png": "arm_front_upper.png",
+   "parent": "chest",
+   "role": "arm_front_upper",
+   "pivot": [
+    500,
+    566
+   ],
+   "rect": [
+    412,
+    517,
+    139,
+    222
+   ],
+   "z": 30,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_front_lower",
+   "png": "arm_front_lower.png",
+   "parent": "arm_front_upper",
+   "role": "arm_front_lower",
+   "pivot": [
+    456,
+    692
+   ],
+   "rect": [
+    189,
+    597,
+    306,
+    173
+   ],
+   "z": 31,
+   "blend": "normal"
+  },
+  {
+   "name": "eye_glow",
+   "png": "eye_glow.png",
+   "parent": "head",
+   "role": "fx",
+   "pivot": [
+    300,
+    392
+   ],
+   "rect": [
+    138,
+    234,
+    317,
+    317
+   ],
+   "z": 40,
+   "blend": "add"
+  }
+ ]
+}
