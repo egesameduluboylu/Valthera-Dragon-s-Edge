@@ -1,0 +1,429 @@
+{
+ "id": "ember_hound",
+ "canvas": [
+  1024,
+  1024
+ ],
+ "feet": [
+  590,
+  970
+ ],
+ "facing": "left",
+ "kind": "beast",
+ "parts": [
+  {
+   "name": "body",
+   "png": "body.png",
+   "parent": "",
+   "role": "root",
+   "pivot": [
+    600,
+    540
+   ],
+   "rect": [
+    309,
+    369,
+    528,
+    353
+   ],
+   "z": 10,
+   "blend": "normal"
+  },
+  {
+   "name": "far_fore_upper",
+   "png": "far_fore_upper.png",
+   "parent": "body",
+   "role": "leg_back_upper",
+   "pivot": [
+    536,
+    540
+   ],
+   "rect": [
+    461,
+    456,
+    150,
+    294
+   ],
+   "z": 2,
+   "blend": "normal"
+  },
+  {
+   "name": "far_hind_upper",
+   "png": "far_hind_upper.png",
+   "parent": "body",
+   "role": "leg_back_upper",
+   "pivot": [
+    782,
+    520
+   ],
+   "rect": [
+    694,
+    416,
+    180,
+    326
+   ],
+   "z": 2,
+   "blend": "normal"
+  },
+  {
+   "name": "tail_1",
+   "png": "tail_1.png",
+   "parent": "body",
+   "role": "tail",
+   "pivot": [
+    806,
+    474
+   ],
+   "rect": [
+    765,
+    351,
+    142,
+    154
+   ],
+   "z": 5,
+   "blend": "normal"
+  },
+  {
+   "name": "mane_neck",
+   "png": "mane_neck.png",
+   "parent": "body",
+   "role": "hair",
+   "pivot": [
+    400,
+    436
+   ],
+   "rect": [
+    330,
+    211,
+    253,
+    265
+   ],
+   "z": 7,
+   "blend": "normal"
+  },
+  {
+   "name": "mane_shoulder",
+   "png": "mane_shoulder.png",
+   "parent": "body",
+   "role": "hair",
+   "pivot": [
+    490,
+    398
+   ],
+   "rect": [
+    437,
+    221,
+    228,
+    219
+   ],
+   "z": 8,
+   "blend": "normal"
+  },
+  {
+   "name": "mane_back",
+   "png": "mane_back.png",
+   "parent": "body",
+   "role": "hair",
+   "pivot": [
+    594,
+    404
+   ],
+   "rect": [
+    556,
+    279,
+    224,
+    168
+   ],
+   "z": 9,
+   "blend": "normal"
+  },
+  {
+   "name": "near_hind_upper",
+   "png": "near_hind_upper.png",
+   "parent": "body",
+   "role": "leg_front_upper",
+   "pivot": [
+    726,
+    520
+   ],
+   "rect": [
+    637,
+    426,
+    183,
+    313
+   ],
+   "z": 14,
+   "blend": "normal"
+  },
+  {
+   "name": "near_fore_upper",
+   "png": "near_fore_upper.png",
+   "parent": "body",
+   "role": "leg_front_upper",
+   "pivot": [
+    470,
+    540
+   ],
+   "rect": [
+    390,
+    456,
+    160,
+    292
+   ],
+   "z": 16,
+   "blend": "normal"
+  },
+  {
+   "name": "head",
+   "png": "head.png",
+   "parent": "body",
+   "role": "head",
+   "pivot": [
+    406,
+    476
+   ],
+   "rect": [
+    92,
+    290,
+    450,
+    237
+   ],
+   "z": 22,
+   "blend": "normal"
+  },
+  {
+   "name": "mane_fx",
+   "png": "mane_fx.png",
+   "parent": "body",
+   "role": "fx",
+   "pivot": [
+    520,
+    400
+   ],
+   "rect": [
+    246,
+    79,
+    505,
+    462
+   ],
+   "z": 29,
+   "blend": "add"
+  },
+  {
+   "name": "far_fore_lower",
+   "png": "far_fore_lower.png",
+   "parent": "far_fore_upper",
+   "role": "leg_back_lower",
+   "pivot": [
+    552,
+    712
+   ],
+   "rect": [
+    506,
+    662,
+    94,
+    309
+   ],
+   "z": 1,
+   "blend": "normal"
+  },
+  {
+   "name": "far_hind_lower",
+   "png": "far_hind_lower.png",
+   "parent": "far_hind_upper",
+   "role": "leg_back_lower",
+   "pivot": [
+    742,
+    700
+   ],
+   "rect": [
+    699,
+    649,
+    193,
+    322
+   ],
+   "z": 1,
+   "blend": "normal"
+  },
+  {
+   "name": "tail_2",
+   "png": "tail_2.png",
+   "parent": "tail_1",
+   "role": "tail",
+   "pivot": [
+    884,
+    384
+   ],
+   "rect": [
+    861,
+    248,
+    55,
+    155
+   ],
+   "z": 6,
+   "blend": "normal"
+  },
+  {
+   "name": "near_hind_lower",
+   "png": "near_hind_lower.png",
+   "parent": "near_hind_upper",
+   "role": "leg_front_lower",
+   "pivot": [
+    682,
+    696
+   ],
+   "rect": [
+    636,
+    642,
+    185,
+    333
+   ],
+   "z": 13,
+   "blend": "normal"
+  },
+  {
+   "name": "near_fore_lower",
+   "png": "near_fore_lower.png",
+   "parent": "near_fore_upper",
+   "role": "leg_front_lower",
+   "pivot": [
+    488,
+    706
+   ],
+   "rect": [
+    365,
+    655,
+    164,
+    320
+   ],
+   "z": 15,
+   "blend": "normal"
+  },
+  {
+   "name": "mane_head",
+   "png": "mane_head.png",
+   "parent": "head",
+   "role": "hair",
+   "pivot": [
+    325,
+    390
+   ],
+   "rect": [
+    236,
+    182,
+    271,
+    261
+   ],
+   "z": 19,
+   "blend": "normal"
+  },
+  {
+   "name": "mouth",
+   "png": "mouth.png",
+   "parent": "head",
+   "role": "extra",
+   "pivot": [
+    314,
+    507
+   ],
+   "rect": [
+    125,
+    481,
+    254,
+    83
+   ],
+   "z": 20,
+   "blend": "normal"
+  },
+  {
+   "name": "jaw",
+   "png": "jaw.png",
+   "parent": "head",
+   "role": "jaw",
+   "pivot": [
+    355,
+    507
+   ],
+   "rect": [
+    137,
+    494,
+    253,
+    141
+   ],
+   "z": 21,
+   "blend": "normal"
+  },
+  {
+   "name": "eyes_fx",
+   "png": "eyes_fx.png",
+   "parent": "head",
+   "role": "fx",
+   "pivot": [
+    237,
+    420
+   ],
+   "rect": [
+    186,
+    369,
+    102,
+    102
+   ],
+   "z": 30,
+   "blend": "add"
+  },
+  {
+   "name": "tail_flame",
+   "png": "tail_flame.png",
+   "parent": "tail_2",
+   "role": "hair",
+   "pivot": [
+    900,
+    284
+   ],
+   "rect": [
+    830,
+    96,
+    181,
+    209
+   ],
+   "z": 7,
+   "blend": "normal"
+  },
+  {
+   "name": "maw_fx",
+   "png": "maw_fx.png",
+   "parent": "jaw",
+   "role": "fx",
+   "pivot": [
+    355,
+    507
+   ],
+   "rect": [
+    153,
+    419,
+    216,
+    227
+   ],
+   "z": 31,
+   "blend": "add"
+  },
+  {
+   "name": "tail_fx",
+   "png": "tail_fx.png",
+   "parent": "tail_2",
+   "role": "fx",
+   "pivot": [
+    900,
+    284
+   ],
+   "rect": [
+    767,
+    65,
+    257,
+    291
+   ],
+   "z": 28,
+   "blend": "add"
+  }
+ ]
+}

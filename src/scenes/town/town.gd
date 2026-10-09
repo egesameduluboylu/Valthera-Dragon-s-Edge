@@ -295,7 +295,9 @@ func _building(id: String, spot: Dictionary, with_sprite: bool) -> Control:
 	plaque.reset_size()
 	var label: Vector2 = spot["label"]
 	var psize := plaque.get_combined_minimum_size()
-	plaque.position = Vector2(label.x - psize.x * 0.5, minf(label.y - psize.y * 0.5, get_viewport_rect().size.y - 150))
+	var view := get_viewport_rect().size
+	plaque.position = Vector2(clampf(label.x - psize.x * 0.5, 10.0, view.x - psize.x - 10.0),
+			minf(label.y - psize.y * 0.5, view.y - 150))
 	b.pressed.connect(func() -> void:
 		var tw := b.create_tween()
 		tw.tween_property(sprite, "scale", Vector2(1.05, 0.96), 0.08)

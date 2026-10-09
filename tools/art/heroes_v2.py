@@ -1230,8 +1230,775 @@ def warrior():
     print(f"warrior {time.time() - t:.1f}s")
 
 
+# ------------------------------------------------------------------ shared helpers for mage and rogue
+
+def star4(c, r, deg=0.0, k=0.3):
+    """Four-point star polygon (embroidery, sparkles)."""
+    pts = []
+    for i in range(8):
+        a = math.radians(deg + i * 45 - 90)
+        rr = r if i % 2 == 0 else r * k
+        pts.append((c[0] + rr * math.cos(a), c[1] + rr * math.sin(a)))
+    return pts
+
+
+def grip_hand(p, wrist, u, grip_u, size, c=SKIN, kind="skin"):
+    """A bare or gloved hand closed around a grip that runs along grip_u; returns the hand centre."""
+    ang = math.degrees(math.atan2(u[1], u[0]))
+    hc = (wrist[0] + u[0] * size * 0.5, wrist[1] + u[1] * size * 0.5)
+    body = p.poly(rot([(hc[0] - size * 0.5, hc[1] - size * 0.36), (hc[0] + size * 0.4, hc[1] - size * 0.42),
+                       (hc[0] + size * 0.52, hc[1] + size * 0.34), (hc[0] - size * 0.46, hc[1] + size * 0.4)], hc, ang),
+                  smooth=True, n=6)
+    p.paint(body, mat(c, kind, round=size * 0.4), cast=0.4)
+    gx, gy = grip_u
+    fc = (hc[0] + u[0] * size * 0.3, hc[1] + u[1] * size * 0.3)
+    for i in range(4):
+        t = (i - 1.5) * size * 0.23
+        cc = (fc[0] + gx * t, fc[1] + gy * t)
+        p.paint(p.ellipse(cc, size * 0.19, size * 0.145, ang), mat(c, kind, round=size * 0.14), cast=0.3, line=0.8)
+    a = (hc[0] - gx * size * 0.32 - u[0] * size * 0.1, hc[1] - gy * size * 0.32 - u[1] * size * 0.1)
+    b = (fc[0] - gx * size * 0.12 + u[0] * size * 0.02, fc[1] - gy * size * 0.12 + u[1] * size * 0.02)
+    p.paint(p.tube([a, lerp(a, b, 0.5), b], [size * 0.3, size * 0.26, size * 0.2]), mat(c, kind, round=size * 0.14),
+            cast=0.35, line=0.8)
+    return hc
+
+
+def glow_part(box, items, seed=90, canvas=1024):
+    """An additive fx layer: items are (centre, radius, colour, strength[, core colour, core radius]).
+    box=None sizes the layer to the halos so they fade out before its edge."""
+    if box is None:
+        box = (max(0, min(it[0][0] - it[1] * 1.9 for it in items)), max(0, min(it[0][1] - it[1] * 1.9 for it in items)),
+               min(canvas, max(it[0][0] + it[1] * 1.9 for it in items)), min(canvas, max(it[0][1] + it[1] * 1.9 for it in items)))
+    p = Part(box, seed=seed)
+    for it in items:
+        c, r, col, s = it[:4]
+        core = C(it[4]) if len(it) > 4 else None
+        p.glow(c, r, C(col), strength=s, core=core, core_r=it[5] if len(it) > 5 else None)
+    return p.image()
+
+
+def glyph_strokes(c, s, rng):
+    """A small made-up rune: three or four straight strokes in an s-sized box."""
+    x, y = c
+    pts = [(x + s * rng.uniform(-0.45, 0.45), y + s * rng.uniform(-0.5, 0.5)) for _ in range(5)]
+    strokes = [[(x, y - s * 0.5), (x, y + s * 0.5)]]
+    for k in range(rng.integers(2, 4)):
+        a, b = pts[k], pts[k + 1]
+        strokes.append([a, b])
+    return strokes
+
+
+# ------------------------------------------------------------------ mage
+
+ROBE = "#1d2a72"
+ROBE_D = "#121a4c"
+ROBE_L = "#33459e"
+MAGE_HAIR, MAGE_HAIR_L = "#a99fcf", "#f6f2ff"
+MHX, MHY, MHS = 512, 238, 1.08
+STAFF_T, STAFF_B = (700, 170), (622, 932)
+ORB_C = (352, 452)
+
+
+def MF(x, y):
+    return (MHX + x * MHS, MHY + y * MHS)
+
+
+def mage_head():
+    F = MF
+    p = Part((MHX - 150, 40, MHX + 160, MHY + 120), seed=111)
+    mass = p.poly([F(-36, -34), F(-46, 4), F(-46, 50), F(-36, 96), F(-58, 100), F(-68, 40), F(-66, -20), F(-40, -54),
+                   F(0, -62), F(40, -50)], smooth=True)
+    hair_mass(p, [mass], [([F(-36, 10), F(-50, 50), F(-50, 100)], 20), ([F(-28, 20), F(-36, 60), F(-34, 104)], 16)],
+              MAGE_HAIR, MAGE_HAIR_L, round_=16)
+    face_skin(p, F, SKIN, female=True)
+    anime_eye(p, F(20, 15), 27 * MHS, 16 * MHS, ("#6a3008", "#f6b440"), female=True, lash=1.15, lid="#2a1424")
+    anime_eye(p, F(48.5, 13.5), 11.5 * MHS, 15 * MHS, ("#6a3008", "#f6b440"), far=True, female=True, lid="#2a1424")
+    brow(p, F(33, -3), F(5, -9), "#6a5a7a", w=3.0, arch=-2.0)
+    brow(p, F(42, -3), F(55, -8), "#6a5a7a", w=2.4, arch=-0.8)
+    nose_mouth(p, F, female=True)
+    cap = p.poly([F(58, -24), F(50, -50), F(20, -64), F(-20, -62), F(-54, -40), F(-62, -5), F(-54, 40), F(-44, 70),
+                  F(-34, 50), F(-34, 14), F(-24, 2), F(-14, -16), F(14, -26), F(42, -30)], smooth=True)
+    fr = [([F(26, -50), F(44, -26), F(54, 8)], 20), ([F(10, -54), F(22, -24), F(28, 12)], 22),
+          ([F(-6, -54), F(4, -24), F(4, 6)], 20), ([F(40, -46), F(56, -26), F(60, -2)], 14),
+          ([F(-20, -40), F(-24, 10), F(-18, 60), F(-24, 104)], 18), ([F(-30, -30), F(-36, 20), F(-30, 80)], 14),
+          ([F(-14, -58), F(-2, -40), F(-10, -10)], 12)]
+    hair_mass(p, [cap], fr, MAGE_HAIR, MAGE_HAIR_L, sheen=(F(0, -16)[0], F(0, -16)[1], 58, 48))
+    # hat: wide brim, then the cone (its base sits on the brim's centre line), then the band
+    bc = F(6, -52)
+    brim = p.ellipse(bc, 112 * MHS, 25 * MHS, -9)
+    X, Y = p.grid()
+    p.paint(brim, mat(ROBE, "cloth", round=10), cast=0.5,
+            bump=fold(p, [F(-80, -40), F(-40, -50)], 10, 1.0) + fold(p, [F(60, -64), F(96, -70)], 10, 1.0))
+    under = brim * smoothstep(-4, 14, (Y - bc[1]) + (X - bc[0]) * math.tan(math.radians(-9)))
+    p.mult(C("#4a5288"), under * 0.75)
+    trim(p, ell_pts(bc, 110 * MHS, 23.5 * MHS, deg=-9, n=48, a0=10, a1=170), 2.6)
+    cone = [F(-52, -50), F(-44, -78), F(-30, -108), F(-16, -132), F(0, -140), F(14, -126), F(28, -98), F(44, -70),
+            F(60, -62)]
+    hf = fold(p, [F(-20, -62), F(-8, -128)], 10, -1.6) + fold(p, [F(20, -64), F(6, -124)], 8, 1.4)
+    p.paint(p.poly(cone, smooth=True), mat(ROBE, "cloth", round=18), bump=hf, cast=0.4)
+    band = p.tube([F(-50, -56), F(6, -63), F(58, -62)], [13, 12, 11])
+    p.paint(band, mat(GOLD, "gold", round=4), cast=0.4)
+    p.paint(p.poly(star4(F(14, -63), 14, 8)), mat(GOLD, "gold", round=3), cast=0.4, line=0.6)
+    gem(p, F(14, -63), 4.5, "#ff8a2a")
+    for k, (sx, sy) in enumerate(((-26, -104), (24, -96), (-6, -122), (-40, -76))):
+        p.paint(p.poly(star4(F(sx, sy), 5.5 - k * 0.6, 10 * k)), mat("#e6c06a", "gold", round=1.5), cast=0.2, line=0.4)
+    return p.finish(line=1.6)
+
+
+def mage_hat_tip():
+    F = MF
+    p = Part((MHX - 140, 20, MHX + 40, MHY - 100), seed=112)
+    pts = [F(-6, -124), F(-10, -146), F(-34, -166), F(-70, -164), F(-92, -146)]
+    m = p.tube(pts, [34, 26, 20, 11, 4])
+    p.paint(m, mat(ROBE, "cloth", round=10), cast=0,
+            bump=fold(p, [F(-12, -146), F(-40, -160), F(-70, -158)], 5, 1.2))
+    trim(p, [F(-30, -170), F(-60, -172)], 1.6)
+    p.paint(p.ellipse(F(-94, -142), 6, 6), mat(GOLD, "gold", round=3), cast=0.3)
+    p.paint(p.poly(star4(F(-96, -128), 10, 0)), mat(GOLD, "gold", round=2), cast=0.3, line=0.5)
+    return p.finish(line=1.6)
+
+
+def mage_hair():
+    """Long hair falling down the back (role hair)."""
+    F = MF
+    p = Part((MHX - 160, MHY - 90, MHX + 20, MHY + 300), seed=113)
+    locks = [([F(-30, -40), F(-62, 30), F(-74, 130), F(-66, 236)], 46), ([F(-20, -30), F(-44, 50), F(-50, 150), F(-40, 240)], 40),
+             ([F(-40, -20), F(-80, 50), F(-100, 140), F(-110, 210)], 34), ([F(-10, -40), F(-30, 60), F(-26, 170)], 30),
+             ([F(-46, 0), F(-86, 80), F(-92, 180)], 26)]
+    base = p.ellipse(F(-30, 0), 36 * MHS, 54 * MHS)
+    hair_mass(p, [base], locks, MAGE_HAIR, MAGE_HAIR_L, round_=14, sheen=(F(-40, 20)[0], F(-40, 20)[1], 60, 70))
+    return p.finish(line=1.6)
+
+
+def mage_torso():
+    p = Part((420, 290, 630, 560), seed=114)
+    p.paint(p.tube([(516, 300), (520, 372)], [30, 34]), mat(SKIN, "skin", round=12), cast=0)
+    p.tint(C("#b9776a"), p.tube([(516, 300), (520, 340)], [36, 30]) * 0.5)
+    body = [(462, 372), (490, 356), (540, 354), (572, 366), (588, 394), (590, 420), (576, 446), (558, 478), (558, 528),
+            (484, 530), (478, 482), (466, 432), (456, 398)]
+    cloth(p, body, ROBE, folds=[([(468, 390), (480, 500)], 10, -1.6), ([(586, 420), (566, 470)], 8, -1.2),
+                                ([(520, 450), (530, 520)], 6, 1.2)])
+    # bust and front panel with gold embroidery down the centre line
+    p.tint(C("#3a4caa"), blur(p.ellipse((570, 412), 22, 18), 6 * SS) * p.poly(body) * 0.5)
+    panel = p.poly([(536, 372), (566, 372), (560, 528), (532, 528)])
+    cloth(p, panel, ROBE_L, round_=8, cast=0.2)
+    trim(p, [(536, 374), (533, 528)], 2.2)
+    trim(p, [(566, 374), (561, 528)], 2.2)
+    for k, y in enumerate((398, 438, 478, 512)):
+        p.paint(p.poly(star4((548, y), 9 - k * 0.5, 0)), mat("#e6c06a", "gold", round=2), cast=0.3, line=0.5)
+    return p.finish(line=1.8)
+
+
+def mage_capelet():
+    """Short mantle over the shoulders with a high collar (extra, above the front arm)."""
+    p = Part((420, 280, 640, 450), seed=115)
+    collar = [(478, 380), (462, 336), (466, 300), (488, 306), (500, 336), (526, 350), (556, 346), (568, 360), (548, 380)]
+    cloth(p, collar, ROBE_D, folds=[([(472, 310), (482, 368)], 6, 1.4)], round_=8)
+    trim(p, [(466, 302), (462, 336), (478, 378)], 2.0)
+    trim(p, [(488, 306), (500, 336), (526, 350), (556, 346), (568, 360)], 2.4)
+    cape = [(452, 396), (458, 376), (484, 360), (520, 358), (560, 358), (590, 370), (602, 392), (598, 410), (582, 416),
+            (568, 406), (550, 418), (530, 408), (510, 420), (490, 408), (472, 418), (454, 410)]
+    folds = [([(470, 370), (466, 426)], 8, -1.4), ([(520, 366), (512, 430)], 8, -1.4), ([(566, 366), (560, 430)], 8, -1.4),
+             ([(494, 368), (490, 428)], 8, 1.2), ([(588, 376), (594, 424)], 8, 1.2)]
+    m = cloth(p, cape, ROBE, folds=folds, round_=14)
+    p.tint(C("#5a6ab8"), m * blur(p.ellipse((560, 380), 50, 18), 10 * SS) * 0.35)
+    trim(p, [(454, 410), (472, 418), (490, 408), (510, 420), (530, 408), (550, 418), (568, 406), (582, 416), (598, 410)], 3.0)
+    for x, y in ((478, 394), (520, 394), (562, 392)):
+        p.paint(p.poly(star4((x, y), 8, 0)), mat("#e6c06a", "gold", round=2), cast=0.3, line=0.5)
+    p.paint(p.ellipse((556, 360), 11, 11), mat(GOLD, "gold", round=6), cast=0.45)
+    gem(p, (556, 360), 6.5, "#ff7a1a", glow=0.6)
+    return p.finish(line=1.8)
+
+
+def mage_root():
+    p = Part((360, 450, 690, 900), seed=116)
+    skirt = [(476, 480), (560, 478), (582, 560), (608, 680), (640, 790), (656, 852), (604, 870), (520, 874), (440, 868),
+             (384, 852), (398, 780), (428, 660), (456, 560)]
+    folds = [([(486, 520), (420, 850)], 14, -2.2), ([(506, 520), (480, 864)], 12, 2.0), ([(520, 530), (526, 868)], 14, -2.0),
+             ([(540, 520), (580, 860)], 12, 1.8), ([(556, 520), (630, 846)], 14, -2.0), ([(470, 540), (400, 820)], 10, 1.6)]
+    m = cloth(p, skirt, ROBE, folds=folds, round_=24)
+    panel = p.poly([(548, 500), (570, 500), (600, 640), (640, 840), (612, 864), (566, 868), (556, 700)], smooth=True)
+    cloth(p, panel, ROBE_L, folds=[([(560, 520), (590, 860)], 8, -1.4)], round_=10, cast=0.3)
+    trim(p, [(548, 500), (556, 700), (566, 866)], 2.6)
+    trim(p, [(570, 500), (600, 640), (640, 840)], 2.6)
+    hem = [(386, 850), (440, 866), (520, 872), (604, 868), (656, 850)]
+    band = p.tube(hem, 34)
+    p.tint(C("#0e1438"), band * m * 0.55)
+    trim(p, [(x, y - 18) for x, y in hem], 2.4)
+    trim(p, hem, 3.6)
+    rng = np.random.default_rng(7)
+    glyphs = []
+    for (x, y), t in resample(catmull([(x, y - 3) for x, y in hem], n=8), 26)[1:-1]:
+        glyphs += glyph_strokes((x, y), 15, rng)
+    gl = np.zeros((p.H, p.W), F32)
+    for s in glyphs:
+        gl = np.maximum(gl, p.line(s, 2.4, smooth=False))
+    gl = gl * m
+    p.over(C("#3fc8ff"), np.clip(blur(gl, 4 * SS) * 2.0, 0, 1) * 0.8)
+    p.over(C("#e8fdff"), gl)
+    # embroidered stars across the skirt, thicker toward the hem
+    for k in range(16):
+        x, y = rng.uniform(410, 630), rng.uniform(560, 830)
+        sm = p.poly(star4((x, y), rng.uniform(4, 8), rng.uniform(0, 30))) * m * (1 - panel)
+        p.paint(sm, mat("#e6c06a", "gold", round=1.5), cast=0.15, line=0.3)
+    # sash with buckle
+    sash = [(470, 476), (566, 472), (570, 504), (472, 510)]
+    p.paint(p.poly(sash, smooth=False), mat("#5a2f6a", "cloth", round=6), cast=0.5,
+            bump=fold(p, [(474, 492), (566, 488)], 3, -0.8))
+    trim(p, [(472, 478), (566, 474)], 2.0)
+    trim(p, [(474, 508), (570, 502)], 2.0)
+    tail = [(536, 500), (552, 498), (560, 590), (548, 620), (532, 596)]
+    cloth(p, tail, "#5a2f6a", folds=[([(544, 510), (544, 600)], 5, -1.2)], round_=6)
+    p.paint(p.ellipse((548, 490), 15, 15), mat(GOLD, "gold", round=7), cast=0.5)
+    gem(p, (548, 490), 8, "#ff7a1a", glow=0.5)
+    return p.finish(line=1.8), glyphs
+
+
+def mage_runes_fx(glyphs):
+    p = Part((360, 780, 690, 900), seed=117)
+    gl = np.zeros((p.H, p.W), F32)
+    for s in glyphs:
+        gl = np.maximum(gl, p.line(s, 2.2, smooth=False))
+    p.over(C("#55d8ff"), np.clip(blur(gl, 6 * SS) * 2.2, 0, 1) * 0.8)
+    p.over(C("#e8fdff"), gl * 0.9)
+    return p.image()
+
+
+def mage_cape():
+    p = Part((250, 340, 600, 920), seed=118)
+    outer = [(560, 370), (520, 360), (478, 366), (440, 392), (402, 440), (366, 520), (336, 620), (312, 730), (296, 830),
+             (318, 880), (380, 900), (450, 894), (520, 870), (548, 760), (556, 600), (566, 450)]
+    folds = [([(470, 390), (380, 600), (330, 860)], 16, -2.2), ([(500, 400), (440, 640), (420, 880)], 16, 2.0),
+             ([(450, 400), (350, 560), (306, 800)], 12, 1.8), ([(530, 420), (500, 650), (490, 870)], 14, -2.0)]
+    m = cloth(p, outer, "#18235f", folds=folds, round_=26, cast=0)
+    lining = p.poly([(296, 830), (318, 880), (380, 900), (450, 894), (520, 870), (518, 852), (450, 874), (380, 880),
+                     (320, 862), (304, 822)], smooth=True)
+    cloth(p, lining, "#c08a3a", round_=5, cast=0.3)
+    trim(p, [(298, 828), (318, 878), (380, 898), (450, 892), (518, 868)], 3.2)
+    rng = np.random.default_rng(3)
+    for k in range(9):
+        x, y = rng.uniform(330, 500), rng.uniform(480, 840)
+        p.paint(p.poly(star4((x, y), rng.uniform(5, 10), rng.uniform(0, 40))) * m, mat("#d8b45e", "gold", round=1.5),
+                cast=0.15, line=0.3)
+    p.mult(C("#5a6aa4"), m * blur(p.poly([(530, 360), (570, 400), (540, 600), (480, 460)]), 20 * SS) * 0.6)
+    return p.finish(line=1.8)
+
+
+def mage_arm(front=True):
+    if front:
+        sh, el, wr = (566, 382), (602, 478), (646, 538)
+        seed, s = 120, 1.0
+    else:
+        sh, el, wr = (470, 386), (424, 470), (386, 528)
+        seed, s = 130, 0.94
+    box_u = (min(sh[0], el[0]) - 60, sh[1] - 50, max(sh[0], el[0]) + 60, el[1] + 50)
+    box_l = (min(el[0], wr[0]) - 90, el[1] - 50, max(el[0], wr[0]) + 90, wr[1] + 70)
+    pu = Part(box_u, seed=seed)
+    pu.paint(pu.tube([along(sh, el, -0.15), el], [38 * s, 30 * s]), mat(ROBE if front else "#18225e", "cloth", round=14),
+             bump=fold(pu, [along(sh, el, 0.3, 8), along(sh, el, 0.9, 4)], 5, -1.2), cast=0)
+    trim(pu, [along(sh, el, 0.86, 15 * s), along(sh, el, 0.86, -15 * s)], 2.4)
+    upper = pu.finish(line=1.8)
+    pl = Part(box_l, seed=seed + 1)
+    u = unit(el, wr)
+    nx, ny = -u[1], u[0]
+    pl.paint(pl.tube([along(el, wr, -0.2), wr], [30 * s, 22 * s]), mat(SKIN, "skin", round=8), cast=0)
+    if ny > 0:
+        nx, ny = -nx, -ny          # n points up: the top edge of the sleeve
+    # bell sleeve: narrow at the elbow, the open cuff hangs down at the wrist
+    top_c = (wr[0] + nx * 19 * s - u[0] * 4, wr[1] + ny * 19 * s - u[1] * 4)
+    hang = (wr[0] - nx * 26 * s - u[0] * 10, wr[1] - ny * 26 * s - u[1] * 10 + 34 * s)
+    sl = [along(el, wr, -0.25, 0), (el[0] + nx * 17 * s, el[1] + ny * 17 * s),
+          (lerp(el, wr, 0.5)[0] + nx * 17 * s, lerp(el, wr, 0.5)[1] + ny * 17 * s), top_c,
+          lerp(top_c, hang, 0.5), hang, (lerp(el, wr, 0.55)[0] - nx * 22 * s, lerp(el, wr, 0.55)[1] - ny * 22 * s + 6 * s),
+          (el[0] - nx * 17 * s, el[1] - ny * 17 * s)]
+    sm = pl.poly(sl, smooth=True, n=6)
+    pl.paint(sm, mat(ROBE if front else "#18225e", "cloth", round=12), cast=0,
+             bump=fold(pl, [el, lerp(lerp(el, wr, 0.6), hang, 0.5), hang], 6, -1.4)
+             + fold(pl, [lerp(el, wr, 0.3), lerp(top_c, hang, 0.3)], 5, 1.2))
+    mouth = pl.tube([top_c, lerp(top_c, hang, 0.5), hang], [7 * s, 12 * s, 7 * s])
+    pl.over(C("#0b0f2c"), mouth * 0.9)
+    trim(pl, [top_c, lerp(top_c, hang, 0.5), hang], 3.0)
+    if front:
+        grip_u = unit(STAFF_B, STAFF_T)
+        hc = grip_hand(pl, wr, u, grip_u, 30 * s)
+    else:
+        # open hand, palm up, fingers reaching out under the orb
+        hc = (wr[0] - 20, wr[1] + 6)
+        palm = pl.poly([(wr[0] + 6, wr[1] - 6), (wr[0] - 26, wr[1] - 4), (wr[0] - 44, wr[1] + 2), (wr[0] - 40, wr[1] + 16),
+                        (wr[0] - 12, wr[1] + 20), (wr[0] + 8, wr[1] + 12)], smooth=True)
+        pl.paint(palm, mat(SKIN, "skin", round=8), cast=0.4)
+        for i in range(4):
+            y0 = wr[1] + 2 + i * 4.2
+            pl.paint(pl.tube([(wr[0] - 36, y0), (wr[0] - 52, y0 - 1 - i), (wr[0] - 58, y0 - 9 - i * 1.5)], [8.5, 7, 5.5]),
+                     mat(SKIN, "skin", round=4), cast=0.3, line=0.7)
+        pl.paint(pl.tube([(wr[0] - 10, wr[1] + 2), (wr[0] - 22, wr[1] - 8), (wr[0] - 30, wr[1] - 16)], [10, 8, 6]),
+                 mat(SKIN, "skin", round=4), cast=0.3, line=0.7)
+        pl.glow((wr[0] - 30, wr[1] - 6), 30, C("#6fc8ff"), strength=0.25)
+    lower = pl.finish(line=1.8)
+    return upper, lower, sh, el, wr, hc
+
+
+def mage_leg(front=True):
+    if front:
+        hip, knee, ank, toe, heel, seed = (536, 548), (566, 748), (588, 918), (660, 968), (566, 972), 140
+    else:
+        hip, knee, ank, toe, heel, seed = (486, 548), (456, 748), (432, 916), (494, 966), (406, 966), 150
+    box_u = (min(hip[0], knee[0]) - 60, hip[1] - 70, max(hip[0], knee[0]) + 60, knee[1] + 50)
+    box_l = (min(heel[0], knee[0]) - 50, knee[1] - 50, max(toe[0], knee[0]) + 30, 1000)
+    pu = Part(box_u, seed=seed)
+    top = (hip[0], hip[1] - 40)
+    pu.paint(pu.tube([top, along(top, knee, 0.5), knee], [72, 60, 46]), mat("#2a2442", "cloth", round=16), cast=0)
+    upper = pu.finish(line=1.8)
+    pl = Part(box_l, seed=seed + 1)
+    kt = (knee[0], knee[1] - 20)
+    pl.paint(pl.tube([kt, along(kt, ank, 0.35, -6), ank], [46, 48, 34]), mat("#5a3624", "leather", round=12), cast=0,
+             bump=fold(pl, [along(kt, ank, 0.3, 14), along(kt, ank, 0.6, -10)], 3, -1.0)
+             + fold(pl, [along(kt, ank, 0.62, 16), along(kt, ank, 0.9, -12)], 3, -1.0))
+    trim(pl, [along(kt, ank, 0.62, 22), along(kt, ank, 0.62, -20)], 2.2)
+    foot = [(ank[0] - 20, ank[1] - 12), (ank[0] + 18, ank[1] - 14), (ank[0] + 36, ank[1] + 22), (toe[0] - 6, toe[1] - 16),
+            toe, (heel[0] + 4, heel[1]), (heel[0] - 2, heel[1] - 26)]
+    pl.paint(pl.poly(foot, smooth=True), mat("#5a3624", "leather", round=10), cast=0.3,
+             bump=fold(pl, [(ank[0] + 20, ank[1] + 10), (ank[0] + 8, ank[1] + 40)], 3, -1.0))
+    pl.paint(pl.poly([(heel[0], heel[1] - 7), (toe[0] - 2, toe[1] - 6), toe, (heel[0] + 2, heel[1])], smooth=False),
+             mat("#2a1c16", "leather", round=3), cast=0)
+    lower = pl.finish(line=1.8)
+    return upper, lower, hip, knee, ank
+
+
+def mage_staff(hand):
+    T, B = STAFF_T, STAFF_B
+    d = unit(B, T)
+    box = (540, 0, 860, 960)
+    p = Part(box, seed=160)
+    nx, ny = -d[1], d[0]
+    carve = sum(fold(p, [along(B, T, k / 22, -9), along(B, T, k / 22 + 0.025, 9)], 2.2, -0.8) for k in range(2, 20, 2))
+    p.paint(p.tube([B, T], [17, 19]), mat("#5a3420", "leather", round=6, spec=0.2), bump=carve, cast=0.35)
+    for t in (0.04, 0.33, 0.56, 0.95):
+        trim(p, [along(B, T, t, 11), along(B, T, t, -11)], 4.0)
+    p.paint(p.tube([along(B, T, -0.01), along(B, T, 0.03)], [14, 18]), mat(GOLD, "gold", round=5), cast=0.3)
+    cr = (T[0] + d[0] * 58, T[1] + d[1] * 58)
+    # gold claw prongs around the crystal
+    for side in (-1, 1):
+        q = [T, (T[0] + nx * 30 * side + d[0] * 30, T[1] + ny * 30 * side + d[1] * 30),
+             (T[0] + nx * 30 * side + d[0] * 70, T[1] + ny * 30 * side + d[1] * 70),
+             (T[0] + nx * 12 * side + d[0] * 98, T[1] + ny * 12 * side + d[1] * 98)]
+        p.paint(p.tube(q, [14, 10, 7, 2]), mat(GOLD, "gold", round=4), cast=0.4)
+    p.paint(p.ellipse(T, 14, 12), mat(GOLD, "gold", round=6), cast=0.4)
+    p.glow(cr, 60, C("#ff7a1a"), strength=0.3)
+    x, y = cr
+    ang = math.degrees(math.atan2(d[1], d[0])) + 90
+    cpts = rot([(x, y - 50), (x + 21, y - 14), (x + 17, y + 26), (x, y + 42), (x - 17, y + 26), (x - 21, y - 14)], cr, ang)
+    cm = p.poly(cpts)
+    p.paint(cm, mat("#ff6a10", "glow", round=10, core=C("#fff2c0")))
+    # facets and an inner flame
+    for a, b in ((cpts[0], cpts[3]), (cpts[1], cpts[4]), (cpts[5], cpts[2])):
+        p.tint(C("#fff6d8"), p.line([a, b], 1.2, smooth=False) * cm * 0.5)
+    fl = p.poly(rot([(x, y - 30), (x + 9, y - 2), (x + 6, y + 22), (x, y + 30), (x - 7, y + 18), (x - 4, y - 6)], cr, ang),
+                smooth=True)
+    p.over(C("#fffbe8"), blur(fl, 2 * SS))
+    p.tint(C("#ffffff"), p.poly(rot([(x - 14, y - 16), (x - 5, y - 40), (x - 2, y - 14)], cr, ang)) * 0.8)
+    p.edge_line(cm, {"c": C("#b03a08")}, 1.0)
+    img = p.finish(line=1.2)
+    fx = glow_part(None, [(cr, 150, "#ff6a10", 0.75), (cr, 60, "#ffb040", 0.9, "#fff6d0", 22)], seed=161)
+    return img, fx, cr
+
+
+def mage_orb():
+    c = ORB_C
+    r = 30
+    p = Part((c[0] - 130, c[1] - 130, c[0] + 130, c[1] + 130), seed=170)
+    p.glow(c, 64, C("#3a8cff"), strength=0.35)
+    X, Y = p.grid()
+    ring = p.ellipse(c, 52, 15, -16) - p.ellipse(c, 48, 12, -16)
+    ring = np.clip(ring, 0, 1)
+    back = ring * (Y < c[1] + (X - c[0]) * math.tan(math.radians(-16)))
+    p.over(C("#9fe8ff"), back * 0.7)
+    m = p.ellipse(c, r, r)
+    d = np.sqrt((X - c[0]) ** 2 + (Y - c[1]) ** 2) / r
+    col = mixc(C("#eaffff"), C("#1e56d8"), np.clip(d, 0, 1)[..., None] ** 0.8)
+    p.over(col, m)
+    ang = np.arctan2(Y - c[1], X - c[0])
+    swirl = np.sin(ang * 2 + d * 9) * 0.5 + 0.5
+    p.tint(C("#7ad8ff"), m * swirl * np.clip(d, 0, 1) * 0.5)
+    p.tint(C("#0e2a8a"), m * smoothstep(0.75, 1.0, d) * 0.6)
+    p.over(C("#ffffff"), p.ellipse((c[0] - 10, c[1] - 12), 8, 5, -30) * 0.85)
+    p.tint(C("#bff4ff"), m * smoothstep(0.7, 1.0, d) * np.clip(X - c[0], 0, None) / r * 0.8)
+    front = ring * (1 - (Y < c[1] + (X - c[0]) * math.tan(math.radians(-16))))
+    p.over(C("#d8faff"), front * 0.95)
+    for k in range(3):
+        a = math.radians(30 + k * 120)
+        s = (c[0] + 44 * math.cos(a), c[1] + 14 * math.sin(a) - 24 * math.sin(a) * 0)
+        p.over(C("#ffffff"), p.poly(star4(s, 6, 0, k=0.25)) * 0.9)
+    img = p.finish(line=0)
+    fx = glow_part(None, [(c, 110, "#2f7cff", 0.6), (c, 40, "#7fe0ff", 0.8, "#f0ffff", 14)], seed=171)
+    return img, fx
+
+
+def mage():
+    global GRADE
+    GRADE = (540, 990, 0.25)
+    t = time.time()
+    fu, fl, fsh, fel, fwr, fhc = mage_arm(True)
+    bu, bl, bsh, bel, bwr, bhc = mage_arm(False)
+    lfu, lfl, fhip, fknee, _ = mage_leg(True)
+    lbu, lbl, bhip, bknee, _ = mage_leg(False)
+    staff, staff_fx, cr = mage_staff(fhc)
+    orb, orb_fx = mage_orb()
+    root, glyphs = mage_root()
+    parts = [
+        ("hips", root, "", "root", (516, 500), 12),
+        ("runes", mage_runes_fx(glyphs), "hips", "fx", (516, 860), 13, "add"),
+        ("torso", mage_torso(), "hips", "torso", (518, 500), 11),
+        ("cape", mage_cape(), "torso", "cape", (516, 372), 1),
+        ("capelet", mage_capelet(), "torso", "extra", (518, 372), 23),
+        ("head", mage_head(), "torso", "head", MF(-4, 64), 18),
+        ("hat_tip", mage_hat_tip(), "head", "hair", MF(-6, -132), 17),
+        ("hair", mage_hair(), "head", "hair", MF(-26, -10), 3),
+        ("arm_back_upper", bu, "torso", "arm_back_upper", bsh, 5),
+        ("arm_back_lower", bl, "arm_back_upper", "arm_back_lower", bel, 4),
+        ("orb", orb, "arm_back_lower", "offhand", (bwr[0] - 30, bwr[1]), 6),
+        ("orb_glow", orb_fx, "orb", "fx", ORB_C, 26, "add"),
+        ("arm_front_upper", fu, "torso", "arm_front_upper", fsh, 21),
+        ("arm_front_lower", fl, "arm_front_upper", "arm_front_lower", fel, 20),
+        ("staff", staff, "arm_front_lower", "weapon", fhc, 19),
+        ("staff_glow", staff_fx, "staff", "fx", cr, 25, "add"),
+        ("leg_back_upper", lbu, "hips", "leg_back_upper", bhip, 7),
+        ("leg_back_lower", lbl, "leg_back_upper", "leg_back_lower", bknee, 6),
+        ("leg_front_upper", lfu, "hips", "leg_front_upper", fhip, 9),
+        ("leg_front_lower", lfl, "leg_front_upper", "leg_front_lower", fknee, 8),
+    ]
+    build_rig("mage", HERO, (512, 972), "humanoid", parts, "sprites/player/mage.png")
+    print(f"mage {time.time() - t:.1f}s")
+
+
+# ------------------------------------------------------------------ rogue (same skeleton and lean as the warrior)
+
+CLOAK = "#1d3a28"
+CLOAK_L = "#2f5a3c"
+TUNIC = "#284a32"
+LEATHER = "#5e3c24"
+LEATHER_D = "#3a2618"
+BRASS = "#c09a52"
+SCARF = "#33463c"
+TROUSER = "#3a2e28"
+EYE_G = ("#0a4a20", "#86ff9e")
+VIAL_C = (590, 504)
+
+
+def rogue_head():
+    F = WF
+    p = Part((WHX - 130, WHY - 124, WHX + 112, WHY + 140), seed=211)
+    hood = [F(80, -18), F(66, -56), F(24, -92), F(-30, -96), F(-80, -64), F(-98, -6), F(-92, 56), F(-70, 100), F(-24, 118),
+            F(24, 108), F(52, 88)]
+    hf = fold(p, [F(10, -84), F(-40, -60), F(-70, 0)], 10, -1.6) + fold(p, [F(-30, -84), F(-70, -40), F(-84, 30)], 8, 1.4) \
+        + fold(p, [F(40, -70), F(0, -50), F(-46, 30)], 8, 1.2)
+    hm = p.poly(hood, smooth=True)
+    p.paint(hm, mat(CLOAK, "cloth", round=26), bump=hf, cast=0)
+    p.tint(C("#08140e"), p.ellipse(F(24, 14), 50 * HS, 66 * HS) * hm * 0.85)
+    fm = face_skin(p, F, SKIN)
+    X, Y = p.grid()
+    # the hood throws the upper face into shadow
+    cap = p.poly([F(60, -26), F(48, -52), F(10, -62), F(-26, -50), F(-30, -20), F(0, -30), F(30, -34)], smooth=True)
+    fr = [([F(30, -40), F(42, -18), F(46, 0)], 13), ([F(14, -42), F(22, -18), F(22, 0)], 14), ([F(-2, -42), F(4, -20), F(0, -4)], 12),
+          ([F(46, -36), F(58, -20), F(62, -6)], 10)]
+    hair_mass(p, [cap], fr, "#2a2220", "#6e5a48", round_=10)
+    sh = fm * smoothstep(F(0, 34)[1], F(0, 4)[1], Y) * 0.85
+    sh = np.maximum(sh, blur(p.poly([F(-46, -60), F(80, -60), F(80, -18), F(40, -6), F(-46, 10)]), 6 * SS) * fm)
+    p.tint(C("#3a2e36"), np.clip(sh, 0, 1) * 0.6)
+    p.tint(C("#4a3a40"), blur(p.tube([F(-40, -4), F(10, -12), F(70, -24)], 22), 8 * SS) * fm * 0.4)
+    anime_eye(p, F(20, 15), 27 * HS, 14 * HS, EYE_G, glow_iris=0.35, lid="#141010", glowc="#5aff7a")
+    anime_eye(p, F(48.5, 13.5), 11.5 * HS, 13 * HS, EYE_G, far=True, glow_iris=0.35, lid="#141010")
+    brow(p, F(34, -2), F(3, -6), "#1e1614", w=4.6, arch=0.6)
+    brow(p, F(42, -2), F(56, -8), "#1e1614", w=3.4, arch=0.2)
+    # scarf mask over nose and mouth
+    scarf = [F(-44, 28), F(0, 32), F(36, 28), F(54, 28), F(61, 34), F(64, 46), F(56, 62), F(40, 78), F(20, 92), F(-20, 104),
+             F(-50, 86)]
+    sf = fold(p, [F(-30, 50), F(20, 54), F(60, 44)], 6, -1.4) + fold(p, [F(-30, 76), F(20, 80), F(48, 70)], 6, -1.4) \
+        + fold(p, [F(-30, 40), F(30, 40), F(56, 36)], 5, 1.0) + blur(p.ellipse(F(56, 38), 8, 6), 3 * SS) * 1.2
+    p.paint(p.poly(scarf, smooth=True), mat(SCARF, "cloth", round=12), bump=sf, cast=0.4)
+    # hood rim over the forehead and down the near cheek
+    rim = p.tube([F(-40, 108), F(-50, 60), F(-46, 4), F(-30, -34), F(10, -50), F(48, -44), F(72, -26), F(82, -12)],
+                 [16, 18, 18, 17, 16, 15, 12, 4])
+    cloth(p, rim, CLOAK_L, round_=6, cast=0.55)
+    return p.finish(line=1.6)
+
+
+def rogue_hood_tip():
+    F = WF
+    p = Part((WHX - 230, WHY - 130, WHX - 20, WHY + 80), seed=212)
+    pts = [F(-62, -54), F(-100, -66), F(-140, -56), F(-166, -26), F(-174, 10)]
+    m = p.tube(pts, [56, 44, 30, 14, 3])
+    p.paint(m, mat(CLOAK, "cloth", round=12), cast=0,
+            bump=fold(p, [F(-80, -58), F(-130, -50), F(-160, -16)], 6, 1.4) + fold(p, [F(-80, -48), F(-140, -40)], 5, -1.2))
+    return p.finish(line=1.6)
+
+
+def rogue_torso():
+    p = Part((380, 190, 680, 560), seed=213, xf=U)
+    body = [(456, 270), (490, 254), (540, 254), (582, 270), (596, 312), (592, 372), (574, 440), (556, 476), (484, 478),
+            (466, 440), (452, 352), (448, 292)]
+    cloth(p, body, TUNIC, folds=[([(462, 300), (470, 430)], 10, -1.4), ([(586, 300), (580, 420)], 8, -1.2)])
+    jerk = [(462, 292), (500, 284), (524, 318), (544, 284), (588, 294), (594, 340), (584, 420), (566, 470), (486, 472),
+            (468, 430), (458, 350)]
+    jb = fold(p, [(470, 330), (480, 460)], 8, -1.0) + fold(p, [(580, 320), (570, 450)], 8, -1.2) \
+        + fold(p, [(500, 400), (560, 404)], 5, -0.8)
+    p.paint(p.poly(jerk, smooth=True), mat(LEATHER, "leather", round=14), bump=jb, cast=0.4,
+            hgt=dome(p, (536, 360), 80, 110, k=0.6))
+    p.tint(C("#1c120c"), p.line([(526, 322), (540, 466)], 2.2) * 0.7)
+    for k in range(6):
+        y = 334 + k * 22
+        p.over(C("#c8b490"), p.line([(519 + k * 1.0, y), (546 + k * 0.9, y + 9)], 1.4, smooth=False) * 0.8)
+    # bandolier from the near shoulder to the back hip
+    band = p.tube([(586, 280), (530, 370), (470, 460)], 18)
+    p.paint(band, mat(LEATHER_D, "leather", round=6), cast=0.5, bump=fold(p, [(586, 280), (470, 460)], 3, 0.6))
+    for t in (0.25, 0.45, 0.65):
+        c = (586 + (470 - 586) * t, 280 + (460 - 280) * t)
+        p.paint(p.poly([(c[0] - 4, c[1] - 14), (c[0] + 4, c[1] - 14), (c[0] + 3, c[1] + 2), (c[0] - 3, c[1] + 2)]),
+                mat("#2a201c", "leather", round=2), cast=0.4)
+        rivet(p, (c[0], c[1] - 16), 3.0, "#c9ccd2")
+    p.paint(p.poly([(548, 318), (566, 314), (570, 334), (550, 338)], smooth=False), mat(BRASS, "gold", round=3), cast=0.4)
+    # mantle of the cloak over the shoulders
+    mant = [(446, 286), (478, 252), (530, 244), (582, 256), (604, 290), (596, 318), (572, 304), (530, 300), (486, 306),
+            (458, 316)]
+    cloth(p, mant, CLOAK, folds=[([(480, 262), (470, 312)], 7, -1.4), ([(530, 252), (528, 302)], 7, -1.2),
+                                 ([(578, 262), (590, 308)], 7, -1.4)], round_=10)
+    trim(p, [(458, 316), (486, 306), (530, 300), (572, 304), (596, 318)], 2.0, c="#8a7a50")
+    p.paint(p.ellipse((564, 298), 10, 10), mat(BRASS, "gold", round=5), cast=0.5)
+    gem(p, (564, 298), 5.5, "#3adf6a")
+    return p.finish(line=1.8)
+
+
+def rogue_root():
+    p = Part((360, 430, 660, 660), seed=214, xf=UR)
+    seat = [(462, 452), (584, 450), (602, 524), (450, 530)]
+    cloth(p, seat, TROUSER, round_=10)
+    for pts, c in (([(456, 468), (506, 466), (500, 590), (480, 586), (466, 602), (436, 560)], LEATHER),
+                   ([(540, 462), (592, 458), (614, 560), (596, 596), (580, 584), (552, 592)], LEATHER)):
+        p.paint(p.poly(pts, smooth=True), mat(c, "leather", round=10), cast=0.45,
+                bump=fold(p, [lerp(pts[0], pts[1], 0.5), lerp(pts[3], pts[4], 0.5)], 5, -1.0))
+        trim(p, pts[2:5], 1.6, c="#8a6a40")
+    belt = [(458, 446), (588, 440), (592, 470), (460, 476)]
+    p.paint(p.poly(belt, smooth=False), mat(LEATHER_D, "leather", round=6), cast=0.5,
+            bump=fold(p, [(460, 452), (590, 446)], 2, 0.6) + fold(p, [(460, 470), (590, 464)], 2, 0.6))
+    p.paint(p.poly([(530, 441), (556, 440), (557, 473), (531, 474)], smooth=False), mat(BRASS, "gold", round=4), cast=0.5)
+    p.paint(p.poly([(536, 448), (551, 447), (551, 466), (537, 467)], smooth=False), mat(LEATHER_D, "leather", round=3), cast=0)
+    # pouches
+    for x0 in (468, 500):
+        pts = [(x0, 470), (x0 + 26, 468), (x0 + 28, 504), (x0 + 2, 506)]
+        p.paint(p.poly(pts, smooth=True), mat("#6a4428", "leather", round=8), cast=0.5)
+        p.paint(p.poly([(x0 - 1, 468), (x0 + 27, 466), (x0 + 27, 484), (x0 + 13, 490), (x0, 484)], smooth=True),
+                mat("#4a2e1c", "leather", round=5), cast=0.4)
+        rivet(p, (x0 + 13, 484), 2.6, BRASS)
+    # poison vial on the front hip
+    vx, vy = UR.inv(*VIAL_C)
+    p.paint(p.tube([(vx - 4, vy - 40), (vx + 4, vy - 40)], 8), mat(LEATHER_D, "leather", round=3), cast=0.4)
+    glass = p.poly([(vx - 7, vy - 26), (vx + 7, vy - 26), (vx + 8, vy - 18), (vx + 13, vy - 8), (vx + 13, vy + 14),
+                    (vx + 6, vy + 22), (vx - 6, vy + 22), (vx - 13, vy + 14), (vx - 13, vy - 8), (vx - 8, vy - 18)], smooth=True)
+    p.glow((vx, vy + 4), 40, C("#5aff3a"), strength=0.3)
+    p.over(C("#2a5a3a"), glass * 0.6)
+    X, Y = p.grid()
+    liquid = glass * (Y > vy - 8)
+    p.over(C("#7aff4a"), liquid)
+    p.over(C("#eaffc8"), liquid * np.exp(-(((X - vx) / 7) ** 2 + ((Y - vy - 6) / 9) ** 2)))
+    p.over(C("#ffffff"), p.tube([(vx - 8, vy - 6), (vx - 8, vy + 14)], 2.4) * 0.8)
+    p.paint(p.poly([(vx - 6, vy - 34), (vx + 6, vy - 34), (vx + 6, vy - 24), (vx - 6, vy - 24)], smooth=False),
+            mat("#8a6a48", "leather", round=3), cast=0.3)
+    p.edge_line(glass, {"c": C("#1e4a2a")}, 1.0)
+    return p.finish(line=1.8)
+
+
+def rogue_cape():
+    p = Part((60, 230, 590, 820), seed=215)
+    outer = [(560, 282), (530, 268), (484, 270), (430, 288), (360, 320), (290, 370), (220, 440), (160, 520), (120, 600),
+             (100, 680), (130, 690), (150, 660), (176, 720), (200, 700), (232, 752), (262, 724), (300, 776), (330, 740),
+             (372, 790), (404, 750), (440, 772), (470, 700), (492, 620), (512, 500), (534, 400), (556, 320)]
+    folds = [([(470, 300), (350, 450), (240, 700)], 18, -2.4), ([(440, 296), (300, 400), (150, 620)], 12, 2.0),
+             ([(490, 320), (420, 490), (380, 760)], 16, 2.0), ([(510, 340), (470, 520), (440, 740)], 14, -2.0),
+             ([(430, 320), (320, 490), (300, 740)], 16, 2.2), ([(450, 300), (360, 340), (200, 470)], 10, -1.6)]
+    m = cloth(p, outer, CLOAK, folds=folds, round_=30, cast=0, smooth=False)
+    X, Y = p.grid()
+    p.mult(C("#5a7a64"), m * smoothstep(560, 780, Y) * 0.5)
+    rng = np.random.default_rng(5)
+    for k in range(14):
+        x = rng.uniform(140, 440)
+        y = rng.uniform(560, 740)
+        p.tint(C("#0e1e14"), p.line([(x, y), (x + rng.uniform(-6, 6), y + rng.uniform(14, 30))], 1.4) * m * 0.5)
+    p.mult(C("#6a8a74"), m * blur(p.poly([(530, 270), (570, 320), (520, 520), (470, 440)]), 20 * SS) * 0.6)
+    return p.finish(line=1.8)
+
+
+def dagger(p, hand, d, blade_len=118, blade_w=20, gem_c="#3adf6a", poison=True):
+    """A long dagger held at `hand`, blade along unit d; returns the tip."""
+    nx, ny = -d[1], d[0]
+    if ny > 0:
+        nx, ny = -nx, -ny
+    pom = (hand[0] - d[0] * 30, hand[1] - d[1] * 30)
+    guard = (hand[0] + d[0] * 18, hand[1] + d[1] * 18)
+    tip = (guard[0] + d[0] * blade_len, guard[1] + d[1] * blade_len)
+    w0 = blade_w / 2
+    bel = (guard[0] + d[0] * blade_len * 0.55, guard[1] + d[1] * blade_len * 0.55)
+    up = [(guard[0] + nx * w0 * 0.7, guard[1] + ny * w0 * 0.7), (bel[0] + nx * w0 * 0.75, bel[1] + ny * w0 * 0.75), tip, bel, guard]
+    lo = [guard, bel, tip, (bel[0] - nx * w0 * 1.1, bel[1] - ny * w0 * 1.1), (guard[0] - nx * w0, guard[1] - ny * w0)]
+    mu, ml = p.poly(up), p.poly(lo)
+    blade = np.maximum(mu, ml)
+    p.cast(blade, strength=0.3)
+    X, Y = p.grid()
+    t = ((X - guard[0]) * d[0] + (Y - guard[1]) * d[1]) / blade_len
+    p.over(mixc(C("#f6f8f4"), C("#9aa8b8"), np.clip(t, 0, 1)[..., None]), mu)
+    p.over(mixc(C("#5c6676"), C("#2e3440"), np.clip(t, 0, 1)[..., None]), ml)
+    p.tint(C("#ffffff"), p.line([(guard[0] + nx * (w0 * 0.7 - 1), guard[1] + ny * (w0 * 0.7 - 1)),
+                                 (bel[0] + nx * (w0 * 0.75 - 1), bel[1] + ny * (w0 * 0.75 - 1)), tip], 1.4, smooth=False) * 0.9)
+    if poison:
+        edge = p.line([(guard[0] - nx * (w0 - 2), guard[1] - ny * (w0 - 2)), (bel[0] - nx * (w0 * 1.1 - 2), bel[1] - ny * (w0 * 1.1 - 2)),
+                       tip], 2.4, smooth=False) * blade
+        p.over(C("#7aff5a"), edge * 0.8)
+    p.edge_line(blade, {"c": C("#5c6676")}, 1.0)
+    p.paint(p.tube([pom, guard], [10, 11]), mat("#2a1c14", "leather", round=4),
+            bump=sum(fold(p, [along(pom, guard, k / 6, -6), along(pom, guard, k / 6 + 0.06, 6)], 1.4, -0.6) for k in range(1, 6)))
+    gl = 16
+    cg = [(guard[0] + nx * gl - d[0] * 4, guard[1] + ny * gl - d[1] * 4), guard, (guard[0] - nx * gl + d[0] * 6, guard[1] - ny * gl + d[1] * 6)]
+    p.paint(p.tube(cg, [6, 9, 5]), mat("#4a4e58", "metal", round=3), cast=0.45)
+    p.paint(p.ellipse(pom, 7, 7), mat("#4a4e58", "metal", round=4), cast=0.4)
+    gem(p, guard, 3.8, gem_c)
+    return tip
+
+
+def rogue_arm(front=True):
+    if front:
+        sh, el, wr = U.fwd(574, 292), (626, 420), (700, 440)
+        seed, s = 220, 1.0
+    else:
+        sh, el, wr = U.fwd(466, 296), (414, 402), (376, 470)
+        seed, s = 230, 0.9
+    box_u = (min(sh[0], el[0]) - 70, sh[1] - 70, max(sh[0], el[0]) + 70, el[1] + 50)
+    box_l = (min(el[0], wr[0]) - 60, el[1] - 60, max(el[0], wr[0]) + 70, wr[1] + 70)
+    pu = Part(box_u, seed=seed)
+    pu.paint(pu.tube([along(sh, el, -0.1), el], [44 * s, 34 * s]), mat(TUNIC if front else "#203a28", "cloth", round=14),
+             bump=fold(pu, [along(sh, el, 0.3, 10), along(sh, el, 0.9, 6)], 5, -1.2), cast=0)
+    ang = math.degrees(math.atan2(el[1] - sh[1], el[0] - sh[0]))
+    for k, (dy, r) in enumerate(((34, 0.8), (16, 0.92), (0, 1.0))):
+        c = along(sh, el, dy / 120.0)
+        pts = \
+            rot(ell_pts(c, 22 * s * r, 32 * s * r, n=36), c, ang)
+        pu.paint(pu.poly(pts), mat(LEATHER if front else "#4e3220", "leather", round=8),
+                 cast=0.45, hgt=dome(pu, c, 22 * s * r, 32 * s * r, deg=ang, k=0.4))
+    rivet(pu, along(sh, el, 0.0, 0), 3.0 * s, BRASS)
+    upper = pu.finish(line=1.8)
+    pl = Part(box_l, seed=seed + 1)
+    u = unit(el, wr)
+    pl.paint(pl.tube([along(el, wr, -0.2), wr], [36 * s, 30 * s]), mat(TUNIC if front else "#203a28", "cloth", round=12), cast=0)
+    br = quad(along(el, wr, 0.3), along(el, wr, 1.0), 36 * s, 33 * s)
+    pl.paint(pl.poly(br, smooth=False), mat(LEATHER_D if front else "#2e1e14", "leather", round=10), cast=0.45,
+             hgt=cyl(pl, el, wr, 19 * s, k=0.8))
+    for t in (0.45, 0.8):
+        a, b = along(el, wr, t, 18 * s), along(el, wr, t + 0.04, -18 * s)
+        pl.paint(pl.tube([a, b], 5 * s), mat("#7a5434", "leather", round=2), cast=0.3, line=0.6)
+        rivet(pl, lerp(a, b, 0.5), 2.4 * s, BRASS)
+    if front:
+        d = (math.cos(math.radians(-8)), math.sin(math.radians(-8)))
+    else:
+        d = unit((0, 0), (-0.3, 1.0))
+    hc = grip_hand(pl, wr, u, d, 30 * s, c="#2c2420", kind="leather")
+    lower = pl.finish(line=1.8)
+    return upper, lower, sh, el, wr, hc, d
+
+
+def rogue_dagger(hand, d, front=True):
+    box = (hand[0] - 70, hand[1] - 160, hand[0] + 200, hand[1] + 170)
+    p = Part(box, seed=240 if front else 241)
+    tip = dagger(p, hand, d, blade_len=128 if front else 100, blade_w=21 if front else 18)
+    img = p.finish(line=1.2)
+    mid = lerp(hand, tip, 0.6)
+    fx = glow_part(None, [(mid, 46, "#5aff3a", 0.35)], seed=242) if front else None
+    return img, fx, tip
+
+
+def rogue_leg(front=True):
+    if front:
+        hip, knee, ank, toe, heel, seed = (505, 566), (622, 724), (642, 904), (736, 969), (614, 972), 250
+    else:
+        hip, knee, ank, toe, heel, seed = (440, 572), (352, 746), (256, 902), (306, 971), (210, 950), 260
+    box_u = (min(hip[0], knee[0]) - 80, hip[1] - 90, max(hip[0], knee[0]) + 80, knee[1] + 60)
+    box_l = (min(heel[0], knee[0]) - 60, knee[1] - 60, max(toe[0], knee[0]) + 30, 1000)
+    pu = Part(box_u, seed=seed)
+    top = (hip[0] + 6, hip[1] - 50)
+    col = TROUSER if front else "#30261f"
+    pu.paint(pu.tube([top, along(top, knee, 0.5), knee], [80, 66, 50]), mat(col, "cloth", round=18), cast=0,
+             bump=fold(pu, [along(top, knee, 0.2, -18), along(top, knee, 0.8, -12)], 8, -1.6)
+             + fold(pu, [along(top, knee, 0.5, 10), along(top, knee, 0.9, -6)], 6, -1.2)
+             + fold(pu, [along(top, knee, 0.85, 20), along(top, knee, 0.95, -18)], 5, -1.0))
+    # thigh strap with a throwing knife
+    a, b = along(top, knee, 0.55, 34), along(top, knee, 0.6, -30)
+    pu.paint(pu.tube([a, b], 9), mat(LEATHER_D, "leather", round=3), cast=0.4)
+    rivet(pu, lerp(a, b, 0.4), 2.6, BRASS)
+    upper = pu.finish(line=1.8)
+    pl = Part(box_l, seed=seed + 1)
+    kt = (knee[0], knee[1] - 24)
+    pl.paint(pl.tube([kt, along(kt, ank, 0.3, -6), ank], [50, 54, 38]), mat(col, "cloth", round=14), cast=0)
+    boot = [along(kt, ank, 0.18, 30), along(kt, ank, 0.98, 22), along(kt, ank, 0.98, -20), along(kt, ank, 0.22, -26)]
+    pl.paint(pl.poly(boot, smooth=False), mat("#4a3022", "leather", round=12), cast=0.4,
+             hgt=cyl(pl, along(kt, ank, 0, 4), along(kt, ank, 1, 2), 28, k=0.8),
+             bump=fold(pl, [along(kt, ank, 0.5, 20), along(kt, ank, 0.56, -18)], 4, -1.2)
+             + fold(pl, [along(kt, ank, 0.75, 20), along(kt, ank, 0.8, -18)], 4, -1.2))
+    cuff = [along(kt, ank, 0.12, 34), along(kt, ank, 0.28, 32), along(kt, ank, 0.32, -30), along(kt, ank, 0.16, -30)]
+    pl.paint(pl.poly(cuff, smooth=True), mat("#5a3a26", "leather", round=8), cast=0.5)
+    for t in (0.45, 0.7):
+        a, b = along(kt, ank, t, 26), along(kt, ank, t + 0.05, -24)
+        pl.paint(pl.tube([a, b], 6), mat(LEATHER_D, "leather", round=2), cast=0.35, line=0.6)
+        pl.paint(pl.poly(rot([(a[0] - 4, a[1] - 5), (a[0] + 4, a[1] - 5), (a[0] + 4, a[1] + 5), (a[0] - 4, a[1] + 5)], a, 0)),
+                 mat(BRASS, "gold", round=2), cast=0.3, line=0.5)
+    # cloth knee wrap
+    pl.paint(pl.tube([along(kt, ank, -0.02, 26), along(kt, ank, 0.04, -24)], 14), mat("#6a5c48", "cloth", round=4), cast=0.4)
+    foot = [(ank[0] - 24, ank[1] - 14), (ank[0] + 20, ank[1] - 18), (ank[0] + 40, ank[1] + 22), (toe[0] - 10, toe[1] - 22),
+            (toe[0] + 2, toe[1] - 6), toe, (heel[0] + 4, heel[1]), (heel[0] - 2, heel[1] - 28)]
+    pl.paint(pl.poly(foot, smooth=True), mat("#4a3022", "leather", round=10), cast=0.3,
+             bump=fold(pl, [(ank[0] + 26, ank[1] + 14), (ank[0] + 12, ank[1] + 46)], 4, -1.2))
+    pl.paint(pl.poly([(heel[0], heel[1] - 7), (toe[0] - 2, toe[1] - 7), toe, (heel[0] + 2, heel[1])], smooth=False),
+             mat("#1e1612", "leather", round=3), cast=0)
+    lower = pl.finish(line=1.8)
+    return upper, lower, hip, knee, ank
+
+
+def rogue():
+    global GRADE
+    GRADE = (520, 990, 0.3)
+    t = time.time()
+    fu, fl, fsh, fel, fwr, fhc, fd = rogue_arm(True)
+    bu, bl, bsh, bel, bwr, bhc, bd = rogue_arm(False)
+    lfu, lfl, fhip, fknee, _ = rogue_leg(True)
+    lbu, lbl, bhip, bknee, _ = rogue_leg(False)
+    dg, dgfx, _ = rogue_dagger(fhc, fd, True)
+    dg2, _, _ = rogue_dagger(bhc, bd, False)
+    eyes = glow_part(None, [(WF(20, 15), 26, "#3aff6a", 0.55, "#d8ffe0", 6), (WF(48.5, 13.5), 18, "#3aff6a", 0.45)], seed=243)
+    vial = glow_part(None, [(VIAL_C, 60, "#4aff2a", 0.55, "#f0ffd0", 10)], seed=244)
+    parts = [
+        ("hips", rogue_root(), "", "root", UR.fwd(520, 480), 12),
+        ("vial_glow", vial, "hips", "fx", VIAL_C, 24, "add"),
+        ("torso", rogue_torso(), "hips", "torso", U.fwd(522, 456), 11),
+        ("cape", rogue_cape(), "torso", "cape", (520, 292), 1),
+        ("head", rogue_head(), "torso", "head", HEAD_PIVOT, 18),
+        ("eye_glow", eyes, "head", "fx", WF(30, 15), 25, "add"),
+        ("hood_tip", rogue_hood_tip(), "head", "hair", WF(-66, -50), 16),
+        ("arm_back_upper", bu, "torso", "arm_back_upper", bsh, 4),
+        ("arm_back_lower", bl, "arm_back_upper", "arm_back_lower", bel, 3),
+        ("dagger_back", dg2, "arm_back_lower", "offhand", bhc, 2),
+        ("arm_front_upper", fu, "torso", "arm_front_upper", fsh, 21),
+        ("arm_front_lower", fl, "arm_front_upper", "arm_front_lower", fel, 20),
+        ("dagger", dg, "arm_front_lower", "weapon", fhc, 19),
+        ("dagger_glow", dgfx, "dagger", "fx", fhc, 23, "add"),
+        ("leg_back_upper", lbu, "hips", "leg_back_upper", bhip, 6),
+        ("leg_back_lower", lbl, "leg_back_upper", "leg_back_lower", bknee, 5),
+        ("leg_front_upper", lfu, "hips", "leg_front_upper", fhip, 9),
+        ("leg_front_lower", lfl, "leg_front_upper", "leg_front_lower", fknee, 8),
+    ]
+    build_rig("rogue", HERO, (470, 972), "humanoid", parts, "sprites/player/rogue.png")
+    print(f"rogue {time.time() - t:.1f}s")
+
+
 RIGS = {
     "warrior": warrior,
+    "mage": mage,
+    "rogue": rogue,
 }
 
 

@@ -1448,12 +1448,1131 @@ def _fx(glows, cv):
     return L
 
 
+# ================================================================== glow bat
+
+def tufted(pts, amp, step, seed=1, closed=True, lean=0.0):
+    """Resamples a (closed) outline and turns it into fur: every other point is pushed outward by a random
+    amount (spiky tufts); lean slides the tips along the edge so the fur seems combed one way."""
+    rng = np.random.default_rng(seed)
+    path = crspline(pts, 14, closed=closed)
+    cx = sum(p[0] for p in path) / len(path)
+    cy = sum(p[1] for p in path) / len(path)
+    out, acc, k = [], 0.0, 0
+    n = len(path)
+    for i in range(n - (0 if closed else 1)):
+        (x0, y0), (x1, y1) = path[i], path[(i + 1) % n]
+        seg = math.hypot(x1 - x0, y1 - y0)
+        acc += seg
+        if acc < step:
+            continue
+        acc = 0.0
+        tx, ty = (x1 - x0) / (seg + 1e-6), (y1 - y0) / (seg + 1e-6)
+        nx, ny = ty, -tx
+        if (x1 - cx) * nx + (y1 - cy) * ny < 0:
+            nx, ny = -nx, -ny
+        if k % 2 == 0:
+            a = rng.uniform(0.45, 1.0) * amp
+            out.append((x1 + nx * a + tx * a * lean, y1 + ny * a + ty * a * lean))
+        else:
+            a = rng.uniform(0.1, 0.35) * amp
+            out.append((x1 - nx * a, y1 - ny * a))
+        k += 1
+    return out
+
+
+def fur_strokes(L, cv, m, n, c, flow, length=26, width=2.0, alpha=0.5, seed=1, clip=True):
+    """Short hair strokes starting inside mask m; flow(x, y) -> direction (dx, dy). clip=False lets them
+    overhang the edge so the silhouette turns hairy."""
+    rng = np.random.default_rng(seed)
+    b = m.getbbox()
+    if b is None:
+        return
+    arr = np.asarray(m)
+    x0, y0, x1, y1 = [v / SS for v in b]
+    out = cv.blank()
+    d = ImageDraw.Draw(out)
+    for _ in range(n):
+        x, y = rng.uniform(x0, x1), rng.uniform(y0, y1)
+        if arr[min(cv.h - 1, int(y * SS)), min(cv.w - 1, int(x * SS))] < 128:
+            continue
+        dx, dy = flow(x, y)
+        ln = length * rng.uniform(0.5, 1.2)
+        bend = rng.uniform(-0.25, 0.25)
+        pts = []
+        for t in np.linspace(0, 1, 5):
+            px = x + dx * ln * t - dy * ln * bend * t * t
+            py = y + dy * ln * t + dx * ln * bend * t * t
+            pts.append((px * SS, py * SS))
+        d.line(pts, fill=int(255 * rng.uniform(0.5, 1.0)), width=max(1, int(width * SS)))
+    L.fill(AND(out, m) if clip else out, c, alpha=alpha, soft=0.4)
+
+
+def fur_edge(L, cv, m, c, dark, n=500, length=16, seed=1, flow=None):
+    """Hairs sticking out over the edge of mask m (only those starting near the edge), combed along flow."""
+    a = np.asarray(m, F32) / 255.0
+    ring = np.clip(a - np.asarray(cv.blank(), F32), 0, 1)
+    inner = fblur(a, 6 * SS)
+    ring = Image.fromarray((np.clip((a - inner) * 4, 0, 1) * (a > 0.5) * 255).astype(np.uint8))
+    flow = flow or (lambda x, y: (0.2, 1.0))
+    fur_strokes(L, cv, ring, n, dark, flow, length, 2.2, 0.75, seed=seed, clip=False)
+    fur_strokes(L, cv, ring, n // 2, c, flow, length * 0.8, 1.6, 0.6, seed=seed + 1, clip=False)
+
+
+def bat_wing(R, S, E, W, tips, root, mem, memd, meml, bone, boned, bonel, vein, seed=1, glow=1.0):
+    """A bat wing on its own layer. S shoulder, E elbow, W wrist, tips: finger tips from the leading edge
+    back, root: points where the membrane meets the body (from the last finger back toward S).
+    Returns (layer, membrane mask, vein mask for an fx glow)."""
+    cv = R.cv
+    L = R.layer()
+    # membrane outline: leading edge along the arm, scalloped trailing edge between finger tips
+    out = [S, lerp_pt(S, E, 0.5), E, W, tips[0]]
+    seq = list(tips) + [root[0]]
+    for a, b in zip(seq[:-1], seq[1:]):
+        mid = lerp_pt(a, b, 0.5)
+        pull = 0.2 if b is not root[0] else 0.14
+        mid = lerp_pt(mid, W, pull)
+        q1 = lerp_pt(lerp_pt(a, b, 0.25), W, pull * 0.7)
+        q3 = lerp_pt(lerp_pt(a, b, 0.75), W, pull * 0.7)
+        out += [q1, mid, q3, b]
+    out += list(root[1:])
+    memm = cv.poly(out, 0)
+    memm = U(memm, cv.poly(crspline(out[4:] + [W], 6, closed=True), 0))
+    memm = U(memm, cv.ell(S[0], S[1], 46, 46))
+    L.paint(memm, mem, dark=memd, lite=meml, alpha=0.93, rim=0.5, spec=0.35, shin=22, tex=0.2, grain="mottle",
+            line=0.9, lw=2.0, round_=0.25, flat=0.4, wrap=0.5, var=("#3a2a6a", 0.4))
+    # light shining through the thin membrane near the trailing edge (backlit by the cave glow)
+    for a, b in zip(seq[:-1], seq[1:]):
+        mid = lerp_pt(lerp_pt(a, b, 0.5), W, 0.26)
+        L.glow(mid[0], mid[1], math.hypot(b[0] - a[0], b[1] - a[1]) * 0.42, "#2a8aa0", 0.35 * glow, clip=memm)
+    # wrinkles: fine creases running from bones to the trailing edge
+    rng = np.random.default_rng(seed)
+    for a, b in zip(tips[:-1], tips[1:]):
+        for t in np.linspace(0.2, 0.85, 5):
+            p0 = lerp_pt(W, a, t)
+            p1 = lerp_pt(W, b, t * rng.uniform(0.85, 1.05))
+            m = lerp_pt(lerp_pt(p0, p1, 0.5), W, -0.06)
+            L.stroke([p0, m, p1], 2.2, 1.2, memd, alpha=0.28, soft=1.0, clip=memm)
+    # glowing veins: a net between neighbouring fingers plus branches off the arm
+    vm = cv.blank()
+    vd = ImageDraw.Draw(vm)
+    vlines = []
+    for a, b in zip(tips[:-1] + [tips[-1]], tips[1:] + [root[0]]):
+        for t in (0.4, 0.74):
+            p0 = lerp_pt(W, a, t + rng.uniform(-0.05, 0.05))
+            p1 = lerp_pt(W, b, t + rng.uniform(-0.05, 0.05)) if b is not root[0] else lerp_pt(root[0], root[-1], 0.3 + t * 0.4)
+            mid = lerp_pt(lerp_pt(p0, p1, 0.5), W, -0.1 - rng.uniform(0, 0.08))
+            path = crspline([p0, mid, p1], 8)
+            vlines.append(path)
+            # twigs off each vein toward the edge
+            for u in (0.3, 0.7):
+                q = path[int(u * (len(path) - 1))]
+                e = lerp_pt(q, lerp_pt(a, b, 0.5), rng.uniform(0.25, 0.45))
+                vlines.append([q, lerp_pt(q, e, 0.5), e])
+    for t in tips:
+        # a main vein running beside each finger bone, forking toward the trailing edge
+        nrm = (-(t[1] - W[1]), t[0] - W[0])
+        ln = math.hypot(*nrm) + 1e-6
+        nrm = (nrm[0] / ln, nrm[1] / ln)
+        off = 12
+        pts = [(W[0] + nrm[0] * off, W[1] + nrm[1] * off)]
+        for u in (0.35, 0.65, 0.9):
+            q = lerp_pt(W, t, u)
+            pts.append((q[0] + nrm[0] * off * (1 + u) + rng.uniform(-4, 4), q[1] + nrm[1] * off * (1 + u)))
+        vlines.append(crspline(pts, 8))
+        for u in (0.3, 0.55, 0.8):
+            q = lerp_pt(W, t, u)
+            q = (q[0] + nrm[0] * off * (1 + u), q[1] + nrm[1] * off * (1 + u))
+            e = (q[0] + nrm[0] * 55 * (1.2 - u) + (t[0] - W[0]) * 0.12, q[1] + nrm[1] * 55 * (1.2 - u) + (t[1] - W[1]) * 0.12)
+            vlines.append(crspline([q, lerp_pt(q, e, 0.5), e], 6))
+    for i in range(3):
+        p0 = lerp_pt(S, E, 0.3 + i * 0.25)
+        e = lerp_pt(p0, root[min(len(root) - 1, 1 + i)], 0.45)
+        vlines.append(crspline([p0, lerp_pt(lerp_pt(p0, e, 0.5), W, -0.08), e], 8))
+    for path in vlines:
+        L.stroke(path, 7, 3, vein, alpha=0.3 * glow, soft=3, clip=memm, mode="add")
+        L.stroke(path, 2.6, 1.0, mixc(vein, "#ffffff", 0.55), alpha=0.95 * glow, soft=0.5, clip=memm, mode="add")
+        vd.line([(px * SS, py * SS) for px, py in (cv.P(x, y) for x, y in path)], fill=255, width=int(3 * SS))
+    for path in vlines[::3]:
+        x, y = path[len(path) // 2]
+        L.glow(x, y, 10, "#e8ffff", 0.9 * glow, clip=memm)
+    # bones: upper arm, forearm, fingers, knuckles; a hooked thumb at the wrist
+    arm = U(cv.limb([S, E], [26, 17]), cv.limb([E, W], [16, 11]), cv.ell(E[0], E[1], 19, 17), cv.ell(W[0], W[1], 15, 13))
+    fingers = []
+    for t in tips:
+        k = lerp_pt(W, t, 0.48)
+        fingers.append(U(cv.limb([W, k], [9, 6]), cv.limb([k, t], [6, 2.2]), cv.ell(k[0], k[1], 8, 7)))
+    bones = U(arm, *fingers)
+    L.paint(bones, bone, dark=boned, lite=bonel, rim=0.8, spec=0.35, shin=18, tex=0.18, line=1.0, lw=1.8)
+    for t in tips:
+        k = lerp_pt(W, t, 0.48)
+        L.glow(k[0], k[1], 9, vein, 0.6 * glow, clip=bones)
+    ang = math.atan2(W[1] - E[1], W[0] - E[0])
+    th0 = (W[0] + math.cos(ang) * 14, W[1] + math.sin(ang) * 14)
+    th1 = (th0[0] + math.cos(ang - 0.9) * 26, th0[1] + math.sin(ang - 0.9) * 26)
+    th2 = (th1[0] + math.cos(ang - 2.2) * 12, th1[1] + math.sin(ang - 2.2) * 12)
+    claw = cv.limb([th0, th1, th2], [6, 4, 1.2])
+    L.paint(claw, "#e6dcc8", dark="#3a2c28", lite="#ffffff", rim=0.4, spec=0.9, shin=30, line=1.0, tex=0.05)
+    # fur over the shoulder and along the upper arm
+    furm = cv.poly(tufted(ell_pts(S[0] + (E[0] - S[0]) * 0.3, S[1] + (E[1] - S[1]) * 0.3, 52, 28,
+                                  math.degrees(math.atan2(E[1] - S[1], E[0] - S[0]))), 5, 7, seed=seed + 3), 0)
+    return L, memm, vm, furm
+
+
+def glow_bat():
+    """A big cave bat diving in at the player: a deep indigo fur coat, glassy teal wing membranes laced
+    with glowing cyan veins, huge ears lit from inside, burning cyan eyes over a wrinkled leaf nose, a
+    snarling fanged mouth, glowing photophores in its chest ruff, hooked feet hanging under it."""
+    R = Rig("glow_bat", (1024, 1024), feet=(512, 972), kind="flyer", flat_size=512, seed=41)
+    cv = R.cv
+    cv.xf = (1.0, 512, 972)
+    fur, furd, furl = "#3e3462", "#0c0818", "#8a7ab8"
+    ruff, ruffl = "#5e5288", "#c4b8ec"
+    mem, memd, meml = "#1e5266", "#06101c", "#6ad0dc"
+    bone, boned, bonel = "#4a3e6a", "#100a1c", "#a898d0"
+    vein = "#4af4ff"
+    skin, skind, skinl = "#8a5a7e", "#200a1a", "#e8b0cc"
+
+    # ---- far wing (behind everything, raised up and forward over the head)
+    Lw, memm, vm, furm = bat_wing(R, (470, 430), (392, 330), (330, 228),
+                                  [(236, 96), (120, 150), (66, 288), (130, 420)], [(350, 520), (420, 520), (470, 470)],
+                                  "#18485c", memd, "#5ab8c8", "#3e3460", boned, "#8a7ab8", vein, seed=3, glow=0.8)
+    Lw.paint(furm, fur, dark=furd, lite=furl, rim=0.5, tex=0.25, line=0.8)
+    Lw.tint("#0a0c22", 0.22)
+    wing_back = Lw
+    fxL = R.layer()
+    fxL.fill(vm, vein, alpha=0.35, soft=7, clip=memm)
+    wing_back_fx = fxL
+
+    # ---- near wing (in front of the body, swept up and back)
+    Lw, memm, vm, furm = bat_wing(R, (586, 440), (690, 356), (764, 238),
+                                  [(870, 92), (960, 230), (952, 400), (852, 540)], [(700, 610), (640, 600), (600, 540)],
+                                  mem, memd, meml, bone, boned, bonel, vein, seed=5)
+    Lw.paint(furm, fur, dark=furd, lite=furl, rim=0.9, tex=0.25, line=0.8)
+    fur_strokes(Lw, cv, furm, 120, furl, lambda x, y: (0.8, -0.6), length=18, width=1.6, alpha=0.35, seed=7)
+    wing_front = Lw
+    fxL = R.layer()
+    fxL.fill(vm, vein, alpha=0.4, soft=7, clip=memm)
+    wing_front_fx = fxL
+
+    # ---- body (root): furry torso, pale chest ruff with photophores
+    L = R.layer()
+    body = cv.poly(tufted(ell_pts(530, 520, 104, 148, -18), 6, 7, seed=2, lean=0.3), 0)
+    L.paint(body, fur, dark=furd, lite=furl, rim=1.0, spec=0.15, tex=0.3, grain="mottle", line=1.0,
+            var=("#2a2a5a", 0.4), wrap=0.4)
+    fur_strokes(L, cv, body, 380, furd, lambda x, y: (0.25, 1.0), length=28, width=2.0, alpha=0.45, seed=3)
+    fur_strokes(L, cv, body, 260, furl, lambda x, y: (0.25, 1.0), length=22, width=1.4, alpha=0.3, seed=4)
+    ruffm = AND(cv.poly(tufted([(430, 420), (520, 400), (580, 470), (590, 580), (550, 660), (480, 640),
+                                (440, 560)], 7, 8, seed=6), 0), body)
+    L.paint(ruffm, ruff, dark=furd, lite=ruffl, rim=0.4, tex=0.3, line=0.5, wrap=0.4)
+    fur_strokes(L, cv, ruffm, 260, ruffl, lambda x, y: (0.1, 1.0), length=20, width=1.4, alpha=0.4, seed=8)
+    fur_strokes(L, cv, ruffm, 200, furd, lambda x, y: (0.1, 1.0), length=22, width=1.6, alpha=0.35, seed=9)
+    glow_spots(L, cv, [(488, 470, 9, 8), (530, 520, 11, 9), (476, 548, 8, 7), (540, 596, 9, 8),
+                       (506, 628, 6, 5), (564, 460, 6, 5)], vein, clip=ruffm)
+    fur_edge(L, cv, body, furl, furd, n=700, length=18, seed=21)
+    L.glow(380, 400, 200, vein, 0.12, clip=body)  # spill from the eyes and the far wing
+    L.fill(cv.poly([(560, 380), (700, 500), (660, 700), (520, 700)]), "#06040e", alpha=0.3, soft=40, clip=body)
+    body_L = L
+
+    # ---- tail stub with a little tail membrane between the legs
+    L = R.layer()
+    tm = cv.poly([(560, 600), (640, 610), (680, 700), (650, 760), (600, 740), (560, 680)], 8)
+    L.paint(tm, "#1a4a5c", dark=memd, lite="#4aa8b8", alpha=0.9, rim=0.5, spec=0.3, tex=0.2, line=0.9, flat=0.5)
+    tail = cv.limb([(590, 620), (640, 690), (660, 762)], [10, 6, 2.5])
+    L.paint(tail, bone, dark=boned, lite=bonel, rim=0.6, tex=0.15, line=1.0)
+    L.stroke([(600, 650), (640, 700), (650, 740)], 6, 2, vein, alpha=0.3, soft=3, clip=tm, mode="add")
+    L.stroke([(600, 650), (640, 700), (650, 740)], 2, 1, "#c8ffff", alpha=0.8, soft=0.5, clip=tm, mode="add")
+    tail_L = L
+
+    # ---- hind legs hanging down, hooked toes
+    legs = []
+    for hip, knee, ankle, sh in (((560, 630), (560, 700), (542, 760), 1.0), ((604, 618), (618, 688), (612, 748), 0.8)):
+        L = R.layer()
+        thigh = U(cv.limb([hip, knee], [22, 13]), cv.limb([knee, ankle], [12, 9]))
+        L.paint(thigh, "#3a2e58", dark=furd, lite=furl, rim=0.8, tex=0.25, line=1.0)
+        fur_strokes(L, cv, cv.limb([hip, knee], [22, 13]), 60, furl, lambda x, y: (0.1, 1), 14, 1.4, 0.3, seed=11)
+        foot = cv.ell(ankle[0], ankle[1] + 6, 15, 11)
+        L.paint(foot, skin, dark=skind, lite=skinl, rim=0.5, tex=0.15, line=1.0)
+        for i, dx in enumerate((-10, 1, 12)):
+            t0 = (ankle[0] + dx, ankle[1] + 12)
+            t1 = (t0[0] - 8, t0[1] + 16)
+            t2 = (t1[0] + 2, t1[1] + 12)
+            t3 = (t2[0] + 10, t2[1] + 4)
+            c = cv.limb([t0, t1, t2, t3], [5, 3.6, 2.4, 0.8])
+            L.paint(c, "#b8aa9a", dark="#2a1c20", lite="#fff4e8", rim=0.3, spec=0.8, shin=30, line=1.0, tex=0.05)
+        if sh < 1:
+            L.tint("#0a0818", 0.25)
+        legs.append(L)
+
+    # ---- ears (sway): huge, ribbed, lit from inside
+    ears = []
+    for base0, tip, base1, inner_c, dim in (((356, 326), (318, 118), (430, 296), (366, 236), 0.8),
+                                            ((436, 296), (566, 104), (530, 352), (494, 236), 1.0)):
+        L = R.layer()
+
+        def bulge(a, b, k):
+            m = lerp_pt(a, b, 0.5)
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            return (m[0] - dy * k, m[1] + dx * k)
+        outer = cv.poly(crspline([base0, bulge(base0, tip, -0.2), lerp_pt(base0, tip, 0.85), tip,
+                                  lerp_pt(base1, tip, 0.85), bulge(tip, base1, -0.24), base1,
+                                  lerp_pt(base0, base1, 0.5)], 10, closed=True), 0)
+        outer = U(outer, cv.ell((base0[0] + base1[0]) / 2, (base0[1] + base1[1]) / 2 + 20, 46, 40))
+        L.paint(outer, fur, dark=furd, lite=furl, rim=1.0, spec=0.2, tex=0.25, line=1.0)
+        inner = cv.poly(crspline([lerp_pt(base0, base1, 0.2), lerp_pt(bulge(base0, tip, -0.2), inner_c, 0.25),
+                                  lerp_pt(tip, inner_c, 0.18), lerp_pt(bulge(tip, base1, -0.24), inner_c, 0.3),
+                                  lerp_pt(base0, base1, 0.85), (inner_c[0], inner_c[1] + 70)], 10, closed=True), 0)
+        inner = AND(inner, outer)
+        L.paint(inner, "#5a3e70", dark=skind, lite="#a888c8", rim=0, spec=0.4, shin=18, tex=0.15, line=0.8)
+        L.glow(inner_c[0], inner_c[1] + 30, 90, "#3ad8f0", 0.6 * dim, clip=inner)
+        L.glow(inner_c[0], inner_c[1] + 40, 40, "#c8ffff", 0.3 * dim, clip=inner)
+        for t in (0.3, 0.48, 0.64, 0.78):
+            a = lerp_pt(base0, tip, t)
+            b = lerp_pt(base1, tip, t)
+            m = lerp_pt(lerp_pt(a, b, 0.5), (inner_c[0], inner_c[1] + 200), 0.08)
+            L.stroke([a, m, b], 5, 2, skind, alpha=0.3, soft=2.5, clip=inner)
+            L.stroke([(a[0], a[1] - 5), (m[0], m[1] - 5), (b[0], b[1] - 5)], 3, 1, "#c8ffff", alpha=0.15, soft=2,
+                     clip=inner)
+        fur_edge(L, cv, SUB(outer, cv.ell(inner_c[0], inner_c[1] + 90, 60, 60)), furl, furd, n=160, length=10,
+                 seed=30 + int(dim * 10), flow=lambda x, y: (0.4, -1.0))
+        if dim < 1:
+            L.tint("#0a0c22", 0.15)
+        ears.append(L)
+
+    # ---- head: furry skull, muzzle, leaf nose, glowing eyes, mouth interior with upper fangs
+    L = R.layer()
+    skull = cv.poly(tufted(ell_pts(424, 372, 96, 84, -8), 5, 7, seed=12, lean=0.3), 0)
+    neck = cv.ell(486, 430, 70, 60)
+    head = U(skull, neck)
+    L.paint(head, fur, dark=furd, lite=furl, rim=1.0, spec=0.15, tex=0.3, line=1.0, var=("#2a2a5a", 0.4))
+    fur_strokes(L, cv, head, 260, furd, lambda x, y: ((x - 440) / 120 + 0.3, (y - 360) / 120), 18, 1.6, 0.4, seed=13)
+    fur_strokes(L, cv, head, 160, furl, lambda x, y: ((x - 440) / 120 + 0.3, (y - 360) / 120), 14, 1.2, 0.3,
+                seed=14)
+    fur_edge(L, cv, skull, furl, furd, n=500, length=14, seed=22,
+             flow=lambda x, y: ((x - 424) / 100 + 0.3, (y - 372) / 100))
+    mouth = cv.poly([(300, 404), (330, 396), (372, 404), (420, 414), (444, 430), (420, 452), (370, 462),
+                     (322, 452), (300, 430)], 8)
+    L.paint(mouth, "#5a1430", dark="#12020a", lite="#b04060", rim=0, spec=0.2, line=1.0, tex=0.1)
+    L.paint(cv.ell(376, 452, 32, 11), "#a04060", dark="#3a0a1a", lite="#e88aa0", rim=0, spec=0.7, shin=24,
+            line=0.4, tex=0.08)  # tongue
+    muzzle = cv.ell(352, 392, 62, 36, -6)
+    L.paint(muzzle, "#5a4a72", dark=furd, lite="#b0a0d0", rim=0.5, spec=0.3, tex=0.25, line=0.9)
+    fur_strokes(L, cv, muzzle, 80, furd, lambda x, y: (1, -0.2), 12, 1.2, 0.35, seed=15)
+    # upper lip and fangs hanging into the mouth
+    lip = cv.poly([(296, 400), (330, 410), (380, 414), (430, 420), (440, 432), (380, 428), (330, 424), (300, 416)], 6)
+    L.paint(lip, "#5a3654", dark=skind, lite="#b088a8", rim=0, spec=0.5, shin=20, line=0.8, tex=0.1)
+    for x, ln, w in ((318, 40, 9), (402, 34, 8)):
+        f = cv.poly([(x - w, 414), (x + w, 416), (x + 1, 414 + ln), (x - 2, 414 + ln - 2)], 4)
+        L.paint(f, "#ece4d0", dark="#5a4a3a", lite="#ffffff", rim=0, spec=1.0, shin=30, line=0.9, tex=0.05)
+    for x in range(334, 396, 10):
+        L.paint(cv.poly([(x - 4, 420), (x + 4, 420), (x, 432)]), "#e0d8c4", dark="#5a4a3a", rim=0, line=0.6, tex=0)
+    # leaf nose: a spear-shaped fleshy noseleaf and a horseshoe around the nostrils
+    leaf = cv.poly([(330, 344), (342, 358), (342, 372), (336, 386), (320, 386), (316, 372), (320, 356)], 8)
+    L.paint(leaf, "#4a3458", dark=skind, lite="#a080b0", rim=0.6, spec=0.45, shin=18, tex=0.2, line=1.0)
+    L.stroke([(330, 312), (330, 350), (328, 376)], 3, 1.5, skind, alpha=0.6, soft=0.8, clip=leaf)
+    for i in range(3):
+        L.stroke([(318, 356 + i * 9), (329, 361 + i * 9), (340, 356 + i * 9)], 2, 1, skind, alpha=0.4, clip=leaf)
+    shoe = cv.poly([(300, 392), (316, 380), (340, 382), (356, 394), (340, 404), (312, 404)], 6)
+    L.paint(shoe, "#4a3050", dark=skind, lite="#a07898", rim=0.3, spec=0.5, shin=20, tex=0.15, line=1.0)
+    for x in (318, 338):
+        L.fill(cv.ell(x, 394, 5, 3, 25), "#1a0410", alpha=0.9, soft=0.8)
+    # snarl creases
+    for pts in ([(350, 352), (372, 366), (390, 360)], [(356, 374), (382, 382), (404, 376)]):
+        L.stroke(pts, 4, 1.5, furd, alpha=0.6, soft=1)
+    # eyes: far (small, near the snout) and near, deep sockets, angry brows
+    eye(L, cv, 372, 342, 15, 11, vein, rotd=-6, pupil="slit", glow=1.3, lid=(-24, -0.25), look=(-0.35, 0.15),
+        core="#f0ffff")
+    eye(L, cv, 438, 336, 21, 15, vein, rotd=8, pupil="slit", glow=1.4, lid=(20, -0.25), look=(-0.35, 0.15),
+        core="#f0ffff")
+    L.stroke([(350, 326), (372, 328), (392, 342)], 7, 2, furd, alpha=0.8, soft=1.4)
+    L.stroke([(410, 340), (436, 322), (470, 318)], 8, 2, furd, alpha=0.8, soft=1.4)
+    L.glow(400, 330, 90, vein, 0.25, clip=head)
+    L.fill(cv.poly([(470, 300), (580, 360), (560, 500), (460, 480)]), "#06040e", alpha=0.3, soft=30, clip=head)
+    head_L = L
+
+    # ---- jaw: lower lip, lower fangs
+    L = R.layer()
+    jaw = cv.poly([(302, 446), (340, 456), (380, 460), (430, 446), (452, 440), (460, 470), (420, 494), (370, 500),
+                   (330, 488), (300, 466)], 8)
+    L.paint(jaw, "#4a3e66", dark=furd, lite="#a898c8", rim=0.5, spec=0.2, tex=0.25, line=1.0)
+    fur_strokes(L, cv, jaw, 80, furd, lambda x, y: (0.6, 0.8), 12, 1.2, 0.4, seed=16)
+    lip = cv.poly([(302, 446), (340, 456), (380, 460), (430, 446), (436, 454), (380, 470), (336, 466), (304, 456)], 6)
+    L.paint(lip, "#5a3654", dark=skind, lite="#b088a8", rim=0, spec=0.5, shin=20, line=0.8, tex=0.1)
+    for x, ln, w in ((330, 26, 7), (392, 22, 6)):
+        f = cv.poly([(x - w, 458), (x + w, 456), (x + 1, 458 - ln), (x - 2, 458 - ln + 2)], 4)
+        L.paint(f, "#ece4d0", dark="#5a4a3a", lite="#ffffff", rim=0, spec=1.0, shin=30, line=0.9, tex=0.05)
+    jaw_L = L
+
+    # ---- floating motes of glow-dust shed from the wings
+    motes = []
+    for i, pts in enumerate(([(236, 560, 4.0), (200, 620, 2.6), (268, 640, 2.2)],
+                             [(820, 640, 3.6), (880, 700, 2.4), (770, 720, 2.6)],
+                             [(130, 480, 3.0), (90, 540, 2.0)])):
+        L = R.layer()
+        spore_dots(L, cv, pts, vein, core="#f0ffff")
+        motes.append((L, pts[0][:2]))
+
+    # ---- assemble
+    R.add("body", body_L, "", "root", (530, 520), 10)
+    R.add("wing_back", wing_back, "body", "wing_back", (470, 430), 2)
+    R.add("wing_back_glow", wing_back_fx, "wing_back", "fx", (470, 430), 3, blend="add")
+    R.add("tail", tail_L, "body", "tail", (590, 620), 5)
+    R.add("leg_back", legs[1], "body", "leg_back", (604, 618), 6)
+    R.add("leg_front", legs[0], "body", "leg_front", (560, 630), 8)
+    R.add("head", head_L, "body", "head", (486, 440), 20)
+    R.add("ear_back", ears[0], "head", "hair", (395, 300), 4)
+    R.add("jaw", jaw_L, "head", "jaw", (440, 446), 21)
+    R.add("ear_front", ears[1], "head", "hair", (470, 310), 19)
+    R.add("wing_front", wing_front, "body", "wing_front", (586, 440), 16)
+    R.add("wing_front_glow", wing_front_fx, "wing_front", "fx", (586, 440), 17, blend="add")
+    R.add("eye_glow", _fx([(372, 340, 46, vein, 0.5), (438, 334, 56, vein, 0.55)], cv), "head", "fx", (420, 340), 24,
+          blend="add")
+    for i, (L, p) in enumerate(motes):
+        R.add(f"mote_{i + 1}", L, "body", "float", p, 26 + i)
+    R.save()
+    return R
+
+
+# ================================================================== shroom brute
+
+def moss_clump(L, cv, x, y, w, h, seed=1, clip=None, c="#4f8a34", glow=None):
+    """A cushion of moss: a lumpy mound with hairy edges and a few glowing sporophyte tips."""
+    rng = np.random.default_rng(seed)
+    blobs = [cv.ell(x, y, w * 0.36, h * 0.36)]
+    for _ in range(int(w / 9) + 4):
+        a = rng.uniform(0, 2 * math.pi)
+        rr = rng.uniform(0.2, 0.42)
+        bx, by = x + math.cos(a) * w * rr, y + math.sin(a) * h * rr
+        r = rng.uniform(0.12, 0.2) * w
+        blobs.append(cv.ell(bx, by, r, r * rng.uniform(0.6, 0.9)))
+    m = U(*blobs)
+    if clip is not None:
+        m = AND(m, clip)
+    L.shadow(m, dx=3, dy=6, blur=5, amt=0.35)
+    L.paint(m, c, dark="#0c1a08", lite="#b8d878", rim=0.5, spec=0.08, tex=0.45, grain="cells", line=0.5,
+            var=("#6a7a30", 0.5), size=h * 0.3, hmap=wart_map(L, m, int(w / 3), 2, 5, 0.9, seed=seed))
+    fur_edge(L, cv, m, "#a8c868", "#24401a", n=int(w * 2.5), length=max(5, h * 0.18), seed=seed,
+             flow=lambda a, b: ((a - x) / w, -0.6))
+    if glow:
+        rng = np.random.default_rng(seed)
+        for _ in range(max(2, int(w / 25))):
+            gx, gy = x + rng.uniform(-w * 0.4, w * 0.4), y - h * rng.uniform(0.2, 0.5)
+            L.stroke([(gx, gy + 10), (gx + rng.uniform(-3, 3), gy - 4)], 1.6, 1, "#a0c060", alpha=0.8)
+            L.glow(gx, gy - 5, 6, glow, 0.9, mode="halo")
+            L.fill(cv.ell(gx, gy - 5, 2.2, 2.2), "#fffff0", alpha=0.95)
+    return m
+
+
+def shelf_fungus(L, cv, x, y, w, seed=1, flip=1, c="#c88a3a"):
+    """A bracket fungus jutting from a surface: a few stacked shelves with growth bands and a pale lip."""
+    rng = np.random.default_rng(seed)
+    for k in range(3):
+        ww = w * (1 - k * 0.25)
+        yy = y + k * w * 0.22
+        xx = x + flip * k * w * 0.06
+        pts = [(xx - flip * ww * 0.1, yy - ww * 0.08), (xx + flip * ww * 0.45, yy - ww * 0.18),
+               (xx + flip * ww * 0.9, yy - ww * 0.02), (xx + flip * ww * 0.75, yy + ww * 0.12),
+               (xx + flip * ww * 0.2, yy + ww * 0.1)]
+        m = cv.poly(pts, 8)
+        L.paint(m, mixc(c, "#5a3010", k * 0.15), dark="#2a1404", lite="#ffd8a0", rim=0.6, spec=0.3, tex=0.25,
+                line=1.0, size=ww * 0.12, flat=0.3)
+        for b in (0.35, 0.6, 0.82):
+            L.stroke([lerp_pt(pts[0], pts[1], 1 - b * 0.4), lerp_pt(pts[0], pts[2], b),
+                      lerp_pt(pts[4], pts[3], b)], 2.2, 1.4, "#5a2c0c", alpha=0.45, soft=0.8, clip=m)
+        L.stroke([pts[2], pts[3], pts[4]], 3, 2, "#fff0c8", alpha=0.7, soft=0.8, clip=m)
+
+
+def shroom_brute():
+    """Elite: a hulking amanita giant. A cracked blood-red cap studded with white warts, moss and little
+    mushrooms, pulled low over burning amber eyes and a snaggle-toothed scowl; a torn ring hanging round
+    its neck like a collar; a fibrous barrel of a stem body with shelf fungus and glowing lichen; arms like
+    trunks; a knotted root club studded with rusty nails; amber light leaking from the cracks and gills."""
+    R = Rig("shroom_brute", (1024, 1024), feet=(512, 972), kind="humanoid", flat_size=512, seed=51)
+    cv = R.cv
+    cv.xf = (0.93, 520, 972)
+    capc, capd, capl = "#c02a22", "#2a0406", "#ff8a64"
+    stem, stemd, steml = "#d8c6a4", "#2e2018", "#fff6e0"
+    wood, woodd, woodl = "#6a4a30", "#1a0c06", "#b48a5c"
+    amber = "#ffb436"
+    lichen = "#d8ff6a"
+
+    # ---- back arm (behind the body), hanging, a huge root-fingered hand
+    L = R.layer()
+    up = cv.limb([(640, 560), (700, 610), (728, 670)], [66, 58, 52])
+    L.paint(up, "#c4b090", dark=stemd, lite=steml, rim=1.0, spec=0.1, tex=0.25, grain="vstreak", line=1.0)
+    fibers(L, cv, up, 120, (0.4, 1), 50, "#3a2a1c", alpha=0.35, width=1.4, seed=2)
+    moss_clump(L, cv, 662, 552, 90, 40, seed=3, clip=up)
+    L.tint("#0a0818", 0.12)
+    back_up = L
+    L = R.layer()
+    fore = cv.limb([(728, 670), (742, 730), (746, 790)], [52, 52, 46])
+    L.paint(fore, "#c4b090", dark=stemd, lite=steml, rim=1.0, spec=0.1, tex=0.25, grain="vstreak", line=1.0)
+    fibers(L, cv, fore, 100, (0.05, 1), 50, "#3a2a1c", alpha=0.35, width=1.4, seed=4)
+    hm = hand(L, cv, (746, 800), 96, 66, "#c4b090", stemd, steml, fingers=4, curl=0.7, spread=0.32, claws=True)
+    fibers(L, cv, hm, 40, (0, 1), 26, "#3a2a1c", alpha=0.3, width=1.2, seed=5)
+    L.tint("#0a0818", 0.12)
+    back_lo = L
+
+    # ---- root legs
+    legs = {}
+    for side, hip, knee, ankle in (("back", (606, 846), (624, 902), (632, 944)),
+                                   ("front", (446, 846), (424, 902), (410, 944))):
+        L = R.layer()
+        m = cv.limb([hip, knee], [52, 44])
+        L.paint(m, stem, dark=stemd, lite=steml, rim=0.8, tex=0.25, grain="vstreak", line=1.0)
+        fibers(L, cv, m, 60, (0, 1), 40, "#3a2a1c", alpha=0.35, width=1.4, seed=6)
+        if side == "back":
+            L.tint("#0a0818", 0.2)
+        legs[side + "_up"] = L
+        L = R.layer()
+        shin = cv.limb([knee, ankle], [42, 40])
+        ax, ay = ankle
+        roots = [shin, cv.ell(ax, ay + 6, 50, 26)]
+        for dx, ln, cr in ((-1, 70, 12), (-0.6, 64, 10), (0.1, 40, 9), (0.7, 54, 10), (1, 40, 8)):
+            tip = (ax + dx * ln, 972 + abs(dx) * 4)
+            roots.append(cv.limb([(ax + dx * 20, ay + 10), lerp_pt((ax + dx * 20, ay + 10), tip, 0.5), tip],
+                                 [cr * 1.4, cr, cr * 0.3]))
+        foot = U(*roots)
+        L.paint(foot, "#b8a280", dark=stemd, lite=steml, rim=0.8, tex=0.3, grain="vstreak", line=1.0,
+                var=("#6a5a3a", 0.5))
+        fibers(L, cv, foot, 80, (0, 1), 30, "#3a2a1c", alpha=0.35, width=1.3, seed=7)
+        L.fill(cv.poly([(ax - 90, 950), (ax + 90, 950), (ax + 90, 990), (ax - 90, 990)]), "#3a2a18", alpha=0.45,
+               soft=10, clip="self")  # soil
+        if side == "back":
+            L.tint("#0a0818", 0.2)
+        legs[side + "_lo"] = L
+
+    # ---- hips: the torn volva cup at the base of the stem
+    L = R.layer()
+    volva = cv.poly(ragged([(330, 820), (420, 790), (520, 784), (620, 790), (712, 822)], 18, 20, seed=8, down=False)
+                    + [(700, 880), (620, 904), (520, 910), (420, 904), (340, 880)], 6)
+    L.paint(volva, "#c8b48e", dark=stemd, lite=steml, rim=0.8, spec=0.15, tex=0.3, grain="mottle", line=1.0,
+            var=("#8a7a5a", 0.5))
+    folds(L, cv, volva, [[(400, 820), (390, 880)], [(470, 812), (468, 896)], [(560, 812), (566, 898)],
+                         [(640, 820), (650, 884)]], stemd, steml, w=10, alpha=0.5)
+    L.fill(cv.poly([(320, 870), (720, 870), (720, 920), (320, 920)]), "#3a2a18", alpha=0.4, soft=12, clip=volva)
+    moss_clump(L, cv, 380, 880, 110, 34, seed=9, clip=volva)
+    moss_clump(L, cv, 670, 870, 80, 30, seed=10, clip=volva)
+    hips = L
+
+    # ---- torso: the fibrous stem barrel
+    L = R.layer()
+    tor = cv.poly([(408, 470), (630, 470), (690, 540), (712, 660), (690, 780), (620, 846), (430, 846),
+                   (358, 782), (336, 660), (352, 540)], 10)
+    L.paint(tor, stem, dark=stemd, lite=steml, rim=1.0, spec=0.12, tex=0.28, grain="vstreak", line=1.1,
+            var=("#a89060", 0.45), wrap=0.4)
+    fibers(L, cv, tor, 420, (0.02, 1), 70, "#3a2a1c", alpha=0.32, width=1.5, seed=11, bend=0.1)
+    fibers(L, cv, tor, 200, (0.02, 1), 50, "#fff8e8", alpha=0.25, width=1.2, seed=12)
+    # gnarled chest plates of fibre, split and peeling
+    for pts in ([(420, 560), (430, 660), (418, 760)], [(520, 540), (512, 680), (520, 800)],
+                [(612, 560), (626, 690), (612, 790)]):
+        L.stroke(pts, 8, 3, stemd, alpha=0.5, soft=2.5, clip=tor)
+        L.stroke([(x - 6, y) for x, y in pts], 4, 2, steml, alpha=0.35, soft=2, clip=tor)
+    L.stroke([(470, 640), (500, 690), (486, 740), (506, 780)], 5, 2, "#1a0c08", alpha=0.75, soft=0.8, clip=tor)
+    L.glow(496, 710, 40, amber, 0.35, clip=tor)  # a wound that glows from inside
+    shelf_fungus(L, cv, 684, 668, 96, seed=13, flip=1, c="#b07434")
+    moss_clump(L, cv, 400, 520, 130, 50, seed=15, clip=tor, glow=lichen)
+    moss_clump(L, cv, 640, 800, 100, 40, seed=16, clip=tor)
+    glow_spots(L, cv, [(560, 600, 8, 6), (580, 620, 5, 4), (420, 700, 6, 5), (650, 700, 5, 4), (600, 760, 7, 5)],
+               lichen, clip=tor, amt=0.8)
+    L.shadow(cv.poly([(380, 540), (660, 540), (690, 610), (360, 610)], 6), dx=0, dy=16, blur=18, amt=0.45)
+    torso = L
+
+    # ---- the ring (annulus) hanging round the neck like a ragged collar
+    L = R.layer()
+    hem = ragged([(356, 606), (430, 622), (520, 630), (610, 622), (690, 600)], 16, 16, seed=17)
+    ring = cv.poly([(404, 552), (470, 546), (580, 546), (646, 554), (690, 600)] + list(reversed(hem))[1:-1] +
+                   [(356, 606)], 6)
+    L.paint(ring, "#e8dcc0", dark="#3a2c20", lite="#ffffff", rim=0.9, spec=0.2, tex=0.2, grain="vstreak", line=1.0,
+            alpha=0.97, wrap=0.4)
+    folds(L, cv, ring, [[(420, 566), (410, 606)], [(476, 562), (472, 618)], [(540, 562), (544, 622)],
+                        [(604, 562), (616, 612)], [(650, 566), (662, 598)]], "#3a2c20", "#ffffff", w=7, alpha=0.6)
+    moss_clump(L, cv, 630, 570, 56, 22, seed=18, clip=ring)
+    ring_L = L
+
+    # ---- head: the face on the upper stem and the great cap
+    L = R.layer()
+    face = cv.poly([(404, 360), (636, 360), (652, 440), (640, 520), (600, 548), (440, 548), (396, 516), (386, 440)], 10)
+    L.paint(face, stem, dark=stemd, lite=steml, rim=0.8, spec=0.12, tex=0.28, grain="vstreak", line=1.0,
+            var=("#a89060", 0.4))
+    fibers(L, cv, face, 160, (0.0, 1), 40, "#3a2a1c", alpha=0.3, width=1.3, seed=19)
+    # brow: a heavy fibrous ridge under the cap
+    brow = cv.poly([(392, 404), (450, 396), (520, 404), (590, 398), (640, 410), (630, 438), (560, 432), (500, 446),
+                    (440, 436), (396, 432)], 8)
+    L.paint(brow, "#c8b490", dark=stemd, lite=steml, rim=0.4, tex=0.3, grain="vstreak", line=1.0)
+    # sockets and eyes: deep, burning amber
+    for ex, ey, rx, ry, rd in ((440, 452, 18, 12, 12), (530, 456, 24, 15, -10)):
+        L.fill(cv.ell(ex, ey, rx * 1.6, ry * 1.6, rd), "#140804", alpha=0.75, soft=6)
+        eye(L, cv, ex, ey, rx, ry, amber, rotd=rd, pupil="slit", glow=1.4, lid=(rd, -0.1), look=(-0.35, 0.1),
+            core="#fff2c0")
+    L.stroke([(410, 436), (442, 446), (470, 458)], 8, 3, "#1a0c06", alpha=0.75, soft=1.5)
+    L.stroke([(498, 460), (530, 440), (570, 438)], 9, 3, "#1a0c06", alpha=0.75, soft=1.5)
+    # lumpy nose
+    nose = cv.poly([(470, 462), (488, 470), (494, 494), (480, 506), (456, 506), (446, 490)], 8)
+    L.paint(nose, "#ccb894", dark=stemd, lite=steml, rim=0.3, spec=0.25, tex=0.3, line=1.0)
+    L.fill(cv.ell(462, 502, 6, 3), "#1a0c06", alpha=0.7, soft=1)
+    # snarling mouth with snaggle teeth
+    mouth = cv.poly([(412, 514), (450, 520), (500, 518), (560, 512), (596, 506), (586, 528), (540, 542), (480, 546),
+                     (430, 540)], 8)
+    L.paint(mouth, "#2a0c0a", dark="#060202", lite="#5a2018", rim=0, spec=0, line=1.0, tex=0.1, round_=0.5)
+    L.glow(500, 532, 60, amber, 0.35, clip=mouth)
+    for x, y0, y1, w in ((428, 516, 534, 7), (462, 520, 532, 6), (520, 518, 540, 8), (572, 510, 526, 6)):
+        f = cv.poly([(x - w, y0 - 3), (x + w, y0 - 2), (x + 2, y1), (x - 2, y1 - 1)], 4)
+        L.paint(f, "#e0d4a8", dark="#4a3a20", lite="#fffbe8", rim=0, spec=0.7, shin=24, line=0.9, tex=0.15)
+    for x, y0, y1, w in ((444, 544, 518, 7), (492, 546, 504, 9), (556, 538, 520, 6)):  # lower tusks
+        f = cv.poly([(x - w, y0 + 2), (x + w, y0 + 2), (x + 2, y1), (x - 2, y1 + 1)], 4)
+        L.paint(f, "#e8dcb0", dark="#4a3a20", lite="#fffbe8", rim=0.2, spec=0.8, shin=24, line=0.9, tex=0.15)
+    L.stroke([(406, 512), (420, 524)], 4, 2, stemd, alpha=0.6)
+    L.stroke([(600, 502), (590, 520)], 4, 2, stemd, alpha=0.6)
+    # cap: underside gills glowing amber, then the dome
+    under = cv.poly(ell_pts(514, 386, 304, 44, 0, 0, 180, 40) + [(210, 380), (818, 380)], 0)
+    L.paint(under, "#e8c8a0", dark="#4a2814", lite="#fff4d8", rim=0, line=1.0, tex=0.15, emit=("#ffb860", 0.15))
+    gill_fan(L, cv, 514, 470, [(222 + i * 19.5, 386 + 34 * math.sin(math.pi * i / 30)) for i in range(31)],
+             "#6a3818", alpha=0.6, w=3, clip=under)
+    L.glow(518, 404, 220, amber, 0.4, clip=under)
+    capm = cv.poly([(204, 394), (212, 330), (256, 252), (324, 180), (412, 128), (510, 108), (606, 116), (692, 152),
+                    (762, 214), (806, 292), (824, 360), (818, 394), (750, 392), (640, 388), (520, 392),
+                    (400, 394), (284, 400)], 10)
+    L.paint(capm, capc, dark=capd, lite=capl, rim=1.0, spec=0.55, shin=18, tex=0.16, grain="mottle",
+            var=("#e8582a", 0.45), line=1.2, wrap=0.4)
+    L.fill(cv.poly([(190, 340), (850, 330), (850, 410), (190, 410)]), capd, alpha=0.4, soft=18, clip=capm)
+    L.stroke([(204, 388), (360, 394), (520, 390), (680, 388), (840, 390)], 6, 4, "#ffb090", alpha=0.35, soft=2,
+             clip=capm)
+    # a deep crack, glowing from inside
+    crack = [(560, 112), (548, 160), (572, 196), (552, 240), (566, 286), (548, 318)]
+    L.stroke(crack, 9, 3, "#1a0204", alpha=0.95, soft=0.8, clip=capm)
+    L.stroke(crack, 3.4, 1.2, "#ffd27a", alpha=0.95, soft=0.6, clip=capm)
+    L.glow(560, 220, 60, amber, 0.5, clip=capm)
+    L.stroke([(566, 196), (600, 214), (626, 210)], 5, 1.5, "#1a0204", alpha=0.8, soft=0.6, clip=capm)
+    # white warts: raised, flaky patches
+    rng = np.random.default_rng(20)
+    warts = [(270, 300, 30, 20, -30), (360, 220, 38, 24, -24), (470, 160, 30, 18, -8), (640, 170, 34, 20, 14),
+             (730, 250, 28, 18, 30), (790, 330, 20, 13, 40), (460, 280, 46, 28, -4), (620, 290, 36, 22, 8),
+             (330, 340, 22, 14, -10), (540, 350, 24, 12, 0), (700, 350, 22, 12, 10), (240, 360, 14, 9, -20),
+             (400, 360, 16, 9, 0), (590, 228, 14, 9, 0)]
+    for x, y, rx, ry, rd in warts:
+        pts = [(x + math.cos(a) * rx * rng.uniform(0.75, 1.1), y + math.sin(a) * ry * rng.uniform(0.75, 1.1))
+               for a in np.linspace(0, 2 * math.pi, 9, endpoint=False)]
+        m = AND(cv.poly(rot(pts, (x, y), rd), 6), capm)
+        L.shadow(m, dx=4, dy=6, blur=4, amt=0.4)
+        L.paint(m, "#efe6d4", dark="#6a5a50", lite="#ffffff", rim=0.4, spec=0.3, tex=0.4, grain="cells", line=0.8,
+                size=min(rx, ry) * 0.5)
+    moss_clump(L, cv, 330, 196, 90, 34, seed=21, clip=U(capm, cv.ell(330, 180, 60, 30)), glow=lichen)
+    moss_clump(L, cv, 700, 186, 70, 26, seed=22, clip=U(capm, cv.ell(700, 172, 50, 26)))
+    L.glow(520, 450, 140, amber, 0.18, clip=face)
+    L.fill(cv.poly([(380, 380), (660, 380), (660, 420), (380, 420)]), "#1a0a04", alpha=0.45, soft=14, clip=face)
+    neck = cv.limb([(520, 520), (520, 560)], [92, 92])
+    L.paint(SUB(neck, face), stem, dark=stemd, lite=steml, rim=0.6, tex=0.25, grain="vstreak", line=0.8)
+    head = L
+
+    # ---- little mushrooms sprouting from the cap (sway)
+    L = R.layer()
+    for x, y, s, ang in ((420, 132, 1.0, -14), (452, 124, 0.7, 6), (760, 230, 0.8, 30)):
+        top = (x + math.sin(math.radians(ang)) * 52 * s, y - math.cos(math.radians(ang)) * 52 * s)
+        st = cv.limb([(x, y + 14), lerp_pt((x, y), top, 0.5), top], [7 * s, 6 * s, 5 * s])
+        L.paint(st, "#f0e4cc", dark="#4a3a2a", lite="#ffffff", rim=0.6, line=0.8, tex=0.15)
+        cp = cv.poly(rot(ell_pts(top[0], top[1], 26 * s, 18 * s, 0, 180, 360, 24), top, ang), 0)
+        L.paint(cp, "#e8902a", dark="#4a1a04", lite="#ffe0a0", rim=0.7, spec=0.6, shin=20, line=0.8, tex=0.1)
+        L.glow(top[0], top[1] + 2, 30 * s, amber, 0.6, clip=cp)
+        L.fill(cv.ell(top[0] - 6 * s, top[1] - 8 * s, 4 * s, 3 * s), "#fff8e0", alpha=0.8)
+    crown = L
+
+    # ---- front arm: trunk-thick, mossy, fist wrapped round the club
+    L = R.layer()
+    up = cv.limb([(426, 604), (380, 650), (342, 698)], [62, 58, 54])
+    L.paint(up, stem, dark=stemd, lite=steml, rim=1.0, spec=0.12, tex=0.28, grain="vstreak", line=1.1,
+            var=("#a89060", 0.4))
+    fibers(L, cv, up, 140, (-0.5, 1), 50, "#3a2a1c", alpha=0.35, width=1.4, seed=23)
+    moss_clump(L, cv, 410, 594, 90, 40, seed=24, clip=up, glow=lichen)
+    front_up = L
+    L = R.layer()
+    fore = cv.limb([(342, 698), (310, 740), (284, 774)], [54, 58, 52])
+    L.paint(fore, stem, dark=stemd, lite=steml, rim=1.0, spec=0.12, tex=0.28, grain="vstreak", line=1.1,
+            var=("#a89060", 0.4))
+    fibers(L, cv, fore, 100, (-0.4, 1), 40, "#3a2a1c", alpha=0.35, width=1.4, seed=25)
+    shelf_fungus(L, cv, 330, 720, 56, seed=26, flip=1, c="#b07434")
+    fm = fist(L, cv, 262, 790, 54, 46, 70, "#d4c09c", stemd, steml)
+    fibers(L, cv, fm, 40, (0, 1), 26, "#3a2a1c", alpha=0.3, width=1.2, seed=27)
+    front_lo = L
+
+    # ---- the root club
+    L = R.layer()
+    h0, h1 = (300, 892), (176, 480)
+    shaft = cv.limb([h0, lerp_pt(h0, h1, 0.35), lerp_pt(h0, h1, 0.7), h1], [20, 22, 28, 36])
+    knot = U(cv.ell(160, 440, 70, 84, -20), cv.ell(198, 400, 46, 50), cv.ell(128, 486, 44, 40),
+             cv.ell(150, 372, 36, 34), cv.ell(206, 470, 30, 34), cv.ell(110, 420, 34, 40))
+    club = U(shaft, knot)
+    L.paint(club, wood, dark=woodd, lite=woodl, rim=0.9, spec=0.15, tex=0.3, grain="vstreak", line=1.1,
+            var=("#4a4a2a", 0.4), hmap=wart_map(L, club, 50, 8, 22, 0.6, seed=31))
+    fibers(L, cv, club, 160, (0.3, -1), 60, "#1a0c06", alpha=0.4, width=1.4, seed=28, bend=0.2)
+    for x, y, r in ((140, 450, 14), (190, 410, 10), (230, 640, 8)):
+        L.paint(cv.ell(x, y, r, r * 0.8), "#3a2414", dark=woodd, lite="#8a6a4a", rim=0.2, line=0.8, tex=0.2,
+                round_=0.4)
+    # rootlets trailing from the knot
+    for pts in ([(110, 500), (84, 540), (90, 580)], [(196, 470), (226, 520), (222, 556)],
+                [(120, 380), (90, 350), (80, 316)]):
+        rm = cv.limb(pts, [7, 4, 1.5])
+        L.paint(rm, "#5a3c26", dark=woodd, lite=woodl, rim=0.6, tex=0.2, line=0.9)
+    # rusty nails driven through the knot
+    for (x, y), ang in (((112, 420), 200), ((150, 362), 250), ((214, 380), 300), ((96, 470), 170),
+                        ((196, 452), 330), ((140, 520), 140), ((176, 330), 270)):
+        a = math.radians(ang)
+        tip = (x + math.cos(a) * 42, y + math.sin(a) * 42)
+        nail = cv.limb([(x, y), tip], [5.5, 2])
+        L.paint(nail, "#7a7a80", dark="#1a1a20", lite="#e8f0ff", rim=0.5, spec=1.2, shin=40, line=1.0, tex=0.1)
+        L.fill(cv.ell(x, y, 9, 9), "#3a3438", alpha=0.95, soft=0.5)
+        L.fill(cv.ell(x - 2, y - 2, 4, 4), "#a8a8b0", alpha=0.8, soft=0.5)
+        L.fill(cv.ell(x + math.cos(a) * 14, y + math.sin(a) * 14, 7, 5, ang), "#8a3a10", alpha=0.5, soft=3,
+               clip=nail)
+    moss_clump(L, cv, 170, 360, 80, 30, seed=29, clip=U(knot, cv.ell(170, 344, 50, 24)))
+    L.glow(160, 440, 140, amber, 0.12, clip=club)
+    club_L = L
+
+    # ---- floating spores
+    sp = []
+    for i, pts in enumerate(([(250, 140, 4), (296, 104, 3), (210, 196, 2.5)],
+                             [(842, 210, 4), (880, 280, 3), (820, 150, 2.6)],
+                             [(110, 260, 3.4), (70, 330, 2.4)])):
+        L = R.layer()
+        spore_dots(L, cv, pts, amber, core="#fff6d8")
+        sp.append((L, pts[0][:2]))
+
+    # ---- assemble
+    R.add("hips", hips, "", "root", (520, 846), 8)
+    R.add("leg_back_upper", legs["back_up"], "hips", "leg_back_upper", (606, 846), 5)
+    R.add("leg_back_lower", legs["back_lo"], "leg_back_upper", "leg_back_lower", (624, 902), 6)
+    R.add("leg_front_upper", legs["front_up"], "hips", "leg_front_upper", (446, 846), 9)
+    R.add("leg_front_lower", legs["front_lo"], "leg_front_upper", "leg_front_lower", (424, 902), 10)
+    R.add("torso", torso, "hips", "torso", (520, 820), 12)
+    R.add("arm_back_upper", back_up, "torso", "arm_back_upper", (640, 560), 3)
+    R.add("arm_back_lower", back_lo, "arm_back_upper", "arm_back_lower", (728, 670), 4)
+    R.add("head", head, "torso", "head", (520, 540), 16)
+    R.add("cap_sprouts", crown, "head", "hair", (520, 160), 17)
+    R.add("ring", ring_L, "torso", "extra", (520, 560), 18)
+    R.add("arm_front_upper", front_up, "torso", "arm_front_upper", (426, 604), 20)
+    R.add("arm_front_lower", front_lo, "arm_front_upper", "arm_front_lower", (342, 698), 22)
+    R.add("club", club_L, "arm_front_lower", "weapon", (262, 790), 21)
+    R.add("glow", _fx([(486, 452, 50, amber, 0.4), (530, 456, 60, amber, 0.45), (518, 420, 200, amber, 0.14),
+                       (560, 220, 70, amber, 0.25)], cv), "head", "fx", (520, 420), 26, blend="add")
+    R.add("lichen_glow", _fx([(400, 500, 70, lichen, 0.2), (580, 620, 50, lichen, 0.18)], cv), "torso", "fx",
+          (500, 560), 25, blend="add")
+    for i, (L, p) in enumerate(sp):
+        R.add(f"spore_{i + 1}", L, "head", "float", p, 28 + i)
+    R.save()
+    return R
+
+
+# ================================================================== spore mother (boss)
+
+def vine(L, cv, pts, radii, c="#3f8a4a", d="#0a1e10", l="#b8f08a", seed=1, thorns=6, leaves=3, twist=True):
+    """A living vine limb: a twisted green tube with spiral grooves, thorns and a few leaves."""
+    m = cv.limb(pts, radii)
+    L.paint(m, c, dark=d, lite=l, rim=0.9, spec=0.35, shin=18, tex=0.2, grain="vstreak", line=1.0,
+            var=("#5a7a2a", 0.4))
+    path = crspline(pts, 12)
+    rng = np.random.default_rng(seed)
+    if twist:
+        # a second strand wrapping round the main one
+        k = len(path)
+        strand = []
+        for i, (x, y) in enumerate(path):
+            j = min(k - 2, i)
+            dx, dy = path[j + 1][0] - path[j][0], path[j + 1][1] - path[j][1]
+            ln = math.hypot(dx, dy) + 1e-6
+            u = i / max(1, k - 1)
+            r = (radii[0] + (radii[-1] - radii[0]) * u) * 0.7
+            s = math.sin(u * 7 * math.pi)
+            strand.append((x - dy / ln * r * s, y + dx / ln * r * s))
+        for i in range(0, len(strand) - 3, 3):
+            seg = strand[i:i + 4]
+            L.stroke(seg, 6, 5, d, alpha=0.45, soft=1.2, clip=m)
+            L.stroke([(x - 2, y - 2) for x, y in seg], 3, 2, l, alpha=0.35, soft=1, clip=m)
+    for _ in range(thorns):
+        i = int(rng.uniform(0.1, 0.9) * (len(path) - 2))
+        (x0, y0), (x1, y1) = path[i], path[i + 1]
+        dx, dy = x1 - x0, y1 - y0
+        ln = math.hypot(dx, dy) + 1e-6
+        side = 1 if rng.random() < 0.5 else -1
+        u = i / max(1, len(path) - 1)
+        r = radii[0] + (radii[-1] - radii[0]) * u
+        bx, by = x0 - dy / ln * r * side * 0.9, y0 + dx / ln * r * side * 0.9
+        tx, ty = bx - dy / ln * 18 * side + dx / ln * 10, by + dx / ln * 18 * side + dy / ln * 10
+        L.paint(cv.limb([(bx, by), (tx, ty)], [4.5, 0.8]), "#c8d0a0", dark="#2a3018", lite="#ffffff", rim=0.2,
+                spec=0.8, shin=30, line=0.8, tex=0.05)
+    for _ in range(leaves):
+        i = int(rng.uniform(0.2, 0.85) * (len(path) - 2))
+        x, y = path[i]
+        ang = rng.uniform(0, 360)
+        a = math.radians(ang)
+        tip = (x + math.cos(a) * 46, y + math.sin(a) * 46)
+        mid = lerp_pt((x, y), tip, 0.5)
+        pts2 = [(x, y), (mid[0] - math.sin(a) * 15, mid[1] + math.cos(a) * 15), tip,
+                (mid[0] + math.sin(a) * 15, mid[1] - math.cos(a) * 15)]
+        lm = cv.poly(pts2, 6)
+        L.paint(lm, "#4a9a4a", dark="#0a2a10", lite="#d8ffa0", rim=0.6, spec=0.4, shin=20, tex=0.15, line=0.9,
+                size=8)
+        L.stroke([(x, y), tip], 1.8, 0.8, "#1a4a1a", alpha=0.6, clip=lm)
+    return m
+
+
+def spore_cloud(L, cv, cx, cy, w, h, c, seed=1, alpha=0.5, dots=14):
+    """A drifting cloud of glowing spores: overlapping soft puffs with a brighter heart and specks."""
+    rng = np.random.default_rng(seed)
+    puffs = []
+    for _ in range(9):
+        px, py = cx + rng.uniform(-0.38, 0.38) * w, cy + rng.uniform(-0.3, 0.3) * h
+        r = rng.uniform(0.18, 0.3) * w
+        puffs.append(cv.ell(px, py, r, r * rng.uniform(0.6, 0.9)))
+    m = U(*puffs)
+    L.fill(m, mixc(c, "#1a3a2a", 0.5), alpha=alpha * 0.4, soft=w * 0.1)
+    L.fill(m, c, alpha=alpha * 0.3, soft=w * 0.16)
+    L.glow(cx, cy, w * 0.35, mixc(c, "#ffffff", 0.3), alpha * 0.7, mode="halo")
+    # brighter, denser cores in a few puffs
+    for _ in range(4):
+        px, py = cx + rng.uniform(-0.3, 0.3) * w, cy + rng.uniform(-0.25, 0.2) * h
+        L.glow(px, py, rng.uniform(0.1, 0.18) * w, mixc(c, "#ffffff", 0.35), alpha * 0.35, mode="halo")
+    pts = [(cx + rng.uniform(-0.55, 0.55) * w, cy + rng.uniform(-0.5, 0.5) * h, rng.uniform(1.6, 4.2))
+           for _ in range(dots)]
+    spore_dots(L, cv, pts, c, core="#f8ffe8")
+
+
+def spore_mother():
+    """Boss: the Spore Mother, a towering mushroom queen. A great violet bell cap ringed with glowing spots,
+    crowned with little luminous toadstools and hung with a veil of glowing threads; a pale, beautiful,
+    eerie face with half-lidded green eyes and a knowing smile; a high gill ruff; the dragon-bone relic
+    burning amber in her breast with light cracking out through her bodice; living vine arms, one open hand
+    pouring spores, the other raising a thorned tendril sceptre; a gown of glowing gill-ruffles whose hem
+    melts into mycelium; spore clouds drifting round her."""
+    R = Rig("spore_mother", (1536, 1536), feet=(768, 1458), kind="humanoid", flat_size=768, seed=61)
+    cv = R.cv
+    cv.xf = (1.38, -161.6, -306.8)  # authored in 1024 design units; design (512, 972) -> feet (768, 1458)
+    capc, capd, capl = "#7a34c4", "#16062c", "#d6a8ff"
+    gown, gownd, gownl = "#57268a", "#10041c", "#c49af0"
+    glowc = "#d890ff"
+    skin, skind, skinl = "#e6dcea", "#3a2444", "#ffffff"
+    spore = "#b8ff7a"
+    amber = "#ffb040"
+    vinec, vined, vinel = "#3f8a4a", "#0a1e10", "#b8f08a"
+
+    # ---- gown (root): three tiers of ruffled gill-flounces, glowing hems, mycelium at the foot
+    L = R.layer()
+    rng = np.random.default_rng(4)
+    tiers = [((300, 960), (740, 960), 700, 52), ((330, 820), (700, 820), 600, 40), ((370, 690), (650, 690), 480, 30)]
+    skirt = cv.poly([(452, 560), (572, 560), (640, 700), (720, 840), (790, 960), (240, 960), (300, 840), (380, 700)],
+                    8)
+    L.paint(skirt, gown, dark=gownd, lite=gownl, rim=1.0, spec=0.2, tex=0.18, grain="vstreak", line=1.0,
+            var=("#7a2a7a", 0.4), wrap=0.4)
+    hems = []
+    for k, (a, b, wy, amp) in enumerate(tiers):
+        x0, x1 = a[0] - 40 + k * 6, b[0] + 40 - k * 6
+        y = a[1]
+        hem_pts = [(x0 + (x1 - x0) * i / 16, y + 8 * math.sin(i * 1.3 + k) + (rng.uniform(8, 20) if i % 2 else 0)
+                    - 18 * math.sin(math.pi * i / 16) * (k == 0)) for i in range(17)]
+        top = y - (130 if k else 150)
+        tier = cv.poly([(x0 + 60 + k * 10, top), (x1 - 60 - k * 10, top)] + list(reversed(hem_pts)), 6)
+        tier = U(tier, cv.poly(crspline(hem_pts + [(x0 + 40, y - 20)], 6), 0))
+        L.shadow(tier, dx=0, dy=16, blur=16, amt=0.5)
+        L.paint(tier, mixc(gown, "#7a3aa8", 0.15 * k), dark=gownd, lite=gownl, rim=1.0, spec=0.25, shin=16,
+                tex=0.16, grain="vstreak", line=1.0, var=("#7a2a7a", 0.4), wrap=0.4)
+        # gill pleats fanning down each tier
+        n = 22 - k * 4
+        for i in range(n + 1):
+            u = i / n
+            p0 = (x0 + 60 + k * 10 + (x1 - x0 - 120 - k * 20) * u, top + 6)
+            p1 = hem_pts[min(16, int(round(u * 16)))]
+            L.stroke([p0, lerp_pt(p0, p1, 0.6), p1], 4, 2, gownd, alpha=0.55, soft=1.2, clip=tier)
+            L.stroke([(p0[0] - 5, p0[1]), (lerp_pt(p0, p1, 0.6)[0] - 5, lerp_pt(p0, p1, 0.6)[1]),
+                      (p1[0] - 5, p1[1] - 4)], 2, 1, gownl, alpha=0.3, soft=1, clip=tier)
+        # glowing hem
+        L.stroke(hem_pts, 7, 7, glowc, alpha=0.75, soft=2.5, clip=tier)
+        L.stroke([(x, yy - 3) for x, yy in hem_pts], 2.4, 2.4, "#fbeaff", alpha=0.9, soft=0.8, clip=tier)
+        L.glow((x0 + x1) / 2, y - 20, (x1 - x0) * 0.45, glowc, 0.18, clip=tier)
+        L.fill(cv.poly([(x1 - 160, top), (x1 + 40, top), (x1 + 40, y + 40), (x1 - 100, y + 40)]), gownd, alpha=0.35,
+               soft=40, clip=tier)
+        hems.append(hem_pts)
+    # glowing spore-dots embroidered on the flounces
+    rng = np.random.default_rng(5)
+    dots = []
+    for k, hp in enumerate(hems):
+        for i in range(1, 16):
+            if rng.random() < 0.55:
+                continue
+            x, y = hp[i]
+            r = rng.uniform(2.5, 6.5)
+            dots.append((x + rng.uniform(-14, 14), y - rng.uniform(18, 110), r, r * 0.8))
+    glow_spots(L, cv, [d + (0,) for d in dots], "#7affd8", clip=L.mask(), amt=0.7)
+    # mycelium hem: pale threads spreading over the ground, tiny glowing toadstools
+    for i in range(70):
+        x = rng.uniform(250, 790)
+        y = 958 + rng.uniform(-4, 8)
+        ex = x + rng.uniform(-70, 70)
+        L.stroke([(x, y), ((x + ex) / 2, y + rng.uniform(4, 10)), (ex, y + rng.uniform(8, 16))], 2.0, 0.6,
+                 "#ece4f4", alpha=0.6, soft=0.4)
+    for x, s in ((262, 1.0), (300, 0.7), (738, 0.9), (774, 0.6), (520, 0.5)):
+        y = 966
+        st = cv.limb([(x, y), (x - 2 * s, y - 26 * s)], [5 * s, 4 * s])
+        L.paint(st, "#f0e8f0", dark="#4a3a4a", rim=0, line=0.6, tex=0.1)
+        cp = cv.poly(ell_pts(x - 2 * s, y - 28 * s, 17 * s, 12 * s, 0, 180, 360, 24), 0)
+        L.paint(cp, "#9a5ae0", dark=capd, lite="#f0d8ff", rim=0.4, spec=0.5, line=0.6, tex=0.05)
+        L.glow(x - 2 * s, y - 30 * s, 26 * s, glowc, 0.7, clip=cp)
+    L.glow(512, 960, 300, glowc, 0.08, clip=skirt)
+    R.add("gown", L, "", "root", (512, 940), 10)
+    del L
+
+    # ---- train behind (cape): a long trailing back panel
+    L = R.layer()
+    train = cv.poly([(560, 590), (650, 610), (760, 720), (860, 860), (930, 966), (800, 972), (680, 940),
+                     (600, 800)], 10)
+    L.paint(train, "#3e1a66", dark=gownd, lite="#9a70d0", rim=1.0, spec=0.2, tex=0.18, grain="vstreak", line=1.0,
+            var=("#6a2a6a", 0.4))
+    for i in range(7):
+        u = i / 6
+        p0 = lerp_pt((600, 620), (640, 640), u)
+        p1 = lerp_pt((700, 950), (920, 962), u)
+        L.stroke([p0, lerp_pt(p0, p1, 0.5), p1], 4, 2, gownd, alpha=0.5, soft=1.5, clip=train)
+    L.stroke([(700, 950), (800, 970), (926, 964)], 6, 6, glowc, alpha=0.6, soft=2.5, clip=train)
+    L.tint("#0a0418", 0.15)
+    R.add("train", L, "gown", "cape", (600, 620), 4)
+
+    # ---- torso: pale body, gill corset, high gill ruff, the relic
+    L = R.layer()
+    body = cv.poly([(470, 400), (556, 400), (590, 440), (594, 500), (566, 560), (560, 610), (464, 610), (458, 560),
+                    (430, 500), (436, 440)], 10)
+    L.paint(body, skin, dark=skind, lite=skinl, rim=0.9, spec=0.2, tex=0.12, line=1.0, var=("#c8b0d8", 0.4))
+    corset = cv.poly([(440, 470), (512, 500), (588, 470), (572, 540), (560, 612), (464, 612), (452, 540)], 8)
+    L.paint(corset, gown, dark=gownd, lite=gownl, rim=1.0, spec=0.35, shin=18, tex=0.15, grain="vstreak", line=1.0)
+    for i in range(9):
+        x = 456 + i * 13
+        L.stroke([(x, 490 + abs(i - 4) * 3), (x + (512 - x) * 0.1, 606)], 3, 2, gownd, alpha=0.55, soft=1, clip=corset)
+        L.stroke([(x - 3, 492 + abs(i - 4) * 3), (x - 3 + (512 - x) * 0.1, 600)], 1.6, 1, gownl, alpha=0.35,
+                 clip=corset)
+    L.stroke([(440, 470), (512, 500), (588, 470)], 4, 4, glowc, alpha=0.7, soft=1.5, clip=corset)
+    # collarbones
+    L.stroke([(468, 432), (494, 440)], 3, 1, skind, alpha=0.35, soft=1, clip=body)
+    L.stroke([(530, 440), (556, 432)], 3, 1, skind, alpha=0.35, soft=1, clip=body)
+    # the relic: a dragon-bone shard set in her breast, light cracking out through skin and bodice
+    shard = cv.poly([(496, 444), (514, 430), (528, 452), (522, 494), (506, 508), (494, 482)], 4)
+    for ang, ln in ((200, 60), (240, 52), (300, 56), (340, 60), (100, 70), (70, 66), (130, 50)):
+        a = math.radians(ang)
+        p0 = (510 + math.cos(a) * 16, 470 + math.sin(a) * 20)
+        p1 = (510 + math.cos(a) * ln, 470 + math.sin(a) * ln)
+        mid = lerp_pt(p0, p1, 0.5)
+        mid = (mid[0] + math.sin(a) * 6, mid[1] - math.cos(a) * 6)
+        L.stroke([p0, mid, p1], 4, 1, "#ff8a20", alpha=0.7, soft=1.2, clip=body)
+        L.stroke([p0, mid, p1], 1.6, 0.6, "#fff0c0", alpha=0.9, soft=0.4, clip=body)
+    L.glow(510, 470, 90, amber, 0.55, clip=body)
+    L.fill(cv.ell(510, 470, 30, 40), "#2a0c04", alpha=0.8, soft=4)
+    L.paint(shard, "#f4e0b0", dark="#7a4010", lite="#ffffff", rim=0, spec=0.6, shin=24, line=1.0, tex=0.2,
+            emit=("#ffc860", 0.45))
+    L.glow(510, 468, 30, "#fff8e0", 1.0, clip=shard)
+    L.stroke([(508, 440), (514, 470), (508, 498)], 2, 1, "#a05a10", alpha=0.6, clip=shard)
+    # the gill ruff rising behind the neck
+    ruff = cv.poly(ell_pts(518, 400, 120, 64, 0, 180, 360, 30) + [(638, 410), (398, 410)], 0)
+    ruff = SUB(ruff, cv.ell(512, 420, 40, 30))
+    L.paint(ruff, "#e8c8f4", dark="#4a2060", lite="#ffffff", rim=0.6, spec=0.2, tex=0.12, line=1.0,
+            emit=(glowc, 0.12), size=20)
+    gill_fan(L, cv, 518, 420, [(400 + i * 10, 400 - 62 * math.sin(math.pi * i / 24)) for i in range(25)],
+             "#7a3a9a", alpha=0.55, w=2.6, clip=ruff)
+    edge = [(400 + i * 10, 400 - 62 * math.sin(math.pi * i / 24)) for i in range(25)]
+    L.stroke(edge, 5, 5, glowc, alpha=0.7, soft=2, clip=ruff)
+    L.stroke(edge, 2, 2, "#ffffff", alpha=0.7, soft=0.6, clip=ruff)
+    R.add("torso", L, "gown", "torso", (512, 600), 14)
+    del L
+
+    # ---- back arm (vine) raised, holding the thorn sceptre
+    L = R.layer()
+    vine(L, cv, [(578, 452), (640, 440), (700, 420)], [26, 22, 20], vinec, vined, vinel, seed=7, thorns=3, leaves=1)
+    L.tint("#060a14", 0.15)
+    R.add("arm_back_upper", L, "torso", "arm_back_upper", (578, 452), 6)
+
+    L = R.layer()
+    vine(L, cv, [(700, 420), (750, 396), (790, 366)], [20, 17, 15], vinec, vined, vinel, seed=8, thorns=2, leaves=1)
+    # tendril fingers wrapped round the sceptre
+    for dy in (-14, 0, 14):
+        L.stroke([(786, 368 + dy), (816, 364 + dy), (826, 378 + dy), (810, 386 + dy)], 9, 5, vinec, alpha=1.0,
+                 soft=0.5)
+    L.paint(L.mask(), vinec, dark=vined, lite=vinel, rim=0.8, spec=0.3, tex=0.15, line=0.9, size=10)
+    L.tint("#060a14", 0.15)
+    R.add("arm_back_lower", L, "arm_back_upper", "arm_back_lower", (700, 420), 8)
+
+    L = R.layer()
+    sc = vine(L, cv, [(810, 600), (808, 480), (802, 360), (806, 250), (834, 186), (878, 176), (896, 210),
+                      (874, 236), (850, 226)], [10, 12, 12, 11, 9, 7, 5, 3.5, 2.5], vinec, vined, vinel, seed=9,
+              thorns=8, leaves=2, twist=False)
+    bud = cv.ell(842, 270, 26, 34, 10)
+    L.paint(bud, "#c890f0", dark=capd, lite="#ffffff", rim=0.4, spec=0.8, shin=24, line=1.0, tex=0.06,
+            emit=(glowc, 0.4))
+    L.glow(842, 270, 40, "#ffffff", 0.8, clip=bud)
+    for a in (-40, 0, 40):
+        L.paint(cv.poly(rot([(842, 304), (826, 270), (842, 242), (858, 270)], (842, 304), a), 4), "#3f8a4a",
+                dark=vined, lite=vinel, rim=0.4, line=0.8, tex=0.1)
+    L.tint("#060a14", 0.1)
+    R.add("sceptre", L, "arm_back_lower", "offhand", (806, 374), 5)
+    R.add("sceptre_glow", _fx([(842, 270, 90, glowc, 0.5), (842, 270, 30, "#ffffff", 0.4)], cv), "sceptre", "fx",
+          (842, 270), 28, blend="add")
+
+    # ---- head: pale eerie face, half-lidded eyes, the bell cap with glowing spots, gills underneath
+    L = R.layer()
+    neck = cv.limb([(500, 380), (506, 424)], [26, 30])
+    face = cv.poly([(452, 256), (520, 256), (548, 290), (550, 330), (536, 364), (506, 392), (474, 404), (452, 402),
+                    (438, 388), (430, 366), (424, 348), (418, 336), (424, 322), (424, 296), (432, 270)], 10)
+    hair = cv.poly([(430, 262), (540, 258), (560, 300), (556, 350), (540, 330), (530, 290), (470, 276), (436, 290)], 8)
+    L.paint(U(neck, face), skin, dark=skind, lite=skinl, rim=0.8, spec=0.25, tex=0.1, line=1.0,
+            var=("#c8b0d8", 0.4))
+    L.fill(cv.ell(500, 352, 30, 26), "#c890c8", alpha=0.25, soft=10, clip=face)  # flush on the cheek
+    L.fill(cv.ell(540, 330, 30, 60), skind, alpha=0.25, soft=14, clip=face)  # far cheek turns away
+    # hair of fine pale hyphae framing the face
+    L.paint(hair, "#d8c8f0", dark="#4a2a6a", lite="#ffffff", rim=0.8, spec=0.3, tex=0.2, grain="vstreak", line=0.9)
+    fibers(L, cv, hair, 60, (0.3, 1), 30, "#6a4a90", alpha=0.4, width=1.2, seed=31)
+    # eyes: half-lidded, glowing green, long dark lashes
+    eye(L, cv, 470, 318, 20, 11, spore, rotd=-6, pupil="slit", glow=1.3, lid=(-6, -0.05), look=(-0.4, 0.15),
+        core="#f8ffe0", sclera=None)
+    eye(L, cv, 432, 316, 11, 9, spore, rotd=-4, pupil="slit", glow=1.1, lid=(-4, -0.05), look=(-0.4, 0.15),
+        core="#f8ffe0")
+    L.stroke([(446, 314), (470, 308), (494, 316)], 4, 2, "#1a0820", alpha=0.95, soft=0.6)  # lash line
+    L.stroke([(488, 314), (500, 306)], 3, 1, "#1a0820", alpha=0.9, soft=0.5)
+    L.stroke([(424, 314), (440, 312)], 3, 1.5, "#1a0820", alpha=0.9, soft=0.5)
+    L.stroke([(446, 294), (476, 286), (500, 294)], 4, 1.5, "#4a2060", alpha=0.7, soft=0.8)  # brows
+    L.stroke([(422, 296), (436, 292)], 3, 1.5, "#4a2060", alpha=0.7, soft=0.8)
+    # nose and smug smile
+    L.stroke([(428, 324), (420, 348), (430, 354)], 3, 1.5, skind, alpha=0.45, soft=1)
+    lips = cv.poly([(430, 370), (452, 366), (476, 362), (486, 356), (480, 370), (456, 380), (436, 380)], 6)
+    L.paint(lips, "#6a2a6a", dark="#1a0420", lite="#d080c8", rim=0, spec=0.6, shin=26, line=0.8, tex=0.05)
+    L.stroke([(432, 371), (456, 370), (482, 360)], 2, 1.2, "#1a0420", alpha=0.85, soft=0.5)
+    L.stroke([(482, 360), (490, 352)], 2, 1, skind, alpha=0.5, soft=0.6)
+    # faint glowing gill-lines on the temple
+    for i in range(4):
+        L.stroke([(520, 280 + i * 12), (536, 290 + i * 12)], 2, 1, glowc, alpha=0.5, soft=0.8, clip=face)
+    # cap underside: gills glowing violet-white
+    gm = cv.poly(ell_pts(512, 268, 262, 26, 0, 0, 180, 40) + [(250, 264), (774, 264)], 0)
+    L.paint(gm, "#e0c0f0", dark="#4a2060", lite="#ffffff", rim=0, line=1.0, tex=0.1, emit=(glowc, 0.3))
+    gill_fan(L, cv, 512, 330, [(256 + i * 18, 268 + 18 * math.sin(math.pi * i / 28)) for i in range(29)],
+             "#6a2a8a", alpha=0.55, w=3, clip=gm)
+    L.glow(512, 290, 200, glowc, 0.4, clip=gm)
+    # the bell cap
+    capm = cv.poly([(246, 276), (276, 236), (330, 196), (372, 150), (404, 96), (452, 62), (512, 50), (572, 62),
+                    (620, 96), (652, 150), (694, 196), (748, 236), (778, 276), (700, 286), (600, 280), (512, 284),
+                    (420, 282), (320, 286)], 10)
+    L.paint(capm, capc, dark=capd, lite=capl, rim=1.0, spec=0.5, shin=16, tex=0.14, grain="mottle",
+            var=("#b04aa0", 0.4), line=1.2, wrap=0.4)
+    L.fill(cv.poly([(240, 240), (790, 240), (790, 300), (240, 300)]), capd, alpha=0.35, soft=14, clip=capm)
+    fibers(L, cv, capm, 120, (0.2, 1), 50, "#2a0a4a", alpha=0.25, width=1.4, seed=10)
+    # glowing rings and spots
+    for i in range(13):  # faint glowing ribs running down the bell
+        a = -150 + i * 10
+        top = (512 + math.cos(math.radians(a + 60)) * 40, 70)
+        bot = (270 + i * 41, 268)
+        L.stroke([top, lerp_pt(top, bot, 0.6), bot], 4, 6, glowc, alpha=0.18, soft=3, clip=capm)
+    glow_spots(L, cv, [(330, 250, 13, 8), (420, 214, 16, 10), (512, 224, 18, 11), (604, 214, 16, 10),
+                       (694, 250, 13, 8), (440, 140, 12, 8), (512, 120, 14, 9), (584, 140, 12, 8),
+                       (380, 260, 8, 5), (650, 262, 8, 5), (470, 90, 8, 6), (556, 90, 8, 6)], "#7affd8", clip=capm)
+    L.stroke([(270, 270), (400, 276), (512, 278), (640, 274), (770, 270)], 5, 3, "#f0d0ff", alpha=0.45, soft=2,
+             clip=capm)
+    L.fill(cv.poly([(410, 280), (560, 280), (560, 330), (410, 330)]), "#2a0a3a", alpha=0.35, soft=12, clip=face)
+    L.glow(470, 300, 70, glowc, 0.25, clip=face)
+    L.glow(470, 420, 80, amber, 0.2, clip=U(face, neck))  # relic light from below
+    R.add("head", L, "torso", "head", (504, 410), 18)
+    del L
+
+    # ---- crown of little luminous toadstools (sway)
+    L = R.layer()
+    for x, y, s, ang, c in ((450, 74, 0.9, -22, "#6affd0"), (500, 56, 1.1, -4, "#ffd06a"), (548, 60, 1.0, 10,
+                                                                                          "#ff8ad8"),
+                            (594, 84, 0.85, 24, "#6affd0"), (412, 108, 0.7, -34, "#ff8ad8")):
+        a = math.radians(ang)
+        top = (x + math.sin(a) * 38 * s, y - math.cos(a) * 38 * s)
+        st = cv.limb([(x, y + 20), lerp_pt((x, y), top, 0.5), top], [9 * s, 7 * s, 6 * s])
+        L.paint(st, "#f0e4f4", dark="#4a3a4a", lite="#ffffff", rim=0.5, line=0.8, tex=0.1)
+        cp = cv.poly(rot(ell_pts(top[0], top[1] + 4 * s, 32 * s, 26 * s, 0, 180, 360, 24) +
+                         [(top[0] + 30 * s, top[1] + 6 * s), (top[0] - 30 * s, top[1] + 6 * s)], top, ang), 0)
+        L.paint(cp, mixc(c, "#4a2a6a", 0.25), dark=capd, lite="#ffffff", rim=0.4, spec=0.7, shin=24, line=0.8,
+                tex=0.06, emit=(c, 0.35))
+        L.glow(top[0], top[1] - 4, 26 * s, "#ffffff", 0.6, clip=cp)
+        L.glow(top[0], top[1], 50 * s, c, 0.5, mode="halo")
+    R.add("crown", L, "head", "hair", (512, 70), 19)
+
+    # ---- veil: curtains of glowing threads hanging from the cap rim (sway)
+    for name, xs, y0, y1, piv, z in (("veil_front", (256, 360), 274, 520, (310, 278), 24),
+                                     ("veil_back", (660, 772), 274, 600, (716, 278), 12)):
+        L = R.layer()
+        rng = np.random.default_rng(len(name) * 7)
+        for i in range(13):
+            x = xs[0] + (xs[1] - xs[0]) * i / 12 + rng.uniform(-4, 4)
+            y = y0 + abs(x - (xs[0] + xs[1]) / 2) * -0.05 + rng.uniform(0, 8)
+            ln = (y1 - y0) * rng.uniform(0.35, 1.0)
+            sway = rng.uniform(-12, 12)
+            pts = [(x, y), (x + sway * 0.4, y + ln * 0.5), (x + sway, y + ln)]
+            L.stroke(pts, 4, 1.5, glowc, alpha=0.2, soft=2)
+            L.stroke(pts, 1.3, 0.5, "#f4e0ff", alpha=0.65, soft=0.4)
+            for t in (0.5, 1.0):
+                if rng.random() < (0.3 if t < 1 else 0.8):
+                    px, py = crspline(pts, 6)[int(t * (len(crspline(pts, 6)) - 1))]
+                    r = rng.uniform(2.2, 4.2) * (1.3 if t == 1.0 else 1)
+                    L.glow(px, py, r * 3, glowc, 0.5, mode="halo")
+                    L.fill(cv.ell(px, py, r, r * 1.2), "#fbefff", alpha=0.95, soft=0.4)
+        R.add(name, L, "head", "hair", piv, z)
+
+    # ---- front arm: vine reaching out, open hand of tendrils, spores rising from the palm
+    L = R.layer()
+    vine(L, cv, [(452, 452), (410, 490), (370, 520)], [28, 24, 22], vinec, vined, vinel, seed=11, thorns=3, leaves=1)
+    R.add("arm_front_upper", L, "torso", "arm_front_upper", (452, 452), 20)
+    L = R.layer()
+    vine(L, cv, [(370, 520), (330, 530), (292, 516)], [22, 19, 16], vinec, vined, vinel, seed=12, thorns=2, leaves=1)
+    palm = cv.ell(276, 506, 26, 18, -20)
+    fingers = [palm]
+    for ang, ln, curl in ((-150, 58, 0.6), (-125, 64, 0.5), (-100, 58, 0.5), (-75, 46, 0.6), (170, 40, -0.6)):
+        a = math.radians(ang)
+        p0 = (276 + math.cos(a) * 14, 506 + math.sin(a) * 10)
+        p1 = (p0[0] + math.cos(a) * ln * 0.6, p0[1] + math.sin(a) * ln * 0.6)
+        p2 = (p1[0] + math.cos(a + curl) * ln * 0.45, p1[1] + math.sin(a + curl) * ln * 0.45)
+        p3 = (p2[0] + math.cos(a + curl * 2.2) * ln * 0.25, p2[1] + math.sin(a + curl * 2.2) * ln * 0.25)
+        fingers.append(cv.limb([p0, p1, p2, p3], [8, 6, 4, 1.5]))
+    hm = U(*fingers)
+    L.paint(hm, vinec, dark=vined, lite=vinel, rim=0.8, spec=0.35, shin=18, tex=0.15, line=1.0)
+    L.glow(270, 470, 70, spore, 0.6, clip=hm)
+    R.add("arm_front_lower", L, "arm_front_upper", "arm_front_lower", (370, 520), 21)
+    L = R.layer()
+    L.glow(266, 440, 80, spore, 0.4, mode="halo")
+    rng = np.random.default_rng(13)
+    pts = []
+    for i in range(46):
+        t = i / 45
+        a = t * 5 * math.pi
+        x = 270 + math.sin(a) * (12 + 50 * t) + rng.uniform(-8, 8)
+        y = 480 - t * 250 + rng.uniform(-8, 8)
+        pts.append((x, y, rng.uniform(1.6, 4.6) * (1.2 - t * 0.5)))
+    spore_dots(L, cv, pts, spore)
+    L.stroke(crspline([(270, 480), (290, 420), (246, 360), (280, 300), (250, 240)], 10), 18, 4, spore, alpha=0.18,
+             soft=8)
+    R.add("spore_stream", L, "arm_front_lower", "weapon", (276, 500), 23)
+
+    # ---- spore clouds drifting round her (float)
+    for i, (cx, cy, w, h) in enumerate(((150, 620, 230, 150), (930, 470, 170, 120), (170, 330, 150, 100),
+                                        (890, 780, 190, 120))):
+        L = R.layer()
+        spore_cloud(L, cv, cx, cy, w, h, spore, seed=20 + i, alpha=0.55)
+        R.add(f"spore_cloud_{i + 1}", L, "gown", "float", (cx, cy), 30 + i)
+
+    # ---- additive glows
+    R.add("relic_glow", _fx([(510, 470, 140, amber, 0.55), (510, 470, 46, "#fff4d0", 0.6)], cv), "torso", "fx",
+          (510, 470), 26, blend="add")
+    R.add("cap_glow", _fx([(512, 290, 260, glowc, 0.22), (512, 224, 60, "#7affd8", 0.2), (470, 318, 40, spore, 0.3)],
+                          cv), "head", "fx", (512, 260), 27, blend="add")
+    R.add("gown_glow", _fx([(512, 960, 300, glowc, 0.14), (512, 820, 220, glowc, 0.12), (300, 960, 60, glowc, 0.2),
+                            (740, 960, 60, glowc, 0.2)], cv), "gown", "fx", (512, 900), 25, blend="add")
+    R.add("hand_glow", _fx([(270, 470, 110, spore, 0.4)], cv), "arm_front_lower", "fx", (276, 500), 29, blend="add")
+    R.save()
+    return R
+
+
 # ================================================================== driver
 
 RIGS = {
     "mushroom_mage": mushroom_mage,
     "cave_slime": cave_slime,
     "toxic_toad": toxic_toad,
+    "glow_bat": glow_bat,
+    "shroom_brute": shroom_brute,
+    "spore_mother": spore_mother,
 }
 
 SCRATCH = os.environ.get("D2_SHEET_DIR", "")

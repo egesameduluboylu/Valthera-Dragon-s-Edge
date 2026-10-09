@@ -1,0 +1,213 @@
+{
+ "id": "mimic",
+ "canvas": [
+  1024,
+  1024
+ ],
+ "feet": [
+  490,
+  968
+ ],
+ "facing": "left",
+ "kind": "beast",
+ "parts": [
+  {
+   "name": "body",
+   "png": "body.png",
+   "parent": "",
+   "role": "root",
+   "pivot": [
+    490,
+    760
+   ],
+   "rect": [
+    228,
+    435,
+    533,
+    479
+   ],
+   "z": 10,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_bl",
+   "png": "leg_bl.png",
+   "parent": "body",
+   "role": "leg_back",
+   "pivot": [
+    430,
+    840
+   ],
+   "rect": [
+    404,
+    813,
+    73,
+    165
+   ],
+   "z": 3,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_br",
+   "png": "leg_br.png",
+   "parent": "body",
+   "role": "leg_front",
+   "pivot": [
+    700,
+    800
+   ],
+   "rect": [
+    673,
+    772,
+    144,
+    206
+   ],
+   "z": 4,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_fr",
+   "png": "leg_fr.png",
+   "parent": "body",
+   "role": "leg_back",
+   "pivot": [
+    560,
+    876
+   ],
+   "rect": [
+    523,
+    839,
+    120,
+    153
+   ],
+   "z": 6,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_fl",
+   "png": "leg_fl.png",
+   "parent": "body",
+   "role": "leg_front",
+   "pivot": [
+    300,
+    856
+   ],
+   "rect": [
+    140,
+    818,
+    199,
+    168
+   ],
+   "z": 7,
+   "blend": "normal"
+  },
+  {
+   "name": "lid",
+   "png": "lid.png",
+   "parent": "body",
+   "role": "jaw",
+   "pivot": [
+    722,
+    534
+   ],
+   "rect": [
+    206,
+    195,
+    557,
+    371
+   ],
+   "z": 20,
+   "blend": "normal"
+  },
+  {
+   "name": "drool",
+   "png": "drool.png",
+   "parent": "lid",
+   "role": "hair",
+   "pivot": [
+    300,
+    470
+   ],
+   "rect": [
+    286,
+    450,
+    240,
+    170
+   ],
+   "z": 21,
+   "blend": "normal"
+  },
+  {
+   "name": "tongue_1",
+   "png": "tongue_1.png",
+   "parent": "body",
+   "role": "tail",
+   "pivot": [
+    452,
+    560
+   ],
+   "rect": [
+    241,
+    516,
+    260,
+    209
+   ],
+   "z": 24,
+   "blend": "normal"
+  },
+  {
+   "name": "tongue_2",
+   "png": "tongue_2.png",
+   "parent": "tongue_1",
+   "role": "tail",
+   "pivot": [
+    276,
+    690
+   ],
+   "rect": [
+    206,
+    655,
+    106,
+    246
+   ],
+   "z": 25,
+   "blend": "normal"
+  },
+  {
+   "name": "eye_glow",
+   "png": "eye_glow.png",
+   "parent": "lid",
+   "role": "fx",
+   "pivot": [
+    335,
+    346
+   ],
+   "rect": [
+    176,
+    177,
+    454,
+    328
+   ],
+   "z": 40,
+   "blend": "add"
+  },
+  {
+   "name": "maw_glow",
+   "png": "maw_glow.png",
+   "parent": "body",
+   "role": "fx",
+   "pivot": [
+    470,
+    524
+   ],
+   "rect": [
+    234,
+    416,
+    473,
+    216
+   ],
+   "z": 11,
+   "blend": "add"
+  }
+ ]
+}

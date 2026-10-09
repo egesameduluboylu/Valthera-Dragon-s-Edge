@@ -10,7 +10,7 @@ assets/sprites/enemies/<id>.png (512 px; the boss 768 px wide). Every monster fa
     ice_wisp     floater  1024 x 1024  faceted ice spirit, crown of shards, trailing wisps, orbiting shards
     yeti_cub     humanoid 1024 x 1024  shaggy young yeti winding up a snowball throw
     ice_troll    humanoid 1024 x 1024  elite: hulking troll in ice armour with a crystal club
-    frostbreath  dragon   1792 x 1344  boss: frost dragon, wings, jaw, tail chain, frost breath fx
+    frostbreath  dragon   1920 x 1344  boss: frost dragon, wings, jaw, tail chain, frost breath fx
 
 Painting model: every part is painted at 2x (SS) in a local buffer around it and downscaled with LANCZOS.
 Shapes are soft masks; `paint` lights them from a height field (a blurred mask, so every mass reads as a
@@ -1517,11 +1517,474 @@ def build_ice_troll():
     return rb, 512
 
 
+# ------------------------------------------------------------------ frostbreath (boss)
+
+def scale_map(P, size, ang=0.0, seed=0):
+    """-1..1 map of overlapping scales: staggered rows, each scale lit along its top and creased along its
+    rounded lower edge, with a little per-scale value variation. ang turns the rows (degrees)."""
+    X, Y = P.grid()
+    r = math.radians(ang)
+    u = X * math.cos(r) + Y * math.sin(r)
+    v = -X * math.sin(r) + Y * math.cos(r)
+    sy = size * 0.6
+    row = np.floor(v / sy)
+    uu = u / size + 0.5 * (row % 2)
+    col = np.floor(uu)
+    fu = uu - col - 0.5
+    fv = v / sy - row
+    edge = fv + (2 * fu) ** 2 * 0.45
+    crease = smooth(0.78, 1.05, edge)
+    h = np.sin(row * 12.9898 + col * 78.233 + seed * 3.17) * 43758.5453
+    var = (h - np.floor(h) - 0.5) * 0.5
+    out = (0.35 - 0.6 * fv + var) * (1 - crease) - crease * 0.6
+    return np.clip(out, -1, 1).astype(F32)
+
+
+def scalepaint(P, m, ramp, r, size, ang=0.0, seed=0, cm=0.07, bk=0.45, frost=0.2, **kw):
+    """Scaled hide: lit as one rounded mass, with a scale relief and rime of frost."""
+    sm = scale_map(P, size, ang, seed)
+    sm = sm * (0.55 + 0.45 * fbm(P.H, P.W, size * 3 * SS, np.random.default_rng(seed + 3), 2))
+    if 'cmod' not in kw:
+        kw['cmod'] = sm + (fbm(P.H, P.W, size * 5 * SS, np.random.default_rng(seed + 5), 2) - 0.5) * 1.2
+    kw.setdefault("spec", 0.22)
+    kw.setdefault("shin", 16)
+    P.paint(m, ramp, r=r, bump=sm, bk=bk, cm=cm, grain=0.03, **kw)
+    if frost:
+        frost_patches(P, m, seed + 7, frost)
+
+
+def scallop(a, b, toward, sag, n=8):
+    """Points from a (excluded) to b bowing toward `toward` (the loose edge of a wing membrane)."""
+    pts = []
+    for i in range(1, n + 1):
+        t = i / n
+        x, y = along(a, b, t)
+        s = math.sin(math.pi * t) * sag
+        pts.append((x + (toward[0] - x) * s, y + (toward[1] - y) * s))
+    return pts
+
+
+def side_points(pts, radii, side, k=1.0, n=10):
+    """Points on one side (+1 right of travel, -1 left) of a tube path, k * radius off the centre line,
+    with the outward unit normal: [(x, y, nx, ny, r)]."""
+    path = catmull(pts, n=n)
+    rs = np.interp(np.linspace(0, 1, len(path)), np.linspace(0, 1, len(radii)), radii)
+    out = []
+    for i, (x, y) in enumerate(path):
+        a, b = path[max(0, i - 1)], path[min(len(path) - 1, i + 1)]
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        dn = math.hypot(dx, dy) + 1e-6
+        nx, ny = -dy / dn * side, dx / dn * side
+        out.append((x + nx * rs[i] * k, y + ny * rs[i] * k, nx, ny, float(rs[i])))
+    return out
+
+
+def build_frostbreath():
+    rid = "frostbreath"
+    CV = (1792, 1344)
+    OFF = 64  # drawn on 1792 x 1344, rigged on 1920 x 1344 so swinging wings, tail and breath stay on canvas
+    rb = rig.RigBuilder(rid, (CV[0] + 2 * OFF, CV[1]), feet=(950 + OFF, 1262), facing="left", kind="dragon")
+    SC = SCALE
+    FARS = mk_ramp("#0e1a3e", "#1c3260", "#345486", "#567cac", "#80a4c8", "#b0cae2")
+    BEL = BELLY
+    MEMF = mk_ramp("#0a1838", "#122c58", "#204c84", "#386ea8", "#5e96c8", "#9cc8e8")
+    CLAW = mk_ramp("#3a4a6a", "#6a7c9c", "#9eb0c8", "#cad8e8", "#eef6fc", "#ffffff")
+    MOUTH_C = mk_ramp("#0a0a22", "#18164a", "#2c2a6e", "#46509a", "#6a88c6", "#a8d8f4")
+    GROUND = 1262
+
+    def spines(P, pts, radii, side, picks, seed, lean=-35, scale=1.0, glow=0.7, kofs=0.72):
+        """Crystal spines standing out of one side of a tube path, raked back by `lean` degrees."""
+        sp = side_points(pts, radii, side, kofs, n=12)
+        for i, (j, L, w) in enumerate(picks):
+            x, y, nx, ny, r = sp[min(len(sp) - 1, int(j * (len(sp) - 1)))]
+            a = math.degrees(math.atan2(ny, nx)) + lean
+            shard_at(P, (x, y), a, L * scale, w * scale, glow=glow, seed=seed + i, ramp=ICE_DEEP, cast=0.3)
+
+    def belly_plates(P, m, pts, radii, side, seed, ramp=BEL, step=30, k0=0.15, wk=0.75):
+        """The pale ridged throat / belly band along one side of a tube."""
+        sp = side_points(pts, radii, side, k0, n=12)
+        cen = [(x, y) for x, y, *_ in sp]
+        rr = [r * wk for *_, r in sp]
+        band = P.tube(cen[::2], rr[::2], n=4) * m
+        band = blur(band, 2 * SS) * m
+        P.paint(band, ramp, r=max(radii) * 0.8, hm=m, line=0.0, cast=0.0, spec=0.25, shin=14,
+                ramp_shift=-0.02, grain=0.03)
+        acc = 0.0
+        prev = None
+        for x, y, nx, ny, r in side_points(pts, radii, side, k0, n=30):
+            if prev is not None:
+                acc += math.hypot(x - prev[0], y - prev[1])
+            prev = (x, y)
+            if acc >= step:
+                acc = 0.0
+                a = (x - nx * r * 0.55 + ny * 4, y - ny * r * 0.55 - nx * 4)
+                b = (x + nx * r * 0.9, y + ny * r * 0.9)
+                c = along(a, b, 0.5)
+                c = (c[0] - ny * 6 * side, c[1] + nx * 6 * side)
+                ln = P.stroke_mask([a, c, b], 4.5, 3.0) * band
+                P.shade(blur(ln, 1.0 * SS), C("#3a4a7a"), 0.55)
+                hl = P.stroke_mask([(a[0] - ny * 5, a[1] + nx * 5), (c[0] - ny * 5, c[1] + nx * 5),
+                                    (b[0] - ny * 5, b[1] + nx * 5)], 3, 2) * band
+                P.light(blur(hl, 1.2 * SS), C("#f4fbff"), 0.25)
+
+    # ---------------- wings
+    def wing(seed, box, root, elbow, wrist, tips, trail, mramp, bramp, far):
+        P = Part(CV, box, seed)
+        out = [root, elbow, wrist, tips[0]]
+        for a, b in zip(tips, tips[1:]):
+            out += scallop(a, b, wrist, 0.2)
+        tr = [tips[-1]] + trail + [root]
+        for a, b in zip(tr, tr[1:]):
+            out += scallop(a, b, elbow, 0.1)
+        mem = P.poly(out, aa=0.8)
+        bones = P.tube([root, elbow, wrist], [28, 20, 16])
+        for t in tips:
+            bones = np.maximum(bones, P.stroke_mask([wrist, along(wrist, t, 0.5), t], 22, 6))
+        near_bone = blur(bones, 22 * SS)
+        rng = random.Random(seed)
+        X, Y = P.grid()
+        cx = sum(p[0] for p in out) / len(out)
+        cy = sum(p[1] for p in out) / len(out)
+        glowin = smooth(0.0, 1.0, lin(P, wrist, (cx + (cx - wrist[0]) * 0.6, cy + (cy - wrist[1]) * 0.6)))
+        P.paint(mem, mramp, r=46, hm=np.clip(mem - near_bone * 0.8, 0, 1), cmod=fbm(P.H, P.W, 40 * SS,
+                np.random.default_rng(seed)) - 0.5, cm=0.18, ramp_shift=0.1 * glowin - 0.04, rim=0.7, spec=0.15,
+                shin=20, cast=0.0, line=0.9, lw=1.2)
+        # light through the thin membrane, brighter between the bones
+        P.light(mem * glowin * (1 - np.clip(near_bone * 2, 0, 1)), C("#7fd4ff"), 0.22)
+        # veins branching from the fingers
+        vm = np.zeros_like(mem)
+        for t in tips:
+            for k in range(4):
+                s = rng.uniform(0.25, 0.85)
+                a = along(wrist, t, s)
+                dx, dy = t[0] - wrist[0], t[1] - wrist[1]
+                dn = math.hypot(dx, dy)
+                side = rng.choice((-1, 1))
+                L = rng.uniform(50, 110)
+                px, py = -dy / dn * side, dx / dn * side
+                b = (a[0] + px * L + dx / dn * L * 0.35, a[1] + py * L + dy / dn * L * 0.35)
+                c = (a[0] + px * L * 0.5 + dx / dn * L * 0.05, a[1] + py * L * 0.5 + dy / dn * L * 0.05)
+                vm = np.maximum(vm, P.stroke_mask([a, c, b], 4, 1))
+        vm = vm * mem
+        P.shade(blur(vm, 0.8 * SS), C("#1a3060"), 0.5)
+        P.light(blur(vm, 0.6 * SS) * glowin, C("#bdf0ff"), 0.18)
+        # rime along the free edge
+        e = blur(mem, 3 * SS)
+        band = mem * np.clip((0.9 - e) / 0.4, 0, 1) * (1 - np.clip(bones * 3, 0, 1))
+        P.light(band, C("#e6f8ff"), 0.45)
+        # bones
+        arm = P.tube([root, elbow, wrist], [28, 20, 16])
+        scalepaint(P, arm, bramp, 24, 12, 60, seed + 1, cm=0.06, bk=0.3, frost=0.15, spec=0.35, cast=0.4, castr=10)
+        for i, t in enumerate(tips):
+            f = P.stroke_mask([wrist, along(wrist, t, 0.45), t], 20, 6)
+            P.paint(f, bramp, r=10, spec=0.4, shin=20, cast=0.35, castr=8, lw=0.9)
+            shard_at(P, t, math.degrees(math.atan2(t[1] - wrist[1], t[0] - wrist[0])), 34 + 6 * (i % 2), 13,
+                     glow=0.6, seed=seed + 20 + i, ramp=ICE_DEEP, spark=False)
+        for c, rr in ((elbow, 24), (wrist, 22)):
+            P.paint(P.ellipse(c, rr, rr * 0.86), bramp, r=16, spec=0.45, shin=20, cast=0.4, castr=8)
+        # the thumb: a crystal claw on the wrist, pointing forward
+        ux, uy = wrist[0] - elbow[0], wrist[1] - elbow[1]
+        a = math.degrees(math.atan2(uy, ux)) - 70
+        shard_at(P, wrist, a, 90, 30, glow=0.9, seed=seed + 40, ramp=ICE_DEEP)
+        if far:
+            P.haze(0.22, C("#5a74a8"))
+        return P
+
+    WB = wing(10, (600, 0, 1300, 800), (960, 690), (890, 500), (790, 230),
+              [(870, 70), (1000, 50), (1130, 130), (1200, 330)], [(1110, 520), (1040, 640)], MEMF, FARS, True)
+    WF = wing(20, (840, 40, 1760, 880), (930, 720), (1090, 530), (1040, 220),
+              [(1250, 150), (1510, 230), (1640, 440), (1570, 660)], [(1390, 730), (1200, 770)], MEMB, SC, False)
+
+    # ---------------- legs: (hip/shoulder, joint, joint, foot) in two parts each
+    def foot_part(P, ankle, foot, ramp, seed, r_ank):
+        toes = []
+        fx, fy = foot
+        m = P.tube([ankle, along(ankle, foot, 0.6), (fx + 16, fy - 26)], [r_ank, r_ank * 0.85, r_ank * 0.8])
+        pad = P.shape([(fx - 70, fy - 6), (fx - 52, fy - 40), (fx + 6, fy - 52), (fx + 44, fy - 34), (fx + 42, fy - 2),
+                       (fx - 20, fy + 4)])
+        m = np.maximum(m, pad)
+        scalepaint(P, m, ramp, r_ank * 0.9, 14, 90, seed, cm=0.08, bk=0.5, frost=0.25, lw=1.0)
+        for k in range(3):
+            tc = (fx - 58 + k * 26, fy - 12 + k * 2)
+            tm = P.ellipse(tc, 20, 15, -10)
+            scalepaint(P, tm, ramp, 10, 8, 0, seed + k, cm=0.05, bk=0.2, frost=0.2, cast=0.3, castr=4, lw=0.8)
+            toes.append(tc)
+        claws(P, [(x - 16, y + 4, 168 - 8 * i) for i, (x, y) in enumerate(toes)], ramp=CLAW, size=26)
+        claws(P, [(fx + 34, fy - 6, 10)], ramp=CLAW, size=16)
+
+    def leg(seed, top, knee, ankle, foot, radii, mass, ramp, far, near_feather=True, spikes=()):
+        x0 = min(top[0], knee[0], ankle[0]) - 190
+        x1 = max(top[0], knee[0], ankle[0]) + 190
+        U = Part(CV, (x0, top[1] - mass[2] - 40, x1, knee[1] + radii[1] + 50), seed)
+        m = U.tube([(top[0], top[1] - 30), top, knee], [radii[0], radii[0], radii[1]])
+        m = np.maximum(m, U.ellipse(*mass))
+        if near_feather and not far:
+            m = feather(U, m, (top[0], top[1] - mass[2] * 0.75), (top[0], top[1] - mass[2] * 0.15))
+        scalepaint(U, m, ramp, radii[0] * 1.1, 22, 20, seed, line=0.7 if far else 0.4)
+        for i, (b, a, L, w) in enumerate(spikes):
+            shard_at(U, b, a, L, w, glow=0.5, seed=seed + 50 + i, ramp=ICE_DEEP)
+        if far:
+            U.haze(0.2, C("#4e68a0"))
+        Lw = Part(CV, (min(knee[0], ankle[0], foot[0]) - 140, knee[1] - 100, max(knee[0], ankle[0], foot[0]) + 120,
+                       foot[1] + 30), seed + 1)
+        m2 = Lw.tube([knee, along(knee, ankle, 0.5), ankle], [radii[1] * 0.92, radii[2] * 1.05, radii[2]])
+        scalepaint(Lw, m2, ramp, radii[2], 16, 80, seed + 1, frost=0.25)
+        foot_part(Lw, ankle, foot, ramp, seed + 2, radii[2] * 0.95)
+        if far:
+            Lw.haze(0.2, C("#4e68a0"))
+        return U, Lw
+
+    far_hind = leg(30, (1300, 880), (1262, 1045), (1330, 1160), (1296, GROUND - 8), [92, 66, 46],
+                   ((1300, 920), 120, 130, 12), FARS, True)
+    far_fore = leg(40, (880, 880), (892, 1040), (862, 1190), (830, GROUND - 8), [62, 52, 42],
+                   ((880, 900), 72, 96, 0), FARS, True)
+
+    # ---------------- tail chain, sweeping back along the ground and curling up to a crystal tip
+    tail_pts1 = [(1250, 880), (1345, 935), (1450, 985)]
+    tail_r1 = [130, 116, 92]
+    T1 = Part(CV, (1110, 680, 1620, 1180), 50)
+    m = T1.tube(tail_pts1, tail_r1)
+    m = feather(T1, m, (1200, 840), (1290, 905))
+    scalepaint(T1, m, SC, 90, 24, 35, 50, line=0.5)
+    belly_plates(T1, m, tail_pts1, tail_r1, 1, 51, step=34, k0=0.55, wk=0.5)
+    spines(T1, tail_pts1, tail_r1, -1, [(0.35, 96, 34), (0.65, 84, 30), (0.92, 70, 26)], 52, lean=25)
+    tail_pts2 = [(1420, 970), (1530, 1010), (1640, 1010)]
+    tail_r2 = [94, 76, 60]
+    T2 = Part(CV, (1300, 820, 1780, 1180), 60)
+    m = T2.tube(tail_pts2, tail_r2)
+    scalepaint(T2, m, SC, 70, 20, 25, 60, line=0.6)
+    belly_plates(T2, m, tail_pts2, tail_r2, 1, 61, step=28, k0=0.55, wk=0.5)
+    spines(T2, tail_pts2, tail_r2, -1, [(0.3, 66, 26), (0.62, 58, 23), (0.92, 50, 20)], 62, lean=25)
+    tail_pts3 = [(1610, 1012), (1680, 985), (1716, 920), (1712, 850)]
+    tail_r3 = [62, 50, 34, 18]
+    T3 = Part(CV, (1490, 640, 1792, 1120), 70)
+    m = T3.tube(tail_pts3, tail_r3)
+    scalepaint(T3, m, SC, 46, 16, -40, 70, line=0.7)
+    spines(T3, tail_pts3, tail_r3, -1, [(0.2, 44, 18), (0.5, 38, 16)], 72, lean=20)
+    for i, (a, L, w) in enumerate([(-92, 120, 40), (-118, 86, 30), (-66, 80, 28), (-140, 52, 20)]):
+        shard_at(T3, (1712, 865), a, L, w, glow=1.0, seed=75 + i, ramp=ICE_DEEP)
+
+    # ---------------- body: deep chest held high, haunch, pale belly
+    B = Part(CV, (560, 560, 1460, 1130), 80)
+    body = B.shape([(640, 860), (670, 760), (760, 690), (880, 660), (1020, 690), (1160, 730), (1290, 790),
+                    (1360, 880), (1340, 990), (1250, 1050), (1110, 1060), (990, 1040), (880, 1060), (760, 1045),
+                    (670, 980)], n=10)
+    scalepaint(B, body, SC, 150, 30, 15, 80, ramp_shift=0.04 - 0.1 * lin(B, (0, 680), (0, 1060)))
+    belly = B.shape([(650, 880), (720, 900), (850, 960), (1000, 990), (1150, 1010), (1260, 1030), (1220, 1070),
+                     (1080, 1080), (920, 1080), (780, 1060), (680, 1000)], n=10)
+    belly = blur(belly, 6 * SS) * body
+    B.paint(belly, BEL, r=110, hm=body, line=0.0, cast=0.0, spec=0.2, ramp_shift=-0.05, grain=0.03)
+    for i in range(9):
+        x = 700 + i * 62
+        a = (x, 880 + i * 14)
+        b = (x + 24, 1080)
+        ln = B.stroke_mask([a, along(a, b, 0.5), b], 5, 3) * belly
+        B.shade(blur(ln, 1.2 * SS), C("#40507e"), 0.5)
+    # haunch muscle and shadow under the wing
+    B.light(body * radial(B, (1150, 860), 200) ** 1.5, C("#e8f4ff"), 0.12)
+    B.shade(body * blur(B.ellipse((960, 730), 220, 60, 8), 30 * SS), C("#16224c"), 0.35)
+    B.shade(body * smooth(0.55, 1.0, lin(B, (1000, 800), (1000, 1070))), C("#18265a"), 0.3)
+    spines(B, [(880, 690), (1060, 700), (1200, 750), (1300, 820)], [40, 40, 40, 40], -1,
+           [(0.6, 70, 30), (0.78, 82, 32), (0.95, 72, 28)], 85, lean=35, kofs=0.0)
+
+    near_hind = leg(90, (1170, 900), (1100, 1070), (1215, 1168), (1170, GROUND), [112, 80, 54],
+                    ((1175, 920), 150, 160, 15), SC, False,
+                    spikes=[((1250, 860), -40, 60, 24), ((1270, 900), -20, 48, 20)])
+    near_fore = leg(100, (770, 880), (745, 1040), (712, 1195), (672, GROUND), [72, 60, 48],
+                    ((775, 905), 80, 112, -6), SC, False,
+                    spikes=[((830, 860), -60, 52, 22)])
+
+    # ---------------- neck: a long arc up and forward, pale ridged throat, crystal spines on the crest
+    neck_pts = [(850, 810), (750, 700), (665, 600), (612, 515), (585, 440)]
+    neck_r = [138, 120, 102, 88, 80]
+    N = Part(CV, (380, 240, 1050, 1000), 110)
+    nm = N.tube(neck_pts, neck_r)
+    nm = feather(N, nm, (930, 900), (830, 790))
+    scalepaint(N, nm, SC, 90, 20, -50, 110, ramp_shift=0.03)
+    belly_plates(N, nm, neck_pts, neck_r, 1, 111, step=30, k0=-0.55, wk=0.5)
+    N.shade(nm * blur(N.ellipse((560, 460), 70, 50), 20 * SS), C("#16224c"), 0.4)
+    spines(N, neck_pts, neck_r, 1, [(0.12, 92, 34), (0.3, 110, 38), (0.48, 104, 36), (0.65, 92, 32),
+                                    (0.82, 74, 28)], 115, lean=12, kofs=0.62)
+
+    # ---------------- head: wedge skull, swept crystal horns, glaring eye, open jaws
+    H = Part(CV, (180, 150, 820, 600), 130)
+    # far horn, half hidden behind the crown
+    hm = H.tube([(548, 372), (590, 318), (636, 276), (686, 250)], [22, 16, 9, 2])
+    H.paint(hm, ICE_DEEP, r=12, spec=0.8, shin=40, cast=0.2, lw=0.9, lift=-0.15)
+    frill = H.poly([(590, 440)] + scallop((590, 440), (720, 410), (640, 470), 0.0, 2)
+                   + scallop((720, 410), (700, 470), (640, 470), 0.25, 6)
+                   + scallop((700, 470), (740, 520), (640, 470), 0.0, 2)
+                   + scallop((740, 520), (610, 530), (640, 470), 0.25, 6))
+    H.paint(frill, MEMB, r=20, spec=0.2, cast=0.2, line=0.9)
+    for a, b in (((600, 460), (720, 412)), ((605, 490), (738, 518))):
+        H.paint(H.stroke_mask([a, along(a, b, 0.5), b], 12, 3), SC, r=6, spec=0.4, cast=0.3)
+    skull = H.shape([(242, 470), (238, 446), (262, 426), (320, 408), (392, 392), (452, 366), (520, 344),
+                     (590, 352), (636, 395), (648, 448), (624, 498), (560, 512), (480, 496), (400, 486),
+                     (320, 482)], n=10)
+    scalepaint(H, skull, SC, 50, 15, -14, 132, ramp_shift=0.03)
+    # snout ridge highlight and cheek shadow
+    H.light(skull * blur(H.stroke_mask([(270, 432), (360, 404), (450, 378)], 30, 20), 8 * SS), C("#fff4e0"), 0.18)
+    H.shade(skull * blur(H.ellipse((560, 470), 60, 34), 14 * SS), C("#14204a"), 0.35)
+    # upper lip line and nostril
+    H.paint(H.stroke_mask([(246, 470), (320, 480), (400, 484), (480, 492), (540, 500)], 7, 4) * skull,
+            mk_ramp("#0a1028", "#16204a", "#24346a", "#38508a", "#5070a8", "#7898c8"), r=4, line=0, cast=0)
+    nos = H.ellipse((268, 438), 14, 7, -20)
+    H.paint(nos, mk_ramp("#04060e", "#0a1024", "#162040", "#24345e", "#3a4c7a", "#6a80a8"), r=5, line=0, cast=0)
+    H.light(H.ellipse((272, 432), 10, 3, -20), C("#cfe8ff"), 0.4)
+    # upper teeth
+    for i, (x, L) in enumerate([(258, 30), (292, 22), (322, 26), (356, 20), (390, 22), (428, 18), (466, 16)]):
+        y = 470 + (x - 250) * 0.11
+        f = H.poly([(x - 7, y - 3), (x + 7, y - 3), (x + 1, y + L)])
+        H.paint(f, TEETH, r=3, spec=0.6, cast=0.2, castr=3, lw=0.6)
+    # brow ridge with crystal crest, and the eye beneath it
+    brow = H.stroke_mask([(400, 404), (450, 382), (510, 374), (560, 384)], 26, 14)
+    scalepaint(H, brow, SC, 12, 10, -10, 133, lift=0.04, cast=0.55, castr=8, castoff=(2, 9), line=0.4)
+    glow_eye(H, (470, 410), 26, 10, -12)
+    H.sparkle((460, 405), 13, 0.8)
+    for i, (b, a, L, w) in enumerate([((452, 384), -150, 40, 16), ((496, 374), -160, 56, 20),
+                                      ((540, 378), -168, 64, 22)]):
+        shard_at(H, b, a + 150, L, w, glow=0.6, seed=140 + i, ramp=ICE_DEEP)
+    # near horn: a long crystal horn sweeping back from the crown
+    hp = [(560, 400), (614, 356), (676, 318), (742, 300)]
+    hm = H.tube(hp, [28, 22, 13, 3])
+    H.paint(hm, ICE_DEEP, r=14, spec=0.9, shin=40, cast=0.4, castr=10, lw=0.9)
+    H.light(hm * blur(H.tube(hp, [10, 8, 5, 1]), 3 * SS), C("#c8f6ff"), 0.5)
+    for k in range(5):
+        p = catmull(hp, n=6)[3 + k * 3]
+        H.shade(H.ellipse(p, 3, 18 - k * 2, 40) * hm, C("#1a3a74"), 0.4)
+    H.glow(hm, GLOWC, 10, 0.3)
+    # cheek and chin crystal spikes
+    for i, (b, a, L, w) in enumerate([((628, 470), 20, 70, 24), ((612, 500), 45, 54, 20)]):
+        shard_at(H, b, a, L, w, glow=0.6, seed=150 + i, ramp=ICE_DEEP)
+
+    Mo = Part(CV, (220, 440, 640, 640), 160)
+    mouth = Mo.shape([(246, 468), (400, 482), (548, 498), (580, 530), (520, 560), (400, 572), (300, 574),
+                      (262, 540)], n=8)
+    Mo.paint(mouth, MOUTH_C, r=24, lift=-0.2, line=0, cast=0)
+    Mo.paint(Mo.shape([(300, 556), (380, 540), (470, 534), (520, 548), (440, 566), (330, 570)]) * mouth,
+             MOUTH, r=12, lift=0.05, spec=0.35, line=0.3, cast=0)
+    Mo.glow(radial(Mo, (420, 520), 120) * mouth, GLOWC, 18, 0.9, core=0.5)
+
+    J = Part(CV, (230, 450, 680, 680), 170)
+    jaw = J.shape([(600, 500), (586, 552), (520, 586), (420, 604), (330, 604), (282, 588), (278, 566),
+                   (330, 556), (420, 544), (500, 528), (560, 498)], n=8)
+    for i, (x, L) in enumerate([(296, 26), (336, 18), (372, 22), (410, 16), (448, 18), (486, 14)]):
+        y = 562 - (x - 290) * 0.1
+        f = J.poly([(x - 7, y + 4), (x + 7, y + 4), (x + 1, y - L)])
+        J.paint(f, TEETH, r=3, spec=0.6, cast=0.15, castr=3, lw=0.6)
+    scalepaint(J, jaw, SC, 24, 12, -8, 171, ramp_shift=-0.03)
+    J.paint(blur(J.shape([(290, 584), (400, 590), (520, 572), (580, 548), (560, 580), (440, 604),
+                          (330, 604)]), 3 * SS) * jaw, BEL, r=16, hm=jaw, line=0, cast=0, ramp_shift=-0.06)
+    for i, (b, a, L, w) in enumerate([((420, 600), 75, 46, 18), ((470, 594), 65, 56, 20),
+                                      ((520, 582), 55, 48, 18)]):
+        shard_at(J, b, a, L, w, glow=0.5, seed=175 + i, ramp=ICE_DEEP)
+
+    # ---------------- breath: an additive glowing cone and a translucent mist with splinters of ice
+    M = (262, 515)
+    bpts = [M, (236, 640), (214, 800), (200, 960), (196, 1060)]
+    brad = [14, 46, 88, 120, 132]
+    BR = Part(CV, (0, 430, 470, 1300), 180)
+    cone = blur(BR.tube(bpts, brad, n=10), 10 * SS)
+    t = lin(BR, M, bpts[-1])
+    fade = (1 - smooth(0.55, 1.0, t))
+    core = blur(BR.tube(bpts[:4], [8, 20, 34, 30], n=10), 6 * SS) * (1 - smooth(0.3, 0.9, t))
+    g = np.clip(cone * fade * 0.55 + core * 0.9, 0, 1)
+    colr = (GLOWC[None, None, :] * (1 - core[..., None]) + np.array([0.9, 1.0, 1.0], F32) * core[..., None])
+    BR.c[...] = colr * g[..., None]
+    BR.a[...] = g
+    BR.glow(radial(BR, M, 60), C("#dffcff"), 12, 0.9)
+
+    MI = Part(CV, (0, 430, 470, 1300), 190)
+    rng = random.Random(191)
+    mist = np.zeros((MI.H, MI.W), F32)
+    path = catmull(bpts, n=10)
+    for k in range(40):
+        s = rng.uniform(0.05, 1.0)
+        cpt = path[int(s * (len(path) - 1))]
+        rr = float(np.interp(s, np.linspace(0, 1, len(brad)), brad))
+        c = (cpt[0] + rng.uniform(-0.75, 0.75) * rr, cpt[1] + rng.uniform(-0.3, 0.3) * rr)
+        mist = np.maximum(mist, MI.ellipse(c, rr * rng.uniform(0.12, 0.25), rr * rng.uniform(0.4, 0.8),
+                                           rng.uniform(-12, 12)) * rng.uniform(0.3, 1.0))
+    streak = fbm(MI.H, MI.W, 14 * SS, np.random.default_rng(192), 3)
+    cone_m = blur(MI.tube(bpts, brad, n=10), 8 * SS)
+    mist = np.clip(blur(mist, 10 * SS) * 1.4 + cone_m * 0.35, 0, 1) * (0.5 + streak)
+    mist = np.clip(mist, 0, 1) * (1 - smooth(0.55, 1.0, lin(MI, M, bpts[-1]))) * cone_m
+    MI.paint(np.clip(mist, 0, 1), mk_ramp("#6a8cc0", "#90b0d8", "#b8d4ec", "#dcefff", "#f2fbff", "#ffffff"),
+             r=40, line=0.0, cast=0.0, rim=0.5, opacity=0.5, grain=0.05)
+    for i in range(16):
+        s = rng.uniform(0.12, 0.8)
+        path = catmull(bpts, n=10)
+        cpt = path[int(s * (len(path) - 1))]
+        rr = float(np.interp(s, np.linspace(0, 1, len(brad)), brad))
+        b = (cpt[0] + rng.uniform(-0.75, 0.75) * rr, cpt[1] + rng.uniform(-0.3, 0.3) * rr)
+        L = rng.uniform(18, 40) * (1.2 - s * 0.4)
+        shard_at(MI, b, rng.uniform(95, 130), L, L * 0.38, glow=0.8, seed=200 + i, ramp=ICE, cast=0.0,
+                 spark=(i % 3 == 0))
+    for i in range(8):
+        s = rng.uniform(0.15, 0.7)
+        path = catmull(bpts, n=10)
+        cpt = path[int(s * (len(path) - 1))]
+        MI.sparkle((cpt[0] + rng.uniform(-50, 50), cpt[1] + rng.uniform(-30, 30)), rng.uniform(8, 16), 0.9)
+
+    # ---------------- glow layers and floating shards
+    fx_eye = fx_glow(CV, [lambda P: P.ellipse((470, 410), 22, 8, -12)], EYE_GLOW, 14, 1.0, box=(380, 340, 570, 480))
+    fx_crest = fx_glow(CV, [lambda P: P.tube([(900, 640), (790, 560), (700, 470), (640, 370)], [60, 60, 50, 40]),
+                            lambda P: P.tube([(560, 400), (676, 318), (742, 300)], [26, 16, 6])],
+                       GLOWC, 30, 0.3, box=(480, 180, 1060, 760))
+    fx_tail = fx_glow(CV, [lambda P: P.ellipse((1712, 800), 50, 80)], GLOWC, 30, 0.5, box=(1560, 600, 1792, 980))
+
+    def floater(seed, c, shards):
+        P = Part(CV, (c[0] - 120, c[1] - 120, c[0] + 120, c[1] + 120), seed)
+        for i, (a, L, w) in enumerate(shards):
+            ra = math.radians(a)
+            b = (c[0] - math.cos(ra) * L * 0.35, c[1] - math.sin(ra) * L * 0.35)
+            shard_at(P, b, a, L, w, glow=0.9, seed=seed + i, ramp=ICE_DEEP, cast=0.0)
+        return P
+
+    F1 = floater(300, (330, 250), [(-80, 90, 32), (-140, 56, 22), (-30, 50, 20)])
+    F2 = floater(310, (1530, 760), [(-100, 80, 30), (-50, 52, 20)])
+    F3 = floater(320, (500, 1160), [(-110, 64, 24), (-60, 44, 18)])
+
+    def add(name, img, parent, role, pivot, z, blend="normal"):
+        big = Image.new("RGBA", rb.canvas, (0, 0, 0, 0))
+        big.paste(img, (OFF, 0))
+        rb.add(name, big, parent, role, (pivot[0] + OFF, pivot[1]), z, blend)
+
+    add("body", B.image(), "", "root", (1000, 880), 10)
+    add("wing_back", WB.image(), "body", "wing_back", (980, 700), 2)
+    add("leg_back_upper", far_hind[0].image(), "body", "leg_back_upper", (1300, 880), 4)
+    add("leg_back_lower", far_hind[1].image(), "leg_back_upper", "leg_back_lower", (1262, 1045), 3)
+    add("arm_back_upper", far_fore[0].image(), "body", "arm_back_upper", (880, 880), 6)
+    add("arm_back_lower", far_fore[1].image(), "arm_back_upper", "arm_back_lower", (892, 1040), 5)
+    add("tail_1", T1.image(), "body", "tail", (1270, 895), 9)
+    add("tail_2", T2.image(), "tail_1", "tail", (1440, 978), 8)
+    add("tail_3", T3.image(), "tail_2", "tail", (1625, 1010), 7)
+    add("neck", N.image(), "body", "torso", (840, 800), 14)
+    add("wing_front", WF.image(), "body", "wing_front", (930, 720), 15)
+    add("leg_front_upper", near_hind[0].image(), "body", "leg_front_upper", (1170, 900), 17)
+    add("leg_front_lower", near_hind[1].image(), "leg_front_upper", "leg_front_lower", (1100, 1070), 16)
+    add("arm_front_upper", near_fore[0].image(), "body", "arm_front_upper", (770, 880), 20)
+    add("arm_front_lower", near_fore[1].image(), "arm_front_upper", "arm_front_lower", (745, 1040), 19)
+    add("head", H.image(), "neck", "head", (590, 450), 24)
+    add("mouth", Mo.image(), "head", "extra", (540, 500), 21)
+    add("jaw", J.image(), "head", "jaw", (575, 505), 22)
+    add("breath_mist", MI.image(), "head", "extra", M, 26)
+    add("breath", BR.image(), "head", "fx", M, 40, blend="add")
+    add("eye_glow", fx_eye.image(), "head", "fx", (470, 410), 41, blend="add")
+    add("crest_glow", fx_crest.image(), "neck", "fx", (840, 800), 39, blend="add")
+    add("tail_glow", fx_tail.image(), "tail_3", "fx", (1712, 850), 38, blend="add")
+    add("shard_1", F1.image(), "body", "float", (330, 250), 42)
+    add("shard_2", F2.image(), "body", "float", (1530, 760), 43)
+    add("shard_3", F3.image(), "body", "float", (500, 1160), 44)
+    return rb, 768
+
+
 RIGS = {
     "frost_wolf": build_frost_wolf,
     "ice_wisp": build_ice_wisp,
     "yeti_cub": build_yeti_cub,
     "ice_troll": build_ice_troll,
+    "frostbreath": build_frostbreath,
 }
 
 

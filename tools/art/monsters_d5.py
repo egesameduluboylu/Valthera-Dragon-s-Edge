@@ -587,6 +587,13 @@ class Rig:
         img = layer if isinstance(layer, Image.Image) else layer.image()
         self.parts.append(dict(name=name, img=img, parent=parent, role=role, pivot=pivot, z=z, blend=blend))
 
+    def rescale(self, k, c=None):
+        """Scales every part (and pivot) by k about c (default: the feet), for a figure drawn a bit small."""
+        c = c or self.feet
+        for p in self.parts:
+            p["img"] = scaled(p["img"], c, k)
+            p["pivot"] = scale_pt(p["pivot"], c, k)
+
     def get(self, name):
         return next(p for p in self.parts if p["name"] == name)
 
@@ -853,7 +860,7 @@ def foot(L, ankle, tips, color, w, seed, claw_c=(0.09, 0.07, 0.08), claw_k=1.0, 
 
 
 def tail_chain(R, prefix, ctrl, widths, n, parent, z0, color, seed, spikes=None, layer_pad=120, tip=None,
-               glow_seams=False, scale=15, top=None):
+               glow_seams=False, scale=15, top=None, spike_c=None):
     """A tail cut into n segments (prefix_1 ... prefix_n, role tail). Each segment starts a little before
     its joint (a rounded cap under the previous one). spikes: list of (s0, s1) arc-length ranges on which to
     raise spikes on the upper side. Returns the joint points."""
@@ -890,7 +897,8 @@ def tail_chain(R, prefix, ctrl, widths, n, parent, z0, color, seed, spikes=None,
                     h = hmax * (1 - 0.5 * ss / total)
                     base = (x + nx * hw * 0.7, y + ny * hw * 0.7)
                     tipp = (base[0] + nx * h + dx / ln * h * 0.7, base[1] + ny * h + dy / ln * h * 0.7)
-                    spike(L, base, tipp, max(10, wk[i] * 0.32), HORN, seed=seed + j, lean=0.3)
+                    spike(L, base, tipp, max(10, wk[i] * 0.32), HORN if spike_c is None else spike_c,
+                          seed=seed + j, lean=0.3)
         if k == n - 1 and tip:
             tip(L, pts, wk)
         m = L.tube(sub, sw)
@@ -1259,9 +1267,1098 @@ def build_ashwing(sheet_dir=None):
 
 
 
+# ------------------------------------------------------------------ shared: armour, cloth, smoke
+
+MON = (1024, 1024)
+STEEL = C("#6c7180")
+STEEL_D = C("#3a3d48")
+GOLD = C("#c9952f")
+BRONZE = C("#9a6a2e")
+CRIMSON = C("#7e1816")
+LEATHER = C("#4a2e22")
+WOOD = C("#5c3b22")
+
+
+def mix(a, b, t):
+    return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
+
+
+def folds(L, m, angle, period, amp=1.0, seed=1, warp=0.35):
+    """Height (working px) of cloth folds: ridges that run across `angle` (the direction they vary along),
+    wavering with noise."""
+    sl, xx, yy = _sub(L, m)
+    r = math.radians(angle)
+    d = xx * math.cos(r) + yy * math.sin(r)
+    h, w = xx.shape
+    nz = noise(h, w, period * SS * 1.6, seed=seed, octaves=3)
+    v = np.sin((d / period + nz * warp * 4) * 2 * math.pi)
+    v = np.sign(v) * np.abs(v) ** 0.6
+    return _full(L, sl, (v * 0.5 + 0.5) * period * SS * 0.2 * amp)
+
+
+def edge_band(m, w):
+    """The inner band of a mask, w canvas px wide (for trims and rims)."""
+    d = dist(m, (w + 6) * SS)
+    return m * smooth(w * SS + 1.2, w * SS - 1.2, d)
+
+
+def metal(L, m, col=STEEL, r=20, **kw):
+    kw.setdefault("spec", 0.95)
+    kw.setdefault("shin", 42)
+    kw.setdefault("tex", 0.05)
+    return L.paint(m, col, r=r, metal=1.0, **kw)
+
+
+def gold_trim(L, m, w=6, col=GOLD, **kw):
+    b = edge_band(m, w)
+    L.ao(b, 0.35, 3, 1, 2)
+    metal(L, b, col, r=w * 0.7, spec=1.0, shin=30, line=0.5, **kw)
+    return b
+
+
+def hem(a, b, n, depth, seed, down=(0, 1)):
+    """Ragged edge from a to b: n teeth hanging `depth` px toward `down`."""
+    rng = np.random.default_rng(seed)
+    out = []
+    for i in range(n * 2 + 1):
+        t = i / (n * 2)
+        x, y = mix(a, b, t)
+        k = depth * (rng.uniform(0.6, 1.2) if i % 2 else rng.uniform(0.0, 0.3))
+        out.append((x + down[0] * k + rng.normal(0, depth * 0.1), y + down[1] * k))
+    return out
+
+
+def rivets(L, pts, r, col=GOLD):
+    for (x, y) in pts:
+        m = L.ellipse(x, y, r, r)
+        L.ao(m, 0.4, 2, 1, 2)
+        metal(L, m, col, r=r, spec=1.0, shin=30, line=0.4)
+
+
+def glow_eye(L, x, y, rx, ry, ang=0, k=1.0, core=(1.0, 0.95, 0.7), halo=EMBER):
+    m = L.ellipse(x, y, rx, ry, ang)
+    L.flat(m, fire(0.75 + 0.25 * L.radial(x, y, rx * 1.1, 1.0)))
+    L.glow(x, y, rx * 3.0, halo, 0.9 * k, extend=0.5)
+    L.glow(x, y, rx * 0.9, np.asarray(core, np.float32), 1.0 * k, extend=0.0)
+    return m
+
+
+# ------------------------------------------------------------------ Dragon Guard
+
+def scale_pt(p, c, k):
+    return (c[0] + (p[0] - c[0]) * k, c[1] + (p[1] - c[1]) * k)
+
+
+def scaled(L, c, k):
+    """A painted layer's canvas image scaled by k about point c (to resize a part drawn in big coordinates)."""
+    img = L.image() if isinstance(L, Layer) else L
+    a = 1.0 / k
+    return img.transform(img.size, Image.AFFINE, (a, 0, c[0] - a * c[0], 0, a, c[1] - a * c[1]), resample=Image.BICUBIC)
+
+
+def dg_leg(R, nm, hip, knee, ankle, toe, heel, z, keyk=1.0, seed=0):
+    up = "leg_%s_upper" % nm
+    lo = "leg_%s_lower" % nm
+    # lower: shin in a steel greave, a dragon-scaled sabaton
+    L = LB(MON, [knee, ankle, toe, heel], 70)
+    shin = L.tube([knee, mix(knee, ankle, 0.5), ankle], [70, 60, 50])
+    L.paint(shin, LEATHER * 0.8, r=26, spec=0.2, tex=0.12, keyk=keyk, seed=seed + 1)
+    dx, dy = ankle[0] - knee[0], ankle[1] - knee[1]
+    ln = math.hypot(dx, dy)
+    nx, ny = -dy / ln, dx / ln
+    fwd = -1 if nx < 0 else 1   # the front of the shin faces left
+    gv = L.tube([(knee[0] + nx * 4 * fwd, knee[1] + 24), mix(knee, ankle, 0.35), mix(knee, ankle, 0.7),
+                 (ankle[0], ankle[1] - 6)], [60, 68, 54, 44])
+    metal(L, gv, STEEL, r=24, keyk=keyk, seed=seed + 2)
+    gold_trim(L, gv, 4, keyk=keyk)
+    foot = L.blob([(ankle[0] + 18, ankle[1] - 22), (heel[0], heel[1] - 30), (heel[0] + 4, heel[1]),
+                   (toe[0] + 6, toe[1] + 2), (toe[0] - 4, toe[1] - 10), (mix(ankle, toe, 0.5)[0], ankle[1] + 4),
+                   (ankle[0] - 22, ankle[1] - 20)], n=6)
+    L.ao(foot, 0.4, 5, 0, -4)
+    skin(L, foot, STEEL * 0.95, 14, 9, angle=180, seed=seed + 3, metal=0.8, spec=0.8, keyk=keyk)
+    claw(L, (toe[0] + 4, toe[1] - 8), 165, 26, 13, color=GOLD * 0.8, curl=-0.3)
+    R.add(lo, L, up, lo, knee, z)
+    # upper: leather thigh, steel cuisse, knee cop with a gold fin
+    L = LB(MON, [hip, knee], 90)
+    th = L.tube([hip, mix(hip, knee, 0.5), knee], [104, 90, 72])
+    L.paint(th, LEATHER, r=34, bump=folds(L, th, 20, 26, 0.7, seed + 4), spec=0.2, tex=0.12, keyk=keyk, seed=seed + 4)
+    dx, dy = knee[0] - hip[0], knee[1] - hip[1]
+    cu = L.tube([mix(hip, knee, 0.15), mix(hip, knee, 0.85)], [84, 66])
+    cu = cu * L.poly([(hip[0] - 200, hip[1] - 50), (hip[0] + 8 + dx * 0.0, hip[1] - 50), (knee[0] + 14, knee[1]),
+                      (knee[0] - 200, knee[1] + 40)])
+    L.ao(cu, 0.4, 5, 3, 4)
+    metal(L, cu, STEEL, r=24, keyk=keyk, seed=seed + 5)
+    gold_trim(L, cu, 4, keyk=keyk)
+    kc = L.ellipse(knee[0] - 6, knee[1], 40, 36, 10)
+    L.ao(kc, 0.5, 6, 2, 6)
+    metal(L, kc, STEEL * 1.05, r=26, keyk=keyk, seed=seed + 6)
+    gold_trim(L, kc, 4, keyk=keyk)
+    spike(L, (knee[0] - 30, knee[1] - 4), (knee[0] - 60, knee[1] - 30), 22, GOLD * 0.75, seed=seed + 7, lean=0.3)
+    R.add(up, L, "hips", up, hip, z + 1)
+
+
+def dg_head():
+    L = Layer(MON, (330, 60, 760, 420))
+    # horns sweeping back, far one first
+    horn(L, [(560, 220), (620, 160), (690, 150), (735, 185)], 36, HORN * 1.4, seed=301, rings=1.0, tipc=C("#6a5038"))
+    # aventail of scales behind the helm
+    av = L.blob([(560, 300), (620, 290), (650, 340), (630, 395), (560, 400), (520, 360)], n=6)
+    skin(L, av, BRONZE * 0.8, 20, 9, angle=90, seed=302, metal=0.7, spec=0.7)
+    dome = L.blob([(448, 245), (478, 206), (530, 190), (585, 202), (612, 240), (616, 296), (596, 342),
+                   (546, 360), (492, 352), (462, 318)], n=8)
+    L.ao(dome, 0.4, 8, 3, 6)
+    metal(L, dome, STEEL, r=60, seed=303, r2=14, k2=0.4)
+    # scale plating on the crown, like the hide of the dragon it imitates
+    crown = dome * L.poly([(480, 150), (640, 150), (640, 290), (560, 270), (500, 240)])
+    skin(L, crown, STEEL * 1.05, 26, 11, angle=200, seed=304, metal=0.9, spec=0.9, shin=34, alpha=0.9)
+    # dark face opening in the dragon's open mouth
+    face = L.blob([(392, 296), (470, 286), (520, 300), (526, 330), (470, 334), (400, 322)], n=4)
+    L.flat(face, C("#0c0709"))
+    glow_eye(L, 478, 312, 12, 6, -6, k=1.0)
+    glow_eye(L, 437, 310, 9, 5, -6, k=0.8)
+    # upper snout (the visor) and the lower jaw guard
+    snout = L.blob([(500, 250), (450, 252), (402, 268), (372, 288), (376, 304), (430, 304), (500, 300), (530, 286)], n=5)
+    L.ao(snout, 0.55, 6, 0, 6)
+    metal(L, snout, STEEL * 1.05, r=22, seed=305)
+    gold_trim(L, snout, 5)
+    jg = L.blob([(520, 330), (470, 334), (420, 332), (396, 344), (416, 364), (480, 372), (536, 362)], n=5)
+    L.ao(jg, 0.5, 6, 0, -4)
+    metal(L, jg, STEEL, r=18, seed=306)
+    gold_trim(L, jg, 4)
+    for x in np.linspace(392, 500, 6):          # gold fangs
+        y = np.interp(x, [372, 430, 500], [302, 304, 300])
+        tooth(L, (x, y - 2), 95 - (x - 440) * 0.05, 15 if x > 400 else 22, 8, GOLD * 0.95, curve=0.15)
+    for x in np.linspace(410, 500, 5):
+        tooth(L, (x, 334), -88, 12, 7, GOLD * 0.95, curve=-0.1)
+    # nostril, brow ridge, the helm's own gold dragon eye
+    L.paint(L.ellipse(384, 286, 8, 4, -20), C("#0c0709"), r=3, rim=0, line=0.3)
+    brow = L.tube([(470, 262), (510, 252), (548, 252)], [16, 14, 8])
+    L.ao(brow, 0.5, 4, 0, 4)
+    metal(L, brow, GOLD * 0.9, r=7, spec=1.0, shin=30)
+    em = L.blob([(500, 230), (520, 222), (540, 228), (520, 236)], n=4)
+    L.flat(em, fire(0.55 + 0.4 * L.radial(520, 229, 22, 1.0)))
+    L.glow(520, 229, 30, EMBER, 0.6, extend=0.3)
+    # cheek fin and near horn
+    fin = L.poly([(548, 300), (610, 280), (660, 292), (622, 306), (650, 322), (600, 326), (560, 338)])
+    L.paint(fin, GOLD * 0.75, r=8, metal=1.0, spec=0.9, shin=30, line=0.6)
+    horn(L, [(548, 240), (600, 196), (672, 196), (712, 236)], 42, HORN * 1.6, seed=307, rings=1.0, tipc=C("#7a5a3a"))
+    return L
+
+
+def dg_crest():
+    """The red crest fin along the top of the helm (sways)."""
+    L = Layer(MON, (440, 90, 720, 330))
+    top = [(500, 205), (532, 192), (566, 196), (598, 212), (624, 238), (640, 270)]
+    tips = [(486, 150), (536, 120), (590, 132), (636, 160), (672, 200), (690, 256), (668, 290)]
+    pts = [top[0]]
+    for i in range(len(tips)):
+        pts.append(tips[i])
+        if i + 1 < len(top):
+            pts.append(mix(top[i], top[i + 1], 0.5) if i < len(top) - 1 else top[-1])
+    pts += [(640, 280), (600, 240), (520, 222)]
+    m = L.poly(pts)
+    L.paint(m, CRIMSON * 1.15, r=10, bump=folds(L, m, 0, 18, 0.8, 310), spec=0.3, tex=0.1, seed=311, sss=0.4)
+    for t in tips:   # gold spines along the fin
+        b = (t[0] * 0.25 + 560 * 0.75, t[1] * 0.25 + 230 * 0.75)
+        L.paint(L.tube([b, t], [9, 2], caps=False), GOLD * 0.8, r=4, metal=1.0, spec=0.9, line=0.4)
+    return L
+
+
+def dg_torso():
+    L = Layer(MON, (400, 300, 680, 620))
+    body = L.blob([(482, 590), (466, 520), (452, 452), (458, 400), (492, 364), (532, 352), (582, 358), (618, 386),
+                   (628, 450), (614, 520), (600, 590)], n=8)
+    # scale mail coat
+    skin(L, body, BRONZE, 50, 10, angle=90, seed=320, metal=0.65, spec=0.8, shin=26, r2=120, k2=0.3)
+    # breastplate over the chest
+    bp = L.blob([(466, 470), (456, 410), (480, 372), (530, 360), (584, 366), (614, 396), (618, 450), (590, 492),
+                 (530, 500)], n=8)
+    L.ao(bp, 0.55, 8, 2, 8)
+    ridge = L.tube([(470, 380), (476, 440), (500, 490)], [30, 34, 22])
+    metal(L, bp, STEEL, r=55, seed=321, bump=blur(ridge, 8 * SS) * 10 * SS)
+    gold_trim(L, bp, 5)
+    # gorget
+    g = L.blob([(480, 365), (530, 340), (590, 350), (600, 378), (535, 382)], n=5)
+    L.ao(g, 0.5, 5, 0, 5)
+    metal(L, g, STEEL * 1.1, r=14, seed=322)
+    gold_trim(L, g, 3)
+    # a gold dragon-claw clasp with an ember stone
+    m = L.ellipse(512, 432, 18, 20)
+    metal(L, m, GOLD, r=12, spec=1.0, shin=30)
+    glow_eye(L, 512, 432, 8, 9, k=0.7)
+    L.add_light(L.radial(512, 432, 70, 2) * 0.25, EMBER)
+    return L
+
+
+def dg_hips():
+    L = Layer(MON, (420, 500, 680, 800))
+    # tabard flap hanging between the legs, with a tattered hem
+    flap = L.poly(catmull([(560, 560), (590, 640), (600, 720)], n=6) + hem((600, 735), (478, 730), 5, 40, 330)
+                  + catmull([(478, 720), (488, 640), (500, 560)], n=6))
+    L.paint(flap, CRIMSON, r=22, bump=folds(L, flap, 0, 34, 1.2, 331, warp=0.12), spec=0.2, tex=0.08, seed=331, sss=0.25)
+    # scale skirt
+    sk = L.blob([(470, 540), (612, 540), (630, 610), (620, 655), (560, 640), (470, 650), (452, 600)], n=6)
+    skin(L, sk, BRONZE * 0.95, 30, 10, angle=90, seed=332, metal=0.65, spec=0.8, shin=26)
+    # front tassets
+    for i, (x0, y0) in enumerate(((452, 572), (494, 578))):
+        t = L.blob([(x0, y0), (x0 + 48, y0 + 4), (x0 + 52, y0 + 72), (x0 + 26, y0 + 86), (x0 - 2, y0 + 70)], n=4)
+        L.ao(t, 0.5, 6, 2, 6)
+        metal(L, t, STEEL, r=16, seed=333 + i)
+        gold_trim(L, t, 3)
+    # belt and buckle
+    belt = L.blob([(462, 540), (612, 538), (616, 572), (462, 578)], n=3)
+    L.ao(belt, 0.5, 5, 0, 5)
+    L.paint(belt, LEATHER * 0.9, r=10, spec=0.35, shin=16, tex=0.12, seed=335)
+    bk = L.blob([(478, 538), (512, 536), (514, 578), (478, 580)], n=3)
+    metal(L, bk, GOLD, r=8, spec=1.0, shin=30)
+    rivets(L, [(540, 556), (568, 556), (596, 556)], 4)
+    return L
+
+
+def dg_arm_back(R):
+    sh, el, hd = (585, 400), (510, 490), (408, 548)
+    L = LB(MON, [sh, el], 70)
+    m = L.tube([sh, el], [76, 62])
+    metal(L, m, STEEL * 0.8, r=28, keyk=0.7, seed=340)
+    pa = L.ellipse(586, 404, 54, 44, -20)
+    metal(L, pa, STEEL * 0.8, r=30, keyk=0.7, seed=341)
+    gold_trim(L, pa, 4, keyk=0.7)
+    R.add("arm_back_upper", L, "torso", "arm_back_upper", sh, 4)
+    L = LB(MON, [el, hd], 60)
+    m = L.tube([el, hd], [60, 50])
+    metal(L, m, STEEL * 0.8, r=24, keyk=0.7, seed=342)
+    L.paint(L.ellipse(hd[0], hd[1], 30, 28), STEEL_D, r=16, metal=1.0, spec=0.9, keyk=0.7)
+    R.add("arm_back_lower", L, "arm_back_upper", "arm_back_lower", el, 3)
+    return hd
+
+
+def dg_shield(hd):
+    L = Layer(MON, (170, 320, 440, 900))
+    out = [(228, 366), (310, 342), (398, 360), (404, 640), (396, 782), (312, 876), (216, 790), (210, 640)]
+    m = L.blob(out, n=8)
+    # curved tower: cylinder across, a little bulge in the middle
+    xx, yy = L.grid()
+    u = np.clip((xx - 207) / 200.0, 0, 1)
+    cyl = np.sqrt(np.clip(1 - (u * 2 - 1.15) ** 2, 0, 1)) * 34 * SS
+    L.ao(m, 0.5, 14, 6, 10)
+    hsh = cyl * m + Layer.height(m, 10 * SS) * 0.5
+    metal(L, m, STEEL_D, h=hsh, seed=352)
+    gold_trim(L, m, 10)
+    # crimson lacquered field inside the rim, worn at the edges
+    inner = L.blob([(244, 392), (310, 372), (380, 388), (384, 640), (378, 760), (312, 842), (234, 768), (228, 640)], n=8)
+    wear = noise(L.h, L.w, 14 * SS, seed=351, octaves=4)
+    field = CRIMSON * 0.9 * (0.85 + 0.3 * noise(L.h, L.w, 50 * SS, seed=353, octaves=3))[..., None]
+    L.paint(inner, field, h=hsh, spec=0.7, shin=30, tex=0.05, seed=354, line=0, under=0.6,
+            clip=1.0 - 0.85 * smooth(0.64, 0.8, wear))
+    gold_trim(L, inner, 4)
+    # the dragon-eye emblem: gold sun rays around a molten eye
+    cx, cy = 308, 560
+    for i in range(12):
+        a = math.radians(i * 30 + 15)
+        ln = 120 if i % 2 == 0 else 80
+        tip = (cx + math.cos(a) * ln * 0.85, cy + math.sin(a) * ln)
+        L.ao(L.tube([(cx, cy), tip], [26, 0], caps=False), 0.35, 4, 2, 4)
+        metal(L, L.tube([(cx, cy), tip], [26, 0], caps=False), GOLD * 0.9, r=8, spec=1.0, shin=30, line=0.5)
+    eyeo = L.blob([(cx - 64, cy), (cx - 20, cy - 34), (cx + 26, cy - 34), (cx + 60, cy), (cx + 26, cy + 34),
+                   (cx - 20, cy + 34)], n=5)
+    L.ao(eyeo, 0.5, 6, 2, 6)
+    metal(L, eyeo, GOLD, r=16, spec=1.0, shin=30)
+    iris = L.blob([(cx - 46, cy), (cx - 12, cy - 22), (cx + 18, cy - 22), (cx + 42, cy), (cx + 18, cy + 22),
+                   (cx - 12, cy + 22)], n=5)
+    L.flat(iris, fire(0.55 + 0.45 * L.radial(cx - 4, cy, 46, 1.0)))
+    L.flat(L.ellipse(cx - 2, cy, 6, 20), np.array([0.18, 0.03, 0.0], np.float32), alpha=0.9)
+    L.glow(cx - 2, cy, 70, EMBER, 0.6, extend=0.0)
+    rivets(L, [(240, 400), (378, 396), (384, 760), (236, 770), (312, 850), (310, 376)], 6)
+    return L
+
+
+def dg_spear(hd):
+    tip, butt = (92, 330), (770, 625)
+    L = Layer(MON, (60, 290, 800, 660))
+    dx, dy = butt[0] - tip[0], butt[1] - tip[1]
+    ln = math.hypot(dx, dy)
+    ux, uy = dx / ln, dy / ln
+    P = lambda s, o=0: (tip[0] + ux * s - uy * o, tip[1] + uy * s + ux * o)
+    shaft = L.tube([P(120), P(ln - 6)], [15, 16])
+    wood = WOOD * (0.85 + 0.3 * noise(L.h, L.w, 6 * SS, seed=360, octaves=3))[..., None]
+    L.paint(shaft, wood, r=8, spec=0.35, shin=16, tex=0.15, seed=361)
+    for s in (420, 440, 560):  # leather grip wraps
+        L.paint(L.tube([P(s - 8), P(s + 8)], [19, 19], caps=False), LEATHER, r=8, spec=0.3, line=0.6)
+    metal(L, L.tube([P(ln - 22), P(ln)], [20, 18]), GOLD * 0.8, r=8)
+    # red tassel under the head
+    for k in range(-3, 4):
+        a = P(128, k * 3)
+        b = (a[0] + 6 + k * 3, a[1] + 64 + abs(k) * -4)
+        L.paint(L.tube([a, mix(a, b, 0.5), b], [6, 5, 2]), CRIMSON * 1.25, r=3, spec=0.25, tex=0.1, line=0.5, sss=0.3)
+    # socket and the leaf blade
+    so = L.tube([P(96), P(132)], [26, 18])
+    metal(L, so, GOLD * 0.9, r=10, spec=1.0)
+    blade = L.poly([P(0), P(30, 12), P(70, 18), P(100, 8), P(100, -8), P(70, -18), P(30, -12)])
+    xx, yy = L.grid()
+    o = (xx - tip[0]) * (-uy) + (yy - tip[1]) * ux
+    hb = (18 - np.abs(o)) * SS * 0.8 * blade
+    metal(L, blade, C("#9aa0b0"), h=hb, spec=1.0, shin=60)
+    L.add_light(blade * smooth(4, 0, np.abs(o)) * 0.25, np.array([1.0, 0.9, 0.7], np.float32))
+    return L
+
+
+def dg_arm_front(R):
+    sh, el, hd = (488, 398), (504, 512), (432, 478)
+    L = LB(MON, [el, hd], 60)
+    m = L.tube([el, mix(el, hd, 0.5), hd], [62, 56, 50])
+    metal(L, m, STEEL, r=24, seed=370)
+    gold_trim(L, L.tube([mix(el, hd, 0.55), mix(el, hd, 0.8)], [62, 58], caps=False), 3)
+    fist = L.blob([(410, 452), (446, 448), (462, 474), (452, 506), (414, 508), (400, 482)], n=5)
+    L.ao(fist, 0.5, 5, 2, 5)
+    skin(L, fist, STEEL * 1.05, 14, 8, angle=180, seed=371, metal=0.9, spec=0.9)
+    for i, y in enumerate((462, 478, 494)):   # knuckle plates
+        k = L.ellipse(410, y, 10, 7)
+        metal(L, k, STEEL * 1.2, r=5)
+    R.add("arm_front_lower", L, "arm_front_upper", "arm_front_lower", el, 30)
+    L = LB(MON, [sh, el, (420, 330), (560, 470)], 60)
+    m = L.tube([sh, el], [76, 62])
+    L.paint(m, LEATHER, r=26, spec=0.2, tex=0.12, seed=372)
+    rb = L.tube([mix(sh, el, 0.35), el], [66, 56])
+    metal(L, rb, STEEL, r=26, seed=373)
+    ec = L.ellipse(el[0] + 6, el[1], 34, 30, 30)
+    L.ao(ec, 0.5, 5, 2, 5)
+    metal(L, ec, STEEL * 1.05, r=20, seed=374)
+    gold_trim(L, ec, 3)
+    # big layered pauldron, a dragon's head shoulder
+    for i, (cx, cy, rx, ry) in enumerate(((500, 452, 58, 30), (496, 428, 64, 34), (490, 398, 70, 50))):
+        p = L.ellipse(cx, cy, rx, ry, -10)
+        L.ao(p, 0.55, 7, 2, 7)
+        metal(L, p, STEEL * (0.95 + 0.07 * i), r=30, seed=375 + i)
+        gold_trim(L, p, 4)
+    for (b, t) in (((466, 372), (440, 330)), ((500, 362), (492, 316)), ((532, 372), (548, 332))):
+        spike(L, b, t, 22, GOLD * 0.8, seed=379, lean=-0.2)
+    R.add("arm_front_upper", L, "torso", "arm_front_upper", sh, 28)
+
+
+def dg_cape():
+    L = Layer(MON, (470, 330, 860, 900))
+    side = catmull([(560, 362), (640, 372), (700, 450), (760, 600), (800, 760), (812, 840)], n=8)
+    pts = side + hem((812, 845), (600, 760), 6, 34, 380, down=(0.2, 1)) + catmull([(600, 760), (590, 600), (560, 470)], n=8)
+    m = L.poly(pts)
+    L.paint(m, CRIMSON * 0.85, r=26, bump=folds(L, m, -20, 70, 1.6, 381, warp=0.12), spec=0.25, tex=0.06, seed=382,
+            sss=0.3, keyk=0.85)
+    L.feather((560, 362), 70, -30, 40)
+    return L
+
+
+def build_dragon_guard(sheet_dir=None):
+    R = Rig("dragon_guard", MON, feet=(530, 968), kind="humanoid")
+    R.add("hips", dg_hips(), "", "root", (535, 585), 10)
+    R.add("torso", dg_torso(), "hips", "torso", (535, 560), 14)
+    R.add("cape", dg_cape(), "torso", "cape", (590, 380), 1)
+    hd = dg_arm_back(R)
+    dg_leg(R, "back", (575, 585), (630, 765), (672, 930), (612, 968), (712, 970), 5, keyk=0.8, seed=390)
+    dg_leg(R, "front", (500, 585), (434, 755), (410, 928), (338, 968), (446, 970), 8, seed=395)
+    R.add("head", scaled(dg_head(), (528, 352), 0.8), "torso", "head", (528, 345), 20)
+    R.add("crest", scaled(dg_crest(), (528, 352), 0.8), "head", "hair", scale_pt((560, 220), (528, 352), 0.8), 19)
+    R.add("shield", dg_shield(hd), "arm_back_lower", "offhand", hd, 24)
+    R.add("spear", dg_spear(hd), "arm_front_lower", "weapon", (432, 478), 26)
+    dg_arm_front(R)
+    G = Layer(MON, (380, 250, 560, 380))
+    G.add_light(G.radial(462, 312, 70, 2.0) * 0.7, EMBER, clip_alpha=False, extend=1.0)
+    fx_window(G, 20)
+    R.add("eye_glow", scaled(G, (528, 352), 0.8), "head", "fx", scale_pt((462, 312), (528, 352), 0.8), 40, blend="add")
+    R.rescale(1.08)
+    R.save(sheet_dir)
+    return R
+
+
+# ------------------------------------------------------------------ generic drake head (whelp, elder drake)
+
+def smoke(L, x, y, r, seed, col=(0.36, 0.33, 0.34), k=1.0, under=0.5, stretch=(1.0, 1.0)):
+    """A soft puff of smoke: noisy billows fading out, lit warm from below."""
+    xx, yy = L.grid()
+    d = np.sqrt(((xx - x) / stretch[0]) ** 2 + ((yy - y) / stretch[1]) ** 2) / r
+    nz = noise(L.h, L.w, r * SS * 0.45, seed=seed, octaves=4)
+    a = smooth(0.15, 0.55, nz * 1.15 - d * 0.75 + 0.2) * smooth(1.0, 0.55, d) * k
+    lit = np.clip(0.55 + (nz - 0.5) * 1.4 - (yy - y) / r * 0.15, 0.25, 1.2)
+    col = np.asarray(col, np.float32) * lit[..., None]
+    col = col + EMBER * (np.clip((yy - y) / r, 0, 1) * under * 0.4)[..., None]
+    L._over(np.minimum(col, 1), a)
+
+
+def drake_head(F, H, L=None):
+    """A drake's skull and upper jaw in Frame F (u forward along the snout, v down) from the spec dict H."""
+    s = F.s
+    L = L or Layer(F.canvas, fbox(F, *H["box"], 30))
+    col, dust = H["color"], H["dust"]
+    for pts, w, tipc in H.get("far_horns", ()):
+        horn(L, F.P(pts), w * s, H["horn"] * 0.8, seed=H["seed"], rings=1.0, tipc=tipc)
+    for (a, b, w) in H.get("frill", ()):
+        spike(L, F(*a), F(*b), w * s, H["horn"] * 1.15, seed=H["seed"] + 1, lean=-0.3)
+    m = L.blob(F.P(H["head"]), n=8)
+    skin(L, m, col, 0.16 * s, H["scale"], angle=_dir(F, 0, 0, -1, 0.2), seed=H["seed"] + 2, top=(dust, 0.55),
+         rim=1.3, spec=0.42)
+    u0, u1, v0, n = H["scutes"]
+    for i, u in enumerate(np.linspace(u0, u1, n)):
+        v = v0 + (u - u0) / (u1 - u0 + 1e-6) * H.get("scute_slope", 0.04)
+        pm = L.ellipse(*F(u, v), 0.045 * s, 0.024 * s, _dir(F, u, v, 1, H.get("scute_slope", 0.04) / (u1 - u0)))
+        L.ao(pm * m, 0.4, 3, 1, 3)
+        L.paint(pm * m, col * 1.3, r=0.02 * s, spec=0.6, shin=22, seed=H["seed"] + 3 + i, line=0.6, top=(dust, 0.6))
+    brow = L.tube(F.P(H["brow"]), [0.09 * s, 0.085 * s, 0.065 * s, 0.02 * s])
+    L.ao(brow, 0.6, 7, 0, 6)
+    skin(L, brow, col * 1.15, 0.04 * s, H["scale"] * 0.9, angle=0, seed=H["seed"] + 4, top=(dust, 0.75), spec=0.5)
+    for (a, b, w) in H.get("brow_spikes", ()):
+        spike(L, F(*a), F(*b), w * s, H["horn"], seed=H["seed"] + 5, lean=-0.4)
+    ck = L.blob(F.P(H["cheek"]), n=3)
+    L.ao(ck, 0.45, 6, 2, 5)
+    skin(L, ck, col * 1.08, 0.025 * s, H["scale"] * 1.2, angle=160, seed=H["seed"] + 6, top=(dust, 0.5), spec=0.5,
+         r2=0.1 * s, k2=0.4)
+    # eye
+    eu, ev, erx, ery = H["eye"]
+    ex, ey = F(eu, ev)
+    L.paint(L.ellipse(ex, ey, erx * 1.45 * s, ery * 1.5 * s, _dir(F, 0, 0, 1, -0.25)), C("#120a0c"), r=0.02 * s,
+            rim=0, spec=0.0, line=0.5)
+    eye = L.blob(F.P([(eu - erx, ev + 0.005), (eu - erx * 0.3, ev - ery), (eu + erx * 0.6, ev - ery * 0.9),
+                      (eu + erx, ev - 0.002), (eu + erx * 0.4, ev + ery * 0.9), (eu - erx * 0.4, ev + ery)]), n=4)
+    rr = L.radial(ex, ey, erx * 1.2 * s, power=1.0)
+    L.flat(eye, ramp(0.5 + 0.5 * rr, H["eye_ramp"]))
+    pw = erx * 0.18
+    pup = L.poly(F.P([(eu + 0.004, ev - ery * 0.95), (eu + 0.004 + pw, ev), (eu + 0.004, ev + ery * 0.95),
+                      (eu + 0.004 - pw, ev)]))
+    L.flat(pup, np.array([0.1, 0.02, 0.0], np.float32), alpha=0.92)
+    L.glow(ex, ey, erx * 1.6 * s, H["eye_glow"], 0.8, extend=0.0)
+    L.glow(*F(eu - erx * 0.35, ev - ery * 0.35), erx * 0.3 * s, np.array([1.0, 1.0, 0.92], np.float32), 0.9, extend=0)
+    nu, nv = H["nostril"]
+    nx_, ny_ = F(nu, nv)
+    L.paint(L.ellipse(nx_, ny_, 0.034 * s, 0.015 * s, _dir(F, 0, 0, 1, -0.5)), C("#0c0708"), r=0.01 * s, rim=0,
+            line=0.3)
+    L.glow(nx_, ny_, 0.05 * s, EMBER, 0.6, extend=0.15)
+    for pts, w, tipc in H.get("horns", ()):
+        horn(L, F.P(pts), w * s, H["horn"], seed=H["seed"] + 7, rings=1.0, tipc=tipc)
+    mu = H["mouth_up"]
+    us = [p[0] for p in mu]
+    vs = [p[1] for p in mu]
+    t0, t1, nt, fangs = H["teeth"]
+    for u in np.linspace(t0, t1, nt):
+        ev_ = np.interp(u, us, vs)
+        fang = any(abs(u - f) < 0.03 for f in fangs)
+        tooth(L, F(u, ev_ - 0.014), _dir(F, u, ev_, 0.02, 1), (0.1 if fang else 0.05) * s,
+              (0.03 if fang else 0.02) * s, BONE_TEETH, curve=-0.12)
+    L.add_light(L.radial(*F(0.45, 0.14), 0.36 * s, 1.6) * H.get("mouth_light", 0.6) * m, EMBER)
+    return L
+
+
+def drake_jaw(F, H, open_deg, extra=24):
+    s = F.s
+    hinge = F(*H["hinge"])
+    L = Layer(F.canvas, fbox(F, *H["jaw_box"], 30))
+
+    def J(pts, extra_deg=0):
+        return rot(F.P(pts), hinge, -open_deg + extra_deg)
+    head_m = L.blob(F.P(H["head"]), n=8)
+    lip = J(H["jaw_up"])
+    wedge = L.blob([hinge] + F.P(H["mouth_up"]) + lip[::-1], n=3)
+    closed = J(H["jaw_up"], extra)
+    wedge = np.maximum(wedge, L.blob([hinge] + closed + lip[::-1], n=3) * head_m)
+    hu, hv = H["hinge"]
+    wedge = np.maximum(wedge, L.blob(F.P([(hu - 0.04, hv - 0.06), (hu + 0.1, hv - 0.08), (hu + 0.1, hv + 0.02),
+                                         (hu - 0.04, hv + 0.04)]), n=3))
+    t = L.radial(*F(hu + 0.06, hv), 0.62 * s, power=1.0)
+    heat = H.get("mouth_heat", 1.0)
+    L.flat(wedge, fire(0.06 + 0.9 * heat * t ** 1.4))
+    tg = L.tube(J([(hu, hv + 0.01), (hu + 0.25, hv - 0.01), (hu + 0.46, hv - 0.025)], -4),
+                [0.085 * s, 0.07 * s, 0.03 * s])
+    L.paint(tg * wedge, C("#6a1a18"), r=0.03 * s, spec=0.7, shin=20, rim=0.2, line=0.4,
+            light=fire(0.3 + 0.5 * t) * 0.8 * heat)
+    nz = noise(L.h, L.w, 0.04 * s * SS, seed=H["seed"] + 10, octaves=3)
+    fl = np.clip(t * 1.4 + (nz - 0.5) * 0.9 - 0.3, 0, 1) * wedge * heat
+    L.add_light(fl * 1.1, np.array([1.0, 0.85, 0.5], np.float32))
+    m = L.blob(J(H["jaw"]), n=8)
+    L.ao(m, 0.5, 6, 0, -4)
+    skin(L, m, H["color"], 0.07 * s, H["scale"], angle=_dir(F, 0, 0, -1, 0), seed=H["seed"] + 11,
+         top=(H["dust"], 0.35), spec=0.4)
+    for (u, v, du, dv) in H.get("jaw_spikes", ()):
+        spike(L, J([(u, v - 0.012)])[0], J([(u + du, v + dv)])[0], 0.04 * s, H["horn"], seed=H["seed"] + 12, lean=0.3)
+    ju = [p[0] for p in H["jaw_up"]]
+    jv = [p[1] for p in H["jaw_up"]]
+    t0, t1, nt, fangs = H["lower_teeth"]
+    for u in np.linspace(t0, t1, nt):
+        v = np.interp(u, ju, jv)
+        fang = any(abs(u - f) < 0.03 for f in fangs)
+        b = J([(u, v + 0.014)])[0]
+        a = _dir(F, u, v, 0, -1) - open_deg
+        tooth(L, b, a, (0.09 if fang else 0.045) * s, (0.028 if fang else 0.018) * s, BONE_TEETH, curve=0.1)
+    L.add_light(L.radial(*J([(0.45, 0.1)])[0], 0.36 * s, 1.5) * 0.8 * heat * np.maximum(m, 0), EMBER)
+    return L, hinge
+
+
+def mouth_fx(R, F, H, hinge, name="mouth_glow", parent="jaw", k=0.55, z=50):
+    G = Layer(F.canvas, fbox(F, 1.2, -0.3, -0.2, 0.75, 20))
+    G.add_light(G.radial(*F(0.4, 0.16), 0.42 * F.s, 2.0) * k, EMBER, clip_alpha=False, extend=0.8)
+    fx_window(G)
+    R.add(name, G, parent, "fx", hinge, z, blend="add")
+
+
+def eye_fx(R, F, H, parent="head", z=51, k=0.8, color=(1.0, 0.7, 0.2)):
+    ex, ey = F(H["eye"][0], H["eye"][1])
+    r = H["eye"][2] * 1.9 * F.s
+    G = Layer(F.canvas, (ex - r * 1.4, ey - r * 1.4, ex + r * 1.4, ey + r * 1.4))
+    G.add_light(G.radial(ex, ey, r, 2.0) * k, np.asarray(color, np.float32), clip_alpha=False, extend=1.0)
+    fx_window(G, 10)
+    R.add("eye_glow", G, parent, "fx", (ex, ey), z, blend="add")
+
+
+# ------------------------------------------------------------------ Dragon Whelp
+
+WH_RED = C("#621016")
+WH_D = C("#3c0b10")
+WH_DUST = C("#94443a")
+WH_PLATE = C("#3a2224")
+WH_MEM = C("#360a0e")
+
+WHELP_HEAD = dict(
+    seed=500, color=WH_RED, dust=WH_DUST, horn=HORN * 1.2, scale=9,
+    box=(1.0, -0.62, -0.62, 0.42), jaw_box=(1.05, -0.3, -0.12, 0.62),
+    head=[(-0.12, 0.0), (-0.07, -0.19), (0.07, -0.29), (0.23, -0.31), (0.37, -0.27), (0.48, -0.19), (0.63, -0.16),
+          (0.78, -0.135), (0.88, -0.09), (0.92, -0.03), (0.88, 0.035), (0.72, 0.056), (0.52, 0.072), (0.36, 0.095),
+          (0.26, 0.17), (0.1, 0.22), (-0.05, 0.18)],
+    mouth_up=[(0.3, 0.095), (0.5, 0.074), (0.7, 0.058), (0.88, 0.036)],
+    jaw=[(0.06, 0.12), (0.26, 0.1), (0.48, 0.09), (0.66, 0.08), (0.8, 0.074), (0.86, 0.09), (0.83, 0.14),
+         (0.66, 0.172), (0.44, 0.21), (0.24, 0.23), (0.05, 0.2)],
+    jaw_up=[(0.26, 0.1), (0.48, 0.09), (0.66, 0.08), (0.8, 0.074), (0.86, 0.09)],
+    hinge=(0.18, 0.14),
+    scutes=(0.52, 0.84, -0.14, 5), scute_slope=0.05,
+    brow=[(0.12, -0.24), (0.27, -0.262), (0.4, -0.22), (0.5, -0.16)],
+    brow_spikes=[((0.18, -0.27), (0.02, -0.38), 0.05), ((0.3, -0.27), (0.17, -0.37), 0.04)],
+    cheek=[(0.02, 0.03), (0.2, 0.0), (0.3, 0.07), (0.25, 0.15), (0.1, 0.19), (-0.02, 0.12)],
+    eye=(0.375, -0.16, 0.06, 0.035), eye_ramp=FIRE[2:], eye_glow=np.array([1.0, 0.55, 0.1], np.float32),
+    nostril=(0.86, -0.07),
+    far_horns=[([(0.14, -0.22), (0.0, -0.4), (-0.2, -0.5), (-0.4, -0.48)], 0.08, C("#3a1410"))],
+    horns=[([(0.1, -0.2), (-0.06, -0.38), (-0.26, -0.47), (-0.5, -0.42)], 0.1, C("#4a1a12")),
+           ([(0.02, -0.06), (-0.14, -0.14), (-0.32, -0.14)], 0.06, C("#3a1410"))],
+    frill=[((0.04, 0.16), (-0.24, 0.28), 0.07), ((-0.02, 0.05), (-0.3, 0.08), 0.075), ((0.0, -0.08), (-0.26, -0.16), 0.07)],
+    teeth=(0.36, 0.86, 10, (0.76,)), lower_teeth=(0.32, 0.82, 9, (0.72,)),
+    jaw_spikes=[(0.3, 0.232, -0.1, 0.08), (0.5, 0.2, -0.1, 0.075)],
+    mouth_light=0.7,
+)
+
+
+def wh_tip(L, pts, wk):
+    x, y = pts[-1]
+    x0, y0 = pts[-14]
+    a = math.degrees(math.atan2(y - y0, x - x0))
+    m = L.blob(rot([(x - 8, y - 26), (x + 30, y - 12), (x + 66, y), (x + 30, y + 12), (x - 8, y + 26), (x + 6, y)],
+                   (x, y), a), n=4)
+    L.paint(m, HORN * 1.3, r=10, spec=0.9, shin=34, seed=77, tex=0.05)
+    ed = np.clip(1 - dist(m, 8 * SS) / (2.5 * SS), 0, 1) * m
+    L.add_light(ed * 0.9, EMBER, extend=0.5)
+
+
+def build_whelp(sheet_dir=None):
+    R = Rig("whelp", MON, feet=(560, 968), kind="dragon")
+    H = WHELP_HEAD
+    # body
+    L = Layer(MON, (380, 470, 860, 860))
+    back = [(560, 552), (640, 548), (720, 572), (780, 620)]
+    pts, _ = resample(catmull(back, n=10), 5)
+    for i, (x, y) in enumerate(pts):
+        h = 48 - i * 4
+        spike(L, (x - 6, y + 12), (x + h * 0.85, y - h * 0.6), 26 - i * 2, HORN * 1.2, seed=510 + i, lean=0.35)
+    body = [(452, 600), (520, 562), (620, 552), (720, 575), (792, 640), (804, 720), (756, 790), (640, 812),
+            (520, 784), (452, 722), (430, 660)]
+    m = L.blob(body)
+    skin(L, m, WH_RED, 40, 12, angle=40, seed=511, top=(WH_DUST, 0.5), rim=1.4, spec=0.42, r2=170, k2=0.4)
+    plates(L, m, [(440, 640), (470, 730), (540, 790), (650, 812), (760, 790)],
+           (np.array([0, 200, 420]), np.array([46, 58, 44])), 34, 512, color=WH_PLATE, r=28,
+           heat=lambda s: smooth(0, 120, s) * smooth(420, 260, s) * 0.8, glow=0.8)
+    R.add("body", L, "", "root", (620, 700), 20)
+
+    # far wing: up and forward, behind the neck and head
+    L = Layer(MON, (160, 20, 720, 640))
+    wing(L, (560, 590), (640, 400), (520, 200), [(240, 120), (230, 300), (340, 380), (450, 430)], (540, 545),
+         WH_MEM * 0.8, WH_D, seed=520, bone_w=22, far=True, glow=0.85, depth=0.14)
+    R.add("wing_back", L, "body", "wing_back", (560, 590), 2)
+    # near wing: up and back
+    L = Layer(MON, (560, 30, 1020, 690))
+    k = 0.58
+    sh = (604, 600)
+    P = lambda dx, dy: (sh[0] + dx * k, sh[1] + dy * k)
+    wing(L, sh, P(150, -300), P(330, -555), [P(580, -658), P(640, -400), P(530, -185), P(333, -65)], P(160, 60),
+         WH_MEM, WH_RED * 0.85, seed=521, bone_w=26, glow=1.0, depth=0.15,
+         tears=[[P(625, -330), P(650, -318), P(630, -300)]])
+    R.add("wing_front", L, "body", "wing_front", sh, 24)
+
+    tail_chain(R, "tail", [(760, 720), (850, 780), (930, 760), (975, 680), (968, 590), (930, 540)],
+               [110, 80, 56, 36, 22, 12], 3, "body", 10, WH_RED, 530, spikes=[(30, 380, 7, 26)], tip=wh_tip,
+               top=(WH_DUST, 0.45), scale=11)
+
+    # far legs (darker, behind)
+    pts = [(770, 700), (745, 820), (790, 880)]
+    L = LB(MON, pts, 90)
+    limb(L, pts, [110, 80, 60], WH_D, 540, keyk=0.8, size=10)
+    R.add("leg_back_upper", L, "body", "leg_back_upper", (770, 705), 8)
+    pts = [(790, 875), (795, 925), (770, 950)]
+    L = LB(MON, pts + [(700, 970)], 70)
+    foot(L, (772, 948), [(704, 960), (724, 966), (750, 968)], WH_D, 24, 545, keyk=0.8)
+    limb(L, pts, [60, 46, 40], WH_D, 541, keyk=0.8, size=9)
+    R.add("leg_back_lower", L, "leg_back_upper", "leg_back_lower", (790, 875), 7)
+    pts = [(530, 640), (540, 760), (530, 830)]
+    L = LB(MON, pts, 80)
+    limb(L, pts, [96, 74, 56], WH_D, 550, keyk=0.8, size=10)
+    R.add("arm_back_upper", L, "body", "arm_back_upper", (530, 650), 12)
+    pts = [(530, 830), (525, 900), (515, 948)]
+    L = LB(MON, pts + [(440, 970)], 70)
+    foot(L, (514, 948), [(452, 962), (470, 968), (494, 970)], WH_D, 24, 555, keyk=0.8)
+    limb(L, pts, [56, 44, 40], WH_D, 551, keyk=0.8, size=9)
+    R.add("arm_back_lower", L, "arm_back_upper", "arm_back_lower", (530, 830), 11)
+
+    # neck, head, jaw
+    F = Frame((396, 522), 258, -8)
+    F.canvas = MON
+    L = Layer(MON, (250, 380, 640, 760))
+    ctrl = [(560, 680), (520, 610), (470, 560), (420, 530), (380, 522)]
+    crest = [(590, 600), (540, 545), (480, 500), (430, 470)]
+    cp, _ = resample(catmull(crest, n=10), 4)
+    for i, (x, y) in enumerate(cp[1:]):
+        h = 46 - i * 5
+        spike(L, (x - 4, y + 10), (x + h * 0.8, y - h * 0.55), 26 - i * 2, HORN * 1.2, seed=560 + i, lean=0.35)
+    m = L.tube(ctrl, [170, 140, 118, 102, 96])
+    skin(L, m, WH_RED, 60, 11, angle=60, seed=561, top=(WH_DUST, 0.5), rim=1.4, spec=0.42)
+    plates(L, m, [(500, 720), (470, 640), (430, 590), (390, 570)], (np.array([0, 200]), np.array([44, 36])), 26, 562,
+           color=WH_PLATE, r=24, heat=lambda s: 0.25 + 0.5 * smooth(60, 200, s), glow=0.8)
+    L.feather((560, 680), -120, 10, 70)
+    R.add("neck", L, "body", "torso", (540, 660), 26)
+    head = drake_head(F, H)
+    R.add("head", head, "neck", "head", F(0.0, 0.0), 30)
+    jaw, hinge = drake_jaw(F, H, 26)
+    R.add("jaw", jaw, "head", "jaw", hinge, 29)
+
+    # near hind leg: crouched thigh, hock back, foot planted
+    pts = [(690, 830), (745, 900), (700, 952)]
+    L = LB(MON, pts + [(610, 972)], 70)
+    foot(L, (698, 950), [(616, 962), (636, 968), (664, 970)], WH_RED, 28, 570, claw_k=1.15)
+    limb(L, pts, [74, 56, 50], WH_RED, 571, top=(WH_DUST, 0.4), size=9)
+    leg_lower = L
+    th = [(640, 640), (730, 620), (800, 680), (800, 770), (750, 838), (690, 852), (640, 820), (618, 730)]
+    L = LB(MON, th, 50)
+    m = L.blob(th)
+    skin(L, m, WH_RED, 36, 11, angle=60, seed=572, top=(WH_DUST, 0.5), rim=1.4, spec=0.42, r2=120, k2=0.45)
+    spike(L, (676, 830), (652, 862), 22, HORN * 1.2, seed=573)
+    R.add("leg_front_upper", L, "body", "leg_front_upper", (720, 700), 32)
+    R.add("leg_front_lower", leg_lower, "leg_front_upper", "leg_front_lower", (695, 830), 31)
+
+    # near foreleg: reaching forward, talons out
+    pts = [(462, 790), (420, 870), (392, 930)]
+    L = LB(MON, pts + [(310, 972)], 70)
+    foot(L, (390, 932), [(316, 950), (330, 964), (356, 970)], WH_RED, 26, 580, claw_k=1.3)
+    limb(L, pts, [64, 50, 44], WH_RED, 581, top=(WH_DUST, 0.4), size=9)
+    R.add("arm_front_lower", L, "arm_front_upper", "arm_front_lower", (462, 790), 35)
+    ua = [(470, 630), (530, 650), (528, 730), (492, 800), (450, 812), (430, 760), (440, 690)]
+    L = LB(MON, ua, 50)
+    m = L.blob(ua)
+    skin(L, m, WH_RED, 30, 10, angle=110, seed=582, top=(WH_DUST, 0.5), rim=1.4, spec=0.45, r2=90, k2=0.35)
+    R.add("arm_front_upper", L, "body", "arm_front_upper", (490, 660), 36)
+
+    mouth_fx(R, F, H, hinge, k=0.5)
+    eye_fx(R, F, H)
+    # smoke curling from the nostrils (floats)
+    nx_, ny_ = F(*H["nostril"])
+    L = Layer(MON, (nx_ - 130, ny_ - 170, nx_ + 70, ny_ + 40))
+    smoke(L, nx_ - 8, ny_ - 22, 30, 590, k=0.9, col=(0.5, 0.46, 0.46))
+    smoke(L, nx_ - 34, ny_ - 64, 42, 591, k=0.75, col=(0.46, 0.43, 0.44))
+    smoke(L, nx_ - 62, ny_ - 112, 40, 592, k=0.5, col=(0.42, 0.4, 0.42))
+    R.add("smoke", L, "head", "float", (nx_, ny_), 55)
+    float_embers(R, "body", [(260, 650), (880, 420), (900, 900)], 595, n=5, spread=40)
+    R.save(sheet_dir)
+    return R
+
+
+# ------------------------------------------------------------------ Elder Drake (elite)
+
+ED = C("#5c3a1c")
+ED_D = C("#3a2614")
+ED_DUST = C("#9c7a48")
+ED_PLATE = C("#7a5a34")
+IVORY = C("#d8c6a0")
+
+ELDER_HEAD = dict(
+    seed=600, color=ED, dust=ED_DUST, horn=IVORY, scale=10,
+    box=(1.08, -0.78, -0.6, 0.45), jaw_box=(1.1, -0.3, -0.12, 0.62),
+    head=[(-0.12, 0.02), (-0.08, -0.18), (0.06, -0.27), (0.22, -0.3), (0.38, -0.27), (0.52, -0.2), (0.68, -0.18),
+          (0.82, -0.16), (0.92, -0.1), (0.97, -0.02), (0.94, 0.05), (0.76, 0.07), (0.54, 0.085), (0.38, 0.11),
+          (0.26, 0.19), (0.1, 0.24), (-0.06, 0.2)],
+    mouth_up=[(0.3, 0.11), (0.54, 0.085), (0.76, 0.07), (0.94, 0.05)],
+    jaw=[(0.06, 0.14), (0.26, 0.12), (0.5, 0.105), (0.7, 0.09), (0.86, 0.085), (0.93, 0.1), (0.89, 0.17),
+         (0.7, 0.205), (0.46, 0.245), (0.24, 0.265), (0.04, 0.22)],
+    jaw_up=[(0.26, 0.12), (0.5, 0.105), (0.7, 0.09), (0.86, 0.085), (0.93, 0.1)],
+    hinge=(0.18, 0.16),
+    scutes=(0.56, 0.86, -0.17, 4), scute_slope=0.05,
+    brow=[(0.14, -0.27), (0.3, -0.29), (0.44, -0.24), (0.54, -0.18)],
+    cheek=[(0.0, 0.04), (0.2, 0.0), (0.32, 0.08), (0.26, 0.17), (0.1, 0.22), (-0.04, 0.14)],
+    eye=(0.42, -0.18, 0.05, 0.028), eye_ramp=[(0.0, (0.5, 0.2, 0.02)), (0.5, (1.0, 0.6, 0.1)), (1.0, (1.0, 0.95, 0.6))],
+    eye_glow=np.array([1.0, 0.6, 0.15], np.float32),
+    nostril=(0.92, -0.07),
+    far_horns=[([(0.14, -0.24), (0.06, -0.5), (0.1, -0.68), (0.2, -0.76)], 0.09, C("#6a5a44"))],
+    horns=[([(0.08, -0.18), (-0.1, -0.36), (-0.3, -0.3), (-0.3, -0.1), (-0.16, -0.0), (-0.06, -0.08)], 0.13,
+            C("#8a7656")),
+           ([(0.2, -0.26), (0.16, -0.52), (0.24, -0.72), (0.36, -0.8)], 0.1, C("#7a6a50")),
+           ([(0.8, -0.16), (0.86, -0.27), (0.82, -0.37)], 0.07, C("#7a6a50"))],
+    frill=[((0.02, 0.18), (-0.22, 0.32), 0.07), ((0.1, 0.22), (-0.06, 0.38), 0.06)],
+    teeth=(0.36, 0.92, 10, (0.82,)), lower_teeth=(0.32, 0.86, 9, (0.76,)),
+    jaw_spikes=[(0.3, 0.262, -0.1, 0.08), (0.52, 0.24, -0.1, 0.075)],
+    mouth_light=0.35, mouth_heat=0.7,
+)
+
+
+def ed_tip(L, pts, wk):
+    """A bony club with ivory spikes at the end of the tail."""
+    x, y = pts[-1]
+    m = L.ellipse(x, y, 40, 32, 20)
+    for a in (-150, -100, -40, 20, 80, 140):
+        r = math.radians(a)
+        spike(L, (x + math.cos(r) * 26, y + math.sin(r) * 22), (x + math.cos(r) * 70, y + math.sin(r) * 60), 22,
+              IVORY, seed=690, lean=0.1)
+    skin(L, m, ED * 0.9, 24, 9, angle=0, seed=691, top=(ED_DUST, 0.5))
+
+
+def ed_spear():
+    """The broken spear of some forgotten knight, stuck deep in the drake's back."""
+    base, top = (636, 486), (780, 236)
+    L = Layer(MON, (560, 170, 900, 540))
+    dx, dy = top[0] - base[0], top[1] - base[1]
+    ln = math.hypot(dx, dy)
+    ux, uy = dx / ln, dy / ln
+    P = lambda s, o=0: (base[0] + ux * s - uy * o, base[1] + uy * s + ux * o)
+    shaft = L.tube([P(-10), P(ln - 18)], [24, 21], caps=False)
+    shaft = np.maximum(shaft, L.poly([P(ln - 20, -8), P(ln - 6, -9), P(ln + 4, -2), P(ln - 4, 3), P(ln + 8, 8),
+                                      P(ln - 20, 8)]))
+    wood = WOOD * 0.9 * (0.85 + 0.3 * noise(L.h, L.w, 5 * SS, seed=601, octaves=3))[..., None]
+    L.paint(shaft, wood, r=9, spec=0.3, shin=14, tex=0.16, seed=602)
+    metal(L, L.tube([P(0), P(26)], [24, 20]), STEEL * 0.8, r=10, spec=0.8)
+    for s in (120, 140):
+        L.paint(L.tube([P(s - 7), P(s + 7)], [21, 21], caps=False), LEATHER, r=8, spec=0.3, line=0.6)
+    # a torn pennant still tied below the break
+    a, b = P(150, 0), P(186, 0)
+    pen = L.poly(catmull([a, (a[0] + 30, a[1] + 40), (a[0] + 70, a[1] + 66)], n=6)
+                 + hem((a[0] + 70, a[1] + 66), (b[0] + 96, b[1] + 30), 3, 14, 603, down=(0.5, 0.6))
+                 + catmull([(b[0] + 96, b[1] + 30), (b[0] + 50, b[1] + 4), b], n=6))
+    L.paint(pen, CRIMSON * 0.8, r=12, bump=folds(L, pen, 30, 40, 0.7, 604, warp=0.1), spec=0.2, tex=0.08, sss=0.3)
+    return L
+
+
+def build_elder_drake(sheet_dir=None):
+    R = Rig("elder_drake", MON, feet=(560, 968), kind="beast")
+    H = ELDER_HEAD
+    # body: heavy barrel with a double row of bony back plates and a molten wound round the spear
+    L = Layer(MON, (300, 360, 900, 860))
+    back = [(470, 488), (560, 462), (680, 462), (780, 492), (850, 556)]
+    pts, _ = resample(catmull(back, n=10), 7)
+    for i, (x, y) in enumerate(pts):
+        h = 62 - abs(i - 3) * 6
+        spike(L, (x - 8, y + 16), (x + h * 0.5, y - h * 0.9), 48 - abs(i - 3) * 4, IVORY * 0.92, seed=610 + i,
+              lean=0.25)
+    body = [(380, 548), (470, 488), (600, 466), (720, 474), (820, 522), (872, 610), (862, 720), (800, 792),
+            (660, 822), (500, 812), (402, 762), (352, 660)]
+    m = L.blob(body)
+    skin(L, m, ED, 50, 16, angle=40, seed=611, top=(ED_DUST, 0.65), rim=1.3, spec=0.45, r2=230, k2=0.4, metal=0.35, shin=22)
+    plates(L, m, [(372, 640), (440, 760), (590, 812), (790, 790)],
+           (np.array([0, 250, 520]), np.array([60, 72, 54])), 46, 612, color=ED_PLATE, r=34,
+           heat=lambda s: 0.0, glow=0.0)
+    # near-row back plates over the silhouette
+    for i, (x, y) in enumerate(pts[1:-1]):
+        pm = L.blob([(x - 30, y + 30), (x - 10, y - 4), (x + 26, y - 10), (x + 40, y + 20), (x + 10, y + 40)], n=4)
+        L.ao(pm, 0.45, 6, 2, 6)
+        L.paint(pm * m, ED_PLATE * 1.05, r=14, spec=0.55, shin=20, seed=620 + i, line=0.6, top=(IVORY, 0.6))
+    # old scars
+    for path in ([(520, 560), (556, 600), (570, 650)], [(700, 600), (742, 640)]):
+        sc = L.tube(path, [7, 6, 3], caps=False)
+        L.paint(sc * m, C("#d8a070"), r=3, spec=0.4, line=0.3)
+    # wound: molten blood around the spear
+    wx, wy = 636, 490
+    wd = L.ellipse(wx, wy + 4, 30, 14, -10)
+    L.flat(wd * m, fire(0.4 + 0.6 * L.radial(wx, wy + 4, 30, 1.0)))
+    drip = L.tube([(wx - 14, wy + 10), (wx - 22, wy + 50), (wx - 18, wy + 86)], [12, 9, 5])
+    L.flat(drip * m, fire(np.full(drip.shape, 0.72)))
+    L.add_light(L.radial(wx, wy + 10, 70, 2.0) * 0.6 * m, EMBER)
+    R.add("body", L, "", "root", (620, 700), 20)
+    R.add("spear", ed_spear(), "body", "extra", (636, 486), 22)
+
+    tail_chain(R, "tail", [(830, 690), (912, 706), (962, 656), (978, 576), (958, 508), (924, 470)],
+               [170, 124, 88, 58, 38, 26], 4, "body", 10, ED, 630, spikes=[(30, 400, 8, 34)], tip=ed_tip,
+               top=(ED_DUST, 0.5), scale=13, spike_c=IVORY * 0.92)
+
+    # far legs
+    pts = [(820, 690), (826, 810)]
+    L = LB(MON, pts, 100)
+    limb(L, pts, [150, 118], ED_D, 640, keyk=0.8, size=12, metal=0.3)
+    R.add("leg_back_upper", L, "body", "leg_back_upper", (820, 700), 8)
+    pts = [(826, 800), (842, 880), (832, 942)]
+    L = LB(MON, pts + [(760, 970)], 80)
+    foot(L, (832, 942), [(762, 958), (784, 966), (810, 970)], ED_D, 34, 645, keyk=0.8)
+    limb(L, pts, [112, 94, 86], ED_D, 641, keyk=0.8, size=11, metal=0.3)
+    R.add("leg_back_lower", L, "leg_back_upper", "leg_back_lower", (826, 805), 7)
+    pts = [(540, 650), (530, 790)]
+    L = LB(MON, pts, 100)
+    limb(L, pts, [150, 120], ED_D, 650, keyk=0.8, size=12, metal=0.3)
+    R.add("arm_back_upper", L, "body", "arm_back_upper", (540, 660), 12)
+    pts = [(530, 785), (526, 880), (520, 940)]
+    L = LB(MON, pts + [(440, 970)], 80)
+    foot(L, (520, 942), [(450, 958), (472, 966), (498, 970)], ED_D, 34, 655, keyk=0.8)
+    limb(L, pts, [116, 96, 88], ED_D, 651, keyk=0.8, size=11, metal=0.3)
+    R.add("arm_back_lower", L, "arm_back_upper", "arm_back_lower", (530, 790), 11)
+
+    # neck and head, low and forward
+    F = Frame((350, 548), 300, -4)
+    F.canvas = MON
+    L = Layer(MON, (220, 400, 600, 780))
+    ctrl = [(500, 650), (440, 610), (380, 570), (340, 552)]
+    m = L.tube(ctrl, [250, 220, 196, 180])
+    skin(L, m, ED, 80, 14, angle=60, seed=661, top=(ED_DUST, 0.6), rim=1.3, spec=0.45, metal=0.35, shin=22)
+    plates(L, m, [(470, 740), (420, 680), (370, 630), (330, 610)], (np.array([0, 160]), np.array([60, 50])), 34, 662,
+           color=ED_PLATE, r=26, heat=lambda s: 0.0, glow=0.0)
+    L.feather((500, 650), -150, 0, 60)
+    R.add("neck", L, "body", "torso", (470, 640), 26)
+    head = drake_head(F, H)
+    # a scar across the old eye
+    sc = head.tube(F.P([(0.34, -0.29), (0.42, -0.18), (0.5, -0.06)]), [9, 7, 3], caps=False)
+    head.paint(sc * (head.a > 0.5), C("#d8a070"), r=3, spec=0.4, line=0.3)
+    R.add("head", head, "neck", "head", F(0.0, 0.0), 30)
+    jaw, hinge = drake_jaw(F, H, 12)
+    R.add("jaw", jaw, "head", "jaw", hinge, 29)
+
+    # near hind leg
+    pts = [(750, 820), (786, 896), (756, 944)]
+    L = LB(MON, pts + [(660, 972)], 80)
+    foot(L, (756, 944), [(666, 958), (690, 966), (720, 970)], ED, 38, 670, claw_k=1.1)
+    limb(L, pts, [120, 98, 90], ED, 671, top=(ED_DUST, 0.45), size=11, metal=0.3)
+    leg_lower = L
+    th = [(690, 620), (790, 590), (870, 650), (880, 760), (820, 840), (740, 856), (690, 810), (668, 710)]
+    L = LB(MON, th, 50)
+    m = L.blob(th)
+    skin(L, m, ED, 44, 14, angle=60, seed=672, top=(ED_DUST, 0.6), rim=1.3, spec=0.45, r2=150, k2=0.45, metal=0.35, shin=22)
+    R.add("leg_front_upper", L, "body", "leg_front_upper", (780, 680), 32)
+    R.add("leg_front_lower", leg_lower, "leg_front_upper", "leg_front_lower", (752, 826), 31)
+
+    # near foreleg, planted like a pillar
+    pts = [(440, 760), (430, 860), (424, 938)]
+    L = LB(MON, pts + [(330, 972)], 80)
+    foot(L, (424, 940), [(340, 956), (364, 966), (394, 970)], ED, 38, 680, claw_k=1.15)
+    limb(L, pts, [116, 98, 92], ED, 681, top=(ED_DUST, 0.45), size=11, metal=0.3)
+    R.add("arm_front_lower", L, "arm_front_upper", "arm_front_lower", (440, 765), 35)
+    ua = [(430, 580), (510, 590), (520, 680), (490, 770), (440, 800), (396, 760), (390, 660)]
+    L = LB(MON, ua, 50)
+    m = L.blob(ua)
+    skin(L, m, ED, 40, 13, angle=110, seed=682, top=(ED_DUST, 0.6), rim=1.3, spec=0.45, r2=110, k2=0.35, metal=0.35, shin=22)
+    R.add("arm_front_upper", L, "body", "arm_front_upper", (460, 620), 36)
+
+    mouth_fx(R, F, H, hinge, k=0.3)
+    eye_fx(R, F, H, k=0.6)
+    G = Layer(MON, (536, 390, 736, 590))
+    G.add_light(G.radial(636, 492, 90, 2.0) * 0.5, EMBER, clip_alpha=False, extend=1.0)
+    fx_window(G, 20)
+    R.add("wound_glow", G, "body", "fx", (636, 492), 48, blend="add")
+    nx_, ny_ = F(*H["nostril"])
+    L = Layer(MON, (nx_ - 110, ny_ - 150, nx_ + 70, ny_ + 40))
+    smoke(L, nx_ - 6, ny_ - 22, 28, 690, k=0.8, col=(0.5, 0.46, 0.44))
+    smoke(L, nx_ - 30, ny_ - 66, 36, 691, k=0.55, col=(0.46, 0.43, 0.42))
+    R.add("smoke", L, "head", "float", (nx_, ny_), 55)
+    R.save(sheet_dir)
+    return R
+
+
+# ------------------------------------------------------------------ Ash Wraith
+
+AR = C("#3c3638")
+AR_D = C("#262124")
+AR_DUST = C("#8a8078")
+SMOKE_C = (0.47, 0.43, 0.43)
+
+
+def dissolve(L, y0, y1, seed, scale=26, amp=60, wind=0.0):
+    """Fades the layer into smoke between y0 (solid) and y1 (gone) with a ragged, billowing edge."""
+    xx, yy = L.grid()
+    nz = noise(L.h, L.w, scale * SS, seed=seed, octaves=4)
+    k = smooth(y1, y0, yy + (nz - 0.5) * amp * 2 - (xx - 512) * wind)
+    L.rgb *= k[..., None]
+    L.a *= k
+    return k
+
+
+def cloth_layer(L, m, col, seed, angle=0, period=40, amp=1.2, keyk=1.0, r=30):
+    period, amp = period * 1.8, amp * 0.55
+    L.paint(m, col * (0.88 + 0.24 * noise(L.h, L.w, 30 * SS, seed=seed, octaves=3))[..., None], r=r,
+            bump=blur(folds(L, m, angle, period, amp, seed, warp=0.08), 2 * SS), spec=0.15, shin=10, tex=0.06,
+            seed=seed + 1,
+            top=(AR_DUST, 0.5), keyk=keyk, rim=1.2)
+
+
+def ember_cracks(L, m, seed, scale=16, k=1.0):
+    """Hairline glowing cracks over a charred surface (Voronoi cell edges)."""
+    e, _, rid = cells(L, scale, 30, 1.0, seed, m=m)
+    c = smooth(0.08, 0.0, e) * (rid > 0.35) * m
+    L.add_light(c * 1.2 * k, EMBER)
+    L.add_light(blur(c, 3 * SS) * 0.6 * k, np.array([1.0, 0.3, 0.05], np.float32))
+
+
+def bone_hand(L, wrist, ang, s, seed, spread=1.0):
+    """A charred, skeletal claw hand from the wrist along ang (degrees): long knuckled fingers, ember cracks."""
+    r = math.radians(ang)
+    ux, uy = math.cos(r), math.sin(r)
+    palm = L.ellipse(wrist[0] + ux * s * 0.32, wrist[1] + uy * s * 0.32, s * 0.34, s * 0.22, ang)
+    hand = palm.copy()
+    tips = []
+    for i, off in enumerate((-38, -14, 8, 30)):
+        a = math.radians(ang + off * spread)
+        b = (wrist[0] + ux * s * 0.55 + math.cos(a) * s * 0.1, wrist[1] + uy * s * 0.55 + math.sin(a) * s * 0.1)
+        k1 = (b[0] + math.cos(a) * s * 0.34, b[1] + math.sin(a) * s * 0.34)
+        a2 = a + math.radians(22)
+        t = (k1[0] + math.cos(a2) * s * 0.3, k1[1] + math.sin(a2) * s * 0.3)
+        f = L.tube([b, k1, t], [s * 0.15, s * 0.12, s * 0.08])
+        hand = np.maximum(hand, f)
+        tips.append((k1, t, a2))
+    th = math.radians(ang + 70 * spread)
+    tb = (wrist[0] + ux * s * 0.2, wrist[1] + uy * s * 0.2)
+    tt = (tb[0] + math.cos(th) * s * 0.55, tb[1] + math.sin(th) * s * 0.55)
+    hand = np.maximum(hand, L.tube([tb, tt], [s * 0.15, s * 0.07]))
+    L.paint(hand, C("#1c1618"), r=s * 0.08, spec=0.55, shin=24, seed=seed, tex=0.1, rim=1.4)
+    ember_cracks(L, hand, seed + 1, scale=s * 0.08, k=0.7)
+    for k1, t, a2 in tips + [(tb, tt, th)]:
+        claw(L, t, math.degrees(a2) + 30, s * 0.26, s * 0.08, color=C("#0e0a0c"), curl=0.4)
+    return hand
+
+
+def build_ash_wraith(sheet_dir=None):
+    R = Rig("ash_wraith", MON, feet=(512, 968), kind="floater")
+    # lower robe dissolving into smoke (root)
+    L = Layer(MON, (330, 520, 960, 1000))
+    side_l = catmull([(452, 560), (424, 680), (440, 790), (500, 870), (560, 910)], n=8)
+    side_r = catmull([(860, 880), (760, 800), (680, 700), (612, 560)], n=8)
+    m = L.poly(side_l + hem((560, 912), (860, 884), 6, 40, 700, down=(0.2, 1)) + side_r)
+    cloth_layer(L, m, AR, 701, angle=-20, period=46, amp=1.6)
+    dissolve(L, 700, 920, 702, amp=70, wind=-0.35)
+    for i, (x, y, r) in enumerate(((470, 850, 70), (560, 900, 76), (660, 880, 70), (760, 860, 64), (850, 860, 54),
+                                   (430, 780, 44))):
+        smoke(L, x, y, r, 710 + i, col=SMOKE_C, k=0.75, under=1.0, stretch=(1.3, 0.85))
+    embers(L, (420, 800, 880, 960), 16, 703, size=(1.2, 3.0), k=0.8)
+    R.add("robe", L, "", "root", (530, 620), 10)
+
+    # trailing cape behind, tattered and smoking
+    L = Layer(MON, (520, 360, 960, 900))
+    edge = catmull([(600, 400), (700, 450), (800, 560), (880, 690), (920, 780)], n=8)
+    m = L.poly(edge + hem((920, 790), (640, 760), 6, 50, 720, down=(0.3, 1)) + catmull([(640, 760), (590, 600), (570, 450)], n=8))
+    cloth_layer(L, m, AR_D, 721, angle=-30, period=50, amp=1.3, keyk=0.8)
+    smoke(L, 860, 790, 70, 722, col=SMOKE_C, k=0.8)
+    smoke(L, 760, 790, 56, 723, col=SMOKE_C, k=0.7)
+    dissolve(L, 560, 860, 724, amp=70, wind=-0.25)
+    L.feather((590, 420), 20, -20, 40)
+    R.add("cape", L, "torso", "cape", (600, 420), 2)
+
+    # back arm raised behind, claws spread
+    sh, el, wr = (594, 424), (690, 486), (772, 448)
+    L = LB(MON, [sh, el], 70)
+    m = L.tube([sh, el], [70, 58])
+    cloth_layer(L, m, AR_D, 730, angle=60, period=24, amp=1.0, keyk=0.75, r=20)
+    R.add("arm_back_upper", L, "torso", "arm_back_upper", sh, 4)
+    L = LB(MON, [el, wr, (900, 360), (860, 520)], 90)
+    bone_hand(L, (wr[0] + 8, wr[1] - 6), -30, 100, 731, spread=1.1)
+    sl = L.tube([el, mix(el, wr, 0.6), (wr[0] + 6, wr[1] - 2)], [56, 66, 84])
+    cloth_layer(L, sl, AR_D, 732, angle=-30, period=18, amp=1.0, keyk=0.75, r=20)
+    R.add("arm_back_lower", L, "arm_back_upper", "arm_back_lower", el, 3)
+
+    # torso: chest of the robe, open over a glowing ribcage
+    L = Layer(MON, (380, 330, 680, 660))
+    body = L.blob([(424, 410), (472, 372), (560, 370), (614, 410), (628, 500), (612, 600), (540, 630), (462, 616),
+                   (432, 520)], n=8)
+    cloth_layer(L, body, AR, 740, angle=10, period=34, amp=1.2)
+    cav = L.blob([(462, 402), (512, 396), (556, 404), (552, 480), (528, 570), (500, 590), (476, 560), (458, 480)], n=6)
+    L.ao(cav, 0.6, 8, 0, 4)
+    L.flat(cav, C("#0e0809"))
+    L.add_light(L.radial(506, 480, 90, 1.5) * cav * 0.35, np.array([1.0, 0.3, 0.05], np.float32))
+    spine = L.tube([(522, 400), (520, 480), (512, 570)], [14, 13, 10])
+    L.paint(spine * cav, C("#2a2020"), r=6, spec=0.4, line=0.5)
+    for i, y in enumerate(np.linspace(420, 540, 5)):
+        w = 46 - i * 5
+        for sgn in (-1, 1):
+            rib = L.tube([(520, y), (520 + sgn * w * 0.7, y + 6), (520 + sgn * w, y + 22)], [11, 9, 6])
+            L.paint(rib * cav, C("#3a2a24"), r=5, spec=0.5, line=0.4, rim=0.5)
+            core = rib * cav
+            L.add_light(core * 0.9, np.array([1.0, 0.5, 0.12], np.float32))
+            L.add_light(blur(core, 5 * SS) * 0.9, EMBER)
+    # robe edges over the cavity, frayed
+    for pts in ([(462, 400), (450, 480), (476, 570), (500, 600)], [(560, 400), (556, 480), (530, 570), (506, 600)]):
+        e = L.tube(pts, [18, 20, 16, 8])
+        cloth_layer(L, e, AR * 1.1, 741, angle=0, period=14, amp=0.8, r=8)
+    L.add_light(L.radial(506, 480, 120, 2.0) * 0.4 * body * (1 - cav), EMBER)
+    R.add("torso", L, "robe", "torso", (530, 600), 14)
+
+    # hood tip drooping behind (sways)
+    L = Layer(MON, (500, 120, 780, 330))
+    tip = L.poly(catmull([(540, 190), (610, 160), (690, 168), (744, 210), (752, 270)], n=8)
+                 + [(730, 250), (700, 222)] + catmull([(680, 220), (620, 230), (560, 260)], n=6))
+    cloth_layer(L, tip, AR_D, 750, angle=60, period=26, amp=1.0, r=18)
+    R.add("hood_tip", L, "head", "hair", (575, 220), 18)
+
+    # head: deep hood, a void with two burning eyes
+    L = Layer(MON, (360, 130, 640, 430))
+    hood = L.blob([(400, 330), (394, 250), (420, 192), (470, 160), (532, 164), (578, 202), (598, 262), (592, 332),
+                   (562, 380), (500, 398), (432, 384)], n=8)
+    cloth_layer(L, hood, AR, 760, angle=-20, period=30, amp=1.2, r=34)
+    void = L.blob([(404, 300), (412, 236), (452, 204), (500, 214), (520, 270), (510, 340), (470, 372), (420, 356)], n=6)
+    L.ao(void, 0.7, 10, -4, 6)
+    vd = dist(void, 30 * SS) / SS
+    L.flat(void, C("#070405") + np.zeros((L.h, L.w, 3), np.float32))
+    L.add_light(np.clip(1 - vd / 14, 0, 1) * void * 0.12, np.array([0.6, 0.3, 0.2], np.float32))
+    for (x, y, rx, ry, a) in ((430, 284, 15, 6, 12), (478, 280, 17, 7, -8)):
+        e = L.poly(rot([(x - rx, y + ry * 0.4), (x - rx * 0.2, y - ry), (x + rx, y - ry * 0.3), (x + rx * 0.3, y + ry)],
+                       (x, y), a))
+        e = blur(e, 1.0 * SS)
+        L.flat(e, fire(0.7 + 0.3 * L.radial(x, y, rx, 1.0)))
+        L.glow(x, y, rx * 2.6, EMBER, 0.9, extend=0.0)
+        L.glow(x, y, rx * 0.7, np.array([1.0, 0.97, 0.8], np.float32), 0.9, extend=0.0)
+    brim = L.tube([(420, 356), (402, 296), (414, 232), (452, 200), (504, 210)],
+                  [22, 22, 20, 18, 10], caps=False) * hood
+    cloth_layer(L, brim, AR * 1.15, 761, angle=0, period=14, amp=0.8, r=10)
+    L.add_light(L.radial(454, 282, 70, 1.5) * brim * 0.6, EMBER)
+    R.add("head", L, "torso", "head", (520, 380), 20)
+
+    # front arm reaching for the hero
+    sh, el, wr = (452, 420), (372, 500), (268, 478)
+    L = LB(MON, [sh, el], 70)
+    m = L.tube([sh, el], [76, 62])
+    cloth_layer(L, m, AR, 770, angle=40, period=22, amp=1.0, r=22)
+    R.add("arm_front_upper", L, "torso", "arm_front_upper", sh, 28)
+    L = LB(MON, [el, wr, (120, 430), (200, 600)], 80)
+    bone_hand(L, wr, 182, 120, 771)
+    sl = L.poly(catmull([(el[0] + 20, el[1] - 30), (330, 470), (wr[0] + 10, wr[1] - 28)], n=6)
+                + hem((wr[0] + 10, wr[1] - 30), (wr[0] + 30, wr[1] + 80), 3, 26, 772, down=(-1, 0.3))
+                + catmull([(wr[0] + 30, wr[1] + 80), (330, 560), (el[0] + 10, el[1] + 34)], n=6))
+    sl = np.maximum(sl, L.ellipse(el[0] + 6, el[1], 34, 34))
+    cloth_layer(L, sl, AR, 773, angle=-30, period=20, amp=1.1, r=24)
+    dissolve(L, 560, 640, 774, amp=30)
+    R.add("arm_front_lower", L, "arm_front_upper", "arm_front_lower", el, 30)
+
+    # fx and floating wisps
+    G = Layer(MON, (360, 200, 560, 380))
+    G.add_light(G.radial(455, 282, 80, 2.0) * 0.8, EMBER, clip_alpha=False, extend=1.0)
+    fx_window(G, 20)
+    R.add("eye_glow", G, "head", "fx", (455, 282), 40, blend="add")
+    G = Layer(MON, (400, 360, 620, 640))
+    G.add_light(G.radial(508, 490, 110, 2.0) * 0.55, EMBER, clip_alpha=False, extend=1.0)
+    fx_window(G, 20)
+    R.add("rib_glow", G, "torso", "fx", (508, 490), 41, blend="add")
+    for i, (x, y, r) in enumerate(((250, 690, 60), (800, 330, 54), (820, 600, 50))):
+        L = Layer(MON, (x - r * 1.6, y - r * 1.6, x + r * 1.6, y + r * 1.6))
+        smoke(L, x, y, r, 780 + i, col=SMOKE_C, k=0.6, stretch=(1.3, 0.8))
+        smoke(L, x + r * 0.5, y - r * 0.4, r * 0.6, 790 + i, col=SMOKE_C, k=0.45)
+        embers(L, (x - r, y - r, x + r, y + r), 3, 795 + i, size=(1.5, 3.0), k=0.8)
+        R.add(f"wisp_{i + 1}", L, "robe", "float", (x, y), 60 + i)
+    R.save(sheet_dir)
+    return R
+
+
 # ------------------------------------------------------------------ main
 
 RIGS = {
+    "dragon_guard": build_dragon_guard,
+    "whelp": build_whelp,
+    "ash_wraith": build_ash_wraith,
+    "elder_drake": build_elder_drake,
     "ashwing": build_ashwing,
 }
 

@@ -1810,10 +1810,744 @@ def mushroom_cave(seed=23):
     return far, mid, near, rays, glow, fx
 
 
+# ============================================================== fire / smoke / cloth helpers
+
+FIRE_STOPS = [(0, C("#4a0a04")), (0.22, C("#a8200a")), (0.45, C("#ec5a10")), (0.68, C("#ffa030")),
+              (0.86, C("#ffd878")), (1, C("#fff6d8"))]
+LAVA_STOPS = [(0, C("#1c0605")), (0.25, C("#5a1006")), (0.45, C("#c0300a")), (0.62, C("#f06a12")),
+              (0.8, C("#ffb03a")), (0.93, C("#ffe48a")), (1, C("#fff8e0"))]
+
+
+def box(x0, y0, x1, y1):
+    x0, y0 = max(0, int(x0)), max(0, int(y0))
+    x1, y1 = min(W, int(math.ceil(x1))), min(H, int(math.ceil(y1)))
+    if x1 <= x0 or y1 <= y0:
+        return Mask(np.zeros((1, 1), F32))
+    return Mask(np.ones((y1 - y0, x1 - x0), F32), x0, y0)
+
+
+def fire(lay, glow, sc, x, base, w, h, key=0, k=1.0, lean=0.0, alpha=0.95, halo=1.0):
+    """Blaze of flame tongues rising from a base line, cut from tall stretched noise fields
+    inside a tapering envelope: dark red licks, orange body, white-yellow core.
+    Colour goes to lay, emission to glow."""
+    m = box(x - w * 0.8 - abs(lean) * h, base - h * 1.35, x + w * 0.8 + abs(lean) * h, base + 10)
+    if m.a.shape == (1, 1):
+        return
+    X, Y = m.X, m.Y
+    cls = 14 if w < 70 else (28 if w < 200 else 56)
+    nA = m.crop(sc.noise(cls * 0.8, 3, key=600, sx=0.45, sy=2.2))
+    nB = m.crop(sc.noise(cls * 1.6, 2, key=601, sx=0.8, sy=2.0))
+    nC = m.crop(sc.noise(cls * 0.35, 2, key=602, sx=0.6, sy=1.4))
+    v = (base - Y) / h
+    vc = np.clip(v, 0, 1.4)
+    u = (X - x) / (w * 0.5) - lean * vc + nB * 0.28 * vc
+    u = u / np.clip(1.0 - 0.55 * vc, 0.25, 1)
+    env = np.clip(1 - u * u, 0, 1)
+    turb = np.tanh(nA * 0.7) * (0.15 + 0.55 * vc) + nC * 0.06
+    heat = env ** 0.6 * (1.05 - vc * 0.95 + turb) - 0.06
+    heat = heat * sstep(base + 10, base - 6 + nC * 6, Y) * (1 - sstep(0.95, 1.3, v))
+    a = sstep(0.0, 0.18, heat)
+    t = np.clip(heat * 1.15, 0, 1)
+    lay.paint(Mask(a, m.x0, m.y0), ramp(t, FIRE_STOPS), alpha)
+    glow.add(Mask(a * sstep(0.45, 1.0, t), m.x0, m.y0), C("#ffc86a"), 0.7 * k)
+    glow.add(Mask(a * t, m.x0, m.y0), C("#ff5a14"), 0.22 * k)
+    if halo:
+        glow.add(gauss(x, base - h * 0.4, w * 0.9, h * 0.75), C("#ff5a14"), 0.16 * k * halo)
+
+
+def smoke_field(sc, key, y0, y1, sx=1.8):
+    d = sc.noise(260, 5, key=key, sx=sx, gain=0.55) + sc.noise(60, 3, key=key + 1, sx=1.3) * 0.35
+    return d
+
+
+def lit_smoke(lay, sc, dens, under, top, mid_col, k_under=1.0):
+    """Paint a smoke density field lit from below by fire (orange undersides, dark crowns)."""
+    b = blur(dens, 6)
+    g = np.gradient(b, axis=0)
+    und = np.clip(-g * 60 * k_under + 0.15, 0, 1)
+    col = lerp(lerp(top, mid_col, np.clip(b * 1.5, 0, 1)[..., None]), under, und[..., None])
+    lay.paint(full_mask(dens), col)
+
+
+def banner(lay, glow, sc, rng, x, top, w, h, key=0, light=1.0, burn=0.0, rod=True):
+    """Red cult banner: rod with finials, swallow-tailed cloth with folds, gold trim and
+    the spiked-sun eye sigil; burn > 0 chars the hem and sets a fire on it."""
+    hw = w / 2
+    pts = [(x - hw, top), (x + hw, top)]
+    for i in range(1, 9):
+        u = i / 8
+        pts.append((x + hw + math.sin(u * 3 + key) * w * 0.03, top + h * u))
+    tail = h * 0.86
+    pts += [(x + hw * 0.1, top + tail), (x, top + tail - h * 0.06), (x - hw * 0.1, top + tail)]
+    for i in range(8, 0, -1):
+        u = i / 8
+        pts.append((x - hw + math.sin(u * 3 + key + 1) * w * 0.03, top + h * u))
+    if burn:
+        # ragged burnt hem
+        for i in range(len(pts)):
+            px, py = pts[i]
+            if py > top + h * 0.7:
+                pts[i] = (px, py - pick(rng, 0, h * 0.12 * burn))
+    m = edge_noise(poly(pts), sc.noise(5, 2, key=key + 3), 0.8, s=1.0)
+    X, Y = m.X, m.Y
+    ph = m.crop(sc.noise(30, 2, key=key + 4)) * 0.6
+    f = np.sin((X - x) / w * math.pi * 3.4 + ph + (Y - top) / h * 0.8)
+    shade = np.clip(0.62 + 0.3 * f - (X - x) / w * 0.35, 0.15, 1.15)
+    shade = shade * (0.8 + 0.2 * sstep(top + h, top, Y))
+    cloth = ramp(np.clip(shade, 0, 1), [(0, C("#2a0406")), (0.4, C("#7a0e10")), (0.75, C("#b8201a")), (1, C("#ec5038"))])
+    edge = np.maximum(sstep(hw - 9, hw - 5, np.abs(X - x)) * (1 - sstep(hw - 2, hw, np.abs(X - x))),
+                      sstep(top + 6, top + 9, Y) * (1 - sstep(top + 14, top + 17, Y)))
+    gold = ramp(np.clip(shade, 0, 1), [(0, C("#3a2408")), (0.6, C("#b0802a")), (1, C("#ffe08a"))])
+    cloth = lerp(cloth, gold, edge[..., None])
+    cloth = cloth * (1 + m.crop(sc.noise(2.5, 2, key=key + 5, sx=0.3, sy=2))[..., None] * 0.06)
+    lay.paint(m, cloth * light)
+    Sf = np.zeros((H, W), F32)
+    Sf[m.sl] = shade
+    # sigil: spiked sun, dark disc, burning eye
+    sx, sy, r = x, top + h * 0.36, w * 0.33
+    sun_pts = []
+    for i in range(24):
+        a = i / 24 * 2 * math.pi
+        rr = r if i % 2 == 0 else r * 0.68
+        sun_pts.append((sx + math.cos(a) * rr, sy + math.sin(a) * rr))
+    for pm, col in ((poly(sun_pts, 0.6), C("#d8a440")), (ellipse(sx, sy, r * 0.58, r * 0.58, 0.6), C("#3a0608")),
+                    (ellipse(sx, sy, r * 0.48, r * 0.24, 0.6), C("#ffcc4a")),
+                    (ellipse(sx, sy, r * 0.09, r * 0.22, 0.5), C("#1a0204"))):
+        pm = Mask(pm.a * m.full()[pm.sl], pm.x0, pm.y0)
+        lay.paint(pm, col * np.clip(Sf[pm.sl] + 0.25, 0.3, 1.2)[..., None] * light)
+    glow.add(ellipse(sx, sy, r * 0.48, r * 0.24, 2), C("#ffb040"), 0.25 * light)
+    if rod:
+        lay.paint(stroke([(x - hw - 14, top - 2), (x + hw + 14, top - 2)], 7), C("#2a1c14"))
+        for ex in (x - hw - 16, x + hw + 16):
+            lay.paint(ellipse(ex, top - 2, 7, 7), C("#8a6a30") * light)
+    if burn:
+        char = Mask(m.a * sstep(top + h * 0.55, top + h * 0.85, Y), m.x0, m.y0)
+        lay.mult(char, C("#140404"), 0.85)
+        glow.add(Mask(m.a * np.exp(-((Y - (top + h * 0.8)) / 10) ** 2) * sstep(0.2, 0.8, m.crop(sc.noise(6, 2, key=key + 8)) + 0.5), m.x0, m.y0),
+                 C("#ff7a20"), 0.8)
+        fire(lay, glow, sc, x - hw * 0.4, top + h * 0.8, w * 0.6, h * 0.35, key=key, k=0.9 * burn)
+    return m
+
+
+def rubble(lay, sc, rng, cx, base, w, h, n, dark, mid_, lite, key=0, light=1.0):
+    """Heap of broken stone blocks, back to front."""
+    for i in range(n):
+        u = rng.uniform(-1, 1)
+        bx = cx + u * w * 0.5
+        top = base - h * (1 - u * u) * pick(rng, 0.5, 1.0)
+        r = pick(rng, 0.08, 0.2) * w * (0.6 + 0.4 * (1 - abs(u)))
+        r = min(r, h * 0.6 + 8)
+        by = min(base - r * 0.3, top + r * 0.6 + i / n * h * 0.4)
+        bm = edge_noise(poly(blob_pts(bx, by, r * pick(rng, 1.0, 1.5), r * pick(rng, 0.6, 0.9), rng, 0.3, n=10,
+                                       rot=pick(rng, -0.4, 0.4))), sc.noise(8, 2, key=key + 1), 0.8)
+        col, _ = rock_col(sc, bm, dark, mid_, lite, nscale=max(8, r * 0.7), key=key + i % 5, cell=max(10, r * 0.7), crack=0.5)
+        lay.paint(bm, col * light)
+
+
+def beam(lay, sc, x0, y0, x1, y1, w, dark, mid_, lite, key=0, char=0.7, broken=True):
+    """Squared timber beam with charred, cracked surface; lit along its upper edge."""
+    ang = math.atan2(y1 - y0, x1 - x0)
+    nx, ny = -math.sin(ang) * w / 2, math.cos(ang) * w / 2
+    end = [(x1 + nx, y1 + ny), (x1 - nx, y1 - ny)]
+    if broken:
+        L = math.hypot(x1 - x0, y1 - y0)
+        dx, dy = (x1 - x0) / L, (y1 - y0) / L
+        end = [(x1 + nx + dx * w * 0.2, y1 + ny + dy * w * 0.2), (x1 + nx * 0.3 - dx * w * 0.3, y1 + ny * 0.3 - dy * w * 0.3),
+               (x1 - nx * 0.2 + dx * w * 0.5, y1 - ny * 0.2 + dy * w * 0.5), (x1 - nx - dx * w * 0.15, y1 - ny - dy * w * 0.15)]
+    pts = [(x0 + nx, y0 + ny)] + end + [(x0 - nx, y0 - ny)]
+    m = poly(pts)
+    X, Y = m.X, m.Y
+    # across-beam coordinate: -1 (upper/left edge) .. 1
+    s = ((X - x0) * -math.sin(ang) + (Y - y0) * math.cos(ang)) / (w / 2)
+    t = np.clip(0.75 - s * 0.45 + (s < -0.55) * 0.25, 0, 1)
+    col = ramp(t, [(0, dark), (0.55, mid_), (1, lite)])
+    al = (X - x0) * math.cos(ang) + (Y - y0) * math.sin(ang)
+    gr = np.sin(al / 9.0 + m.crop(sc.noise(20, 2, key=key + 1)) * 2.0)
+    col = col * (1 + gr[..., None] * 0.06)
+    # alligator char checks
+    ck = m.crop(sc.noise(7, 2, key=key + 2, sx=1.6, sy=0.6))
+    col = col * (1 - (sstep(0.9, 1.4, np.abs(ck)) * char * 0.6))[..., None]
+    lay.paint(m, col)
+    return m, s
+
+
+def ember_cracks(m, sc, key, thick=0.97):
+    """Thin glowing crack network from ridged noise."""
+    n = m.crop(sc.noise(70, 3, key=key, sx=1.6, gain=0.45))
+    r = 1 - np.abs(n) * 0.5
+    return sstep(thick, 0.995, r)
+
+
+def cells(u, v, key=0, jit=0.8):
+    """Jittered-grid voronoi in unit cells (3x3 search): nearest / second distance and a
+    random value per nearest cell."""
+    iu, iv = np.floor(u), np.floor(v)
+    d1 = np.full(u.shape, 9.0, F32)
+    d2 = np.full(u.shape, 9.0, F32)
+    rid = np.zeros(u.shape, F32)
+    for du in (-1, 0, 1):
+        for dv in (-1, 0, 1):
+            cu, cv = iu + du, iv + dv
+            px = cu + 0.5 + (hash2(cu, cv, key) - 0.5) * jit
+            py = cv + 0.5 + (hash2(cv, cu, key + 5) - 0.5) * jit
+            d = np.sqrt((u - px) ** 2 + (v - py) ** 2)
+            closer = d < d1
+            d2 = np.where(closer, d1, np.minimum(d2, d))
+            rid = np.where(closer, hash2(cu, cv, key + 11), rid)
+            d1 = np.where(closer, d, d1)
+    return d1, d2, rid
+
+
+# ============================================================== BURNT KEEP
+
+def burnt_keep(seed=41):
+    rng = np.random.default_rng(seed)
+    sc = Noise(seed)
+    HOR, CX = 480.0, 960.0
+    Z0, HW = 10.0, 4.6
+    far, mid, near, rays, glow = Layer(), Layer(), Layer(), Light(), Light()
+    stone = [(0, C("#22160f")), (0.35, C("#38261c")), (0.7, C("#503526")), (1, C("#684534"))]
+    mortar = C("#0e0806")
+    soot = C("#0a0504")
+
+    def pp(Z, xw, yw):
+        return P(Z, xw, yw, HOR, CX)
+
+    # ---------------- far: burning sky, smoke, the outer keep ablaze
+    sky = vgrad([(0, C("#140708")), (0.3, C("#3a1210")), (0.6, C("#8a2a14")), (0.82, C("#e0661e")), (1, C("#ffb050"))], 0, 600)
+    far.paint(full_mask(), sky)
+    far.light(gauss(980, 560, 520, 160), C("#ffb040"), 0.35)
+    dens = smoke_field(sc, 700, 0, 600)
+    dens = np.clip((dens + 0.2) * 0.75, 0, 1) * (1 - sstep(380, 560, YY) * 0.85)
+    lit_smoke(far, sc, dens * 0.9, C("#ff8a30"), C("#140a0a"), C("#4a2420"))
+    # distant curtain wall and towers of the keep, burning
+    wall2 = ridge(rng, 600, 1400, 520, 6, steps=5)
+    far.paint(poly([(600, 600)] + [(x, y) for x, y in wall2] + [(1400, 600)]), C("#2a1210"))
+    castle(far, 990, 560, 1.05, C("#1c0c0c"), C("#5a2418"), C("#120808"), C("#3a1a14"), win=C("#ffb050"), rng=rng)
+    for fx_, fy_, fw, fh in ((905, 470, 18, 34), (1042, 398, 16, 36), (1085, 520, 34, 46), (840, 545, 44, 40), (1150, 480, 16, 30)):
+        fire(far, glow, sc, fx_, fy_, fw, fh, key=int(fx_), k=0.6)
+    dens2 = np.clip(sc.noise(90, 4, key=710, sx=0.5, sy=1.6) * 0.5 + 0.2, 0, 1) * gauss(1020, 300, 120, 260).full()
+    lit_smoke(far, sc, dens2 * 0.85, C("#ff7a28"), C("#1a0c0c"), C("#3a1c18"))
+    far.haze(full_mask(sstep(420, 600, YY) * 0.25), C("#ff9a48"))
+
+    # back wall of the hall, its top and centre torn open
+    bx0, bx1 = pp(Z0, -HW, 0)[0], pp(Z0, HW, 0)[0]
+    by_floor = pp(Z0, 0, 0)[1]
+    top_edge = [(x, y) for x, y in ridge(rng, bx0 - 4, bx1 + 4, 70, 40, steps=6, rough=0.6)]
+    breach = [(700, -40), (735, 110), (705, 190), (752, 290), (790, 372), (812, 452), (850, 520), (905, 556),
+              (1010, 562), (1090, 530), (1140, 470), (1185, 392), (1172, 300), (1222, 205), (1200, 100), (1240, -40)]
+    wpts = [(bx0 - 2, by_floor)] + top_edge + [(bx1 + 2, by_floor)]
+    bw_m = poly(wpts)
+    holef = edge_noise(poly(breach), sc.noise(12, 3, key=720), 0.7, sharp=4.0, s=2.0).full()
+    bw_m = Mask(bw_m.a * (1 - holef[bw_m.sl]), bw_m.x0, bw_m.y0)
+    s9 = FOCAL / Z0
+    col, _ = ashlar(bw_m, bx0, by_floor, 0.8 * s9, 0.38 * s9, stone, mortar, lw=3, key=6, sc=sc)
+    far.paint(bw_m, col)
+    # broken edge: lit by the fire beyond, sooty face
+    rimf = np.clip(blur(holef, 12) * 2.5, 0, 1) * (1 - holef)
+    far.mult(Mask(bw_m.a * sstep(420, 60, bw_m.Y), bw_m.x0, bw_m.y0), soot, 0.55)
+    far.light(full_mask(rimf * sstep(80, 560, YY)), C("#ff7a30"), 0.45)
+    # pointed windows glowing with the fire outside
+    wins = [(505, 445, 62, 255), (1420, 445, 62, 255)]
+    for wx, sill, hw_, spring in wins:
+        outer = [(wx - hw_ - 18, sill + 8)] + arch_pts(wx, spring, hw_ + 18, 0.35) + [(wx + hw_ + 18, sill + 8)]
+        fr = poly(outer)
+        far.paint(fr, ramp(np.clip(0.7 - (fr.X - wx) / (hw_ * 4), 0, 1), [(0, C("#2a1a12")), (1, C("#6a4632"))]))
+        op = [(wx - hw_, sill)] + arch_pts(wx, spring, hw_, 0.35) + [(wx + hw_, sill)]
+        om = poly(op)
+        far.paint(om, ramp(sstep(sill, spring - hw_, om.Y), [(0, C("#ffcf70")), (0.5, C("#f06a1e")), (1, C("#7a1a0e"))]))
+        glow.add(om.k(sstep(spring - hw_, sill, om.Y)), C("#ffb050"), 0.45)
+        # mullion and tracery
+        bars = [[(wx - 4, spring - hw_ * 0.6), (wx + 4, spring - hw_ * 0.6), (wx + 4, sill), (wx - 4, sill)],
+                [(wx - hw_, spring + 50), (wx + hw_, spring + 50), (wx + hw_, spring + 56), (wx - hw_, spring + 56)]]
+        bm = polys(bars)
+        far.paint(Mask(bm.a * om.full()[bm.sl], bm.x0, bm.y0), C("#1a0c08"))
+        far.light(gauss(wx, sill + 40, hw_ * 2.2, 90), C("#ff9a48"), 0.18)
+        far.light(gauss(wx, spring, hw_ * 3, 220), C("#ff7a2a"), 0.08)
+    # side walls of the hall
+    for sgn in (-1, 1):
+        xe = 0 if sgn < 0 else W
+        Ze = abs(HW * FOCAL / (xe - CX))
+        fy = pp(Ze, 0, 0)[1]
+        xb = bx0 if sgn < 0 else bx1
+        wm = poly([(xe, -10), (xb, -10), (xb, by_floor), (xe, fy)])
+        col, Zw, _, _ = wall_persp(sc, wm, HOR, CX, sgn * HW, 0.9, 0.42, stone, mortar, key=8 + sgn)
+        far.paint(wm, col * (0.8 if sgn < 0 else 0.62))
+    # banners on the back wall corners
+    banner(far, glow, sc, rng, bx0 + 85, 200, 96, 330, key=11, light=0.85)
+    banner(far, glow, sc, rng, bx1 - 85, 200, 96, 330, key=12, light=0.75, burn=1.0)
+    # soot streaks, firelight from below, darkness high up
+    walls = np.clip(bw_m.full() + ((XX < bx0) | (XX > bx1)) * (YY < 760), 0, 1)
+    streak = np.clip(sc.noise(36, 3, key=730, sx=0.35, sy=3.0) - 0.3, 0, 2) * 0.45
+    far.mult(full_mask(blur(np.clip(streak, 0, 0.7), 2) * sstep(640, 100, YY) * walls), soot)
+    far.light(full_mask(walls * gauss(960, 620, 520, 200).full()), C("#ff7a2a"), 0.14)
+    far.mult(full_mask(walls * np.clip(sstep(330, -20, YY) * 0.55 + (sstep(500, 0, XX) + sstep(1420, 1920, XX)) * 0.3, 0, 0.75)), soot)
+    # rubble filling the base of the breach
+    rubble(far, sc, rng, 965, 640, 520, 110, 26, C("#1a0e0a"), C("#4a2c20"), C("#b07050"), key=740)
+    far.light(gauss(965, 560, 260, 70), C("#ff9a48"), 0.3)
+    fire(far, glow, sc, 905, 590, 120, 120, key=21, k=0.9)
+    fire(far, glow, sc, 1065, 585, 90, 150, key=22, k=0.9)
+
+    # ---------------- mid: floor, pillars, fallen beams, rafters
+    Ze = abs(HW * FOCAL / CX)
+    fl = poly([(0, pp(Ze, 0, 0)[1]), (bx0, by_floor), (bx1, by_floor), (W, pp(Ze, 0, 0)[1]), (W, H), (0, H)])
+    fstone = [(0, C("#150e0b")), (0.4, C("#241914")), (0.75, C("#33241b")), (1, C("#463024"))]
+    col, Zf, rnd, joint = floor_persp(sc, fl, HOR, CX, 0.62, 0.62, fstone, mortar, key=50, lw=0.012)
+    mid.paint(fl, col)
+    # ash drifts and soot on the floor
+    ash = sstep(0.3, 1.2, fl.crop(sc.noise(90, 4, key=51, sx=2.8)))
+    mid.paint(Mask(ash * fl.a * 0.55, fl.x0, fl.y0), C("#5a4a44"))
+    # glowing cracks / embers in the floor, away from the fighting ground
+    cr = ember_cracks(fl, sc, 52, thick=0.985) * sstep(0.4, 1.2, fl.crop(sc.noise(160, 3, key=53)))
+    cr = cr * (1 - np.exp(-((fl.X - 920) / 620) ** 2) * np.exp(-((fl.Y - 770) / 110) ** 2)) * sstep(640, 700, fl.Y)
+    mid.paint(Mask(cr * fl.a, fl.x0, fl.y0), C("#ff8a2a"), 0.9)
+    glow.add(Mask(cr * fl.a, fl.x0, fl.y0), C("#ff7a24"), 0.7)
+    glow.add(Mask(blur(cr, 4) * fl.a, fl.x0, fl.y0), C("#ff5a14"), 0.6)
+    # firelight: a warm pool from the breach, flicker spots, dark toward the viewer
+    mid.light(gauss(940, 765, 560, 100), C("#ffa050"), 0.2)
+    mid.light(gauss(960, 680, 300, 50), C("#ffb060"), 0.16)
+    mid.mult(full_mask(np.clip(sstep(830, 1080, YY) * 0.72 + (sstep(500, 0, XX) + sstep(1420, 1920, XX)) * 0.4 * sstep(600, 1080, YY), 0, 0.85)), C("#0c0605"))
+
+    # fallen roof beam leaning into the breach (back, right) and one lying on the left
+    wood_dk, wood_md, wood_lt = C("#0e0806"), C("#2e1a10"), C("#6a4028")
+    bm, s = beam(mid, sc, 1560, 120, 1170, 668, 46, wood_dk, wood_md * 0.7, wood_lt * 0.6, key=60)
+    glow.add(Mask(bm.a * sstep(0.3, 0.95, s) * sstep(0.5, 1.4, bm.crop(sc.noise(9, 2, key=61)) + 0.3), bm.x0, bm.y0), C("#ff6a1a"), 0.9)
+    fire(mid, glow, sc, 1290, 520, 70, 120, key=62, lean=-0.4, k=1.0)
+    fire(mid, glow, sc, 1215, 650, 110, 140, key=63, k=1.1)
+    mid.paint(ellipse(1210, 672, 120, 12, feather=8), soot, 0.6)
+    bm, s = beam(mid, sc, 260, 676, 680, 652, 40, wood_dk, wood_md, wood_lt, key=64)
+    glow.add(Mask(bm.a * sstep(0.2, 0.9, s) * sstep(0.4, 1.3, bm.crop(sc.noise(9, 2, key=65)) + 0.3), bm.x0, bm.y0), C("#ff6a1a"), 0.8)
+    fire(mid, glow, sc, 600, 660, 120, 150, key=66, k=1.0)
+    fire(mid, glow, sc, 430, 668, 70, 70, key=67, k=0.8)
+    mid.light(gauss(600, 680, 260, 70), C("#ff8a3a"), 0.25)
+    mid.light(gauss(1215, 690, 300, 70), C("#ff8a3a"), 0.25)
+    rubble(mid, sc, rng, 300, 708, 300, 70, 14, C("#140a08"), C("#3a2418"), C("#9a6248"), key=68, light=0.95)
+    rubble(mid, sc, rng, 1640, 712, 340, 80, 16, C("#140a08"), C("#3a2418"), C("#9a6248"), key=69, light=0.9)
+    # scattered stones, a dropped shield and a broken spear
+    for sx_, sy_, sr in ((760, 735, 10), (1130, 742, 12), (690, 805, 8), (1340, 820, 14), (1500, 760, 9), (540, 760, 11)):
+        sm_ = poly(blob_pts(sx_, sy_, sr * 1.4, sr * 0.8, rng, 0.3, n=10))
+        c, _ = rock_col(sc, sm_, C("#120a08"), C("#3a2418"), C("#a06a4c"), key=70, cell=sr)
+        mid.paint(ellipse(sx_ + sr * 0.6, sy_ + sr * 0.6, sr * 1.8, sr * 0.4, feather=3), soot, 0.5)
+        mid.paint(sm_, c)
+    sh = ellipse(1460, 700, 36, 15)
+    mid.paint(sh, ramp(np.clip(0.7 - (sh.X - 1460) / 60 - (sh.Y - 700) / 30, 0, 1), [(0, C("#3a0a0a")), (0.6, C("#8a1a14")), (1, C("#e0a060"))]))
+    mid.paint(ellipse(1460, 700, 8, 4), C("#c8a050"))
+    mid.paint(stroke([(470, 724), (600, 708)], 4), C("#3a2414"))
+    mid.paint(poly([(600, 704), (622, 704), (604, 712)]), C("#8a8078"))
+
+    # great pillars at the screen edges, with banners
+    for sgn in (-1, 1):
+        Zp = 4.0
+        pxc, pbase = pp(Zp, sgn * 2.6, 0)
+        pw = 0.72 * FOCAL / Zp
+        x0, x1 = pxc - pw / 2, pxc + pw / 2
+        shaft = poly([(x0, -20), (x1, -20), (x1, pbase), (x0, pbase)])
+        c, _ = ashlar(shaft, x0, pbase, pw * 0.5, pw * 0.3, stone, mortar, lw=3, key=80 + sgn, sc=sc)
+        shade = cyl_shade(shaft, x0, x1, C("#120a08"), C("#4a3226"), C("#b07050"), hl=0.25 if sgn < 0 else 0.75)
+        c = c * (shade / C("#5a3a2a") * 0.75)
+        mid.paint(shaft, c)
+        mid.mult(shaft.k(sstep(500, 0, shaft.Y) * 0.55), soot)
+        inner = x1 if sgn < 0 else x0
+        mid.light(shaft.k(np.exp(-((shaft.X - inner) / 40) ** 2) * sstep(100, 600, shaft.Y)), C("#ff8a3a"), 0.22)
+    banner(mid, glow, sc, rng, 72, 150, 118, 430, key=13, light=0.8, burn=0.0)
+    banner(mid, glow, sc, rng, W - 72, 120, 118, 400, key=14, light=0.7, burn=1.0)
+
+    # charred rafters left of the collapsed roof
+    for (a, b, c_, d, w_) in ((-30, 60, 640, 8, 44), (1960, 30, 1340, 0, 40), (-30, 200, 300, 120, 30), (1960, 170, 1700, 120, 30)):
+        bm, s = beam(mid, sc, a, b, c_, d, w_, wood_dk, wood_md * 0.8, wood_lt * 0.7, key=90 + a % 7)
+        glow.add(Mask(bm.a * np.exp(-((bm.X - c_) / 40) ** 2), bm.x0, bm.y0), C("#ff6a1a"), 0.8)
+        fire(mid, glow, sc, c_ - (20 if a < 0 else -20), d + 18, 50, 70, key=91 + a % 7, k=0.9, halo=0.6)
+    for cx0, ln in ((380, 300), (1530, 240)):
+        chain(mid, cx0, 40, cx0 + 6, ln, 4, 18, C("#1e1412"), 2.6)
+
+    # ---------------- near: dark blurred framing (charred timber, rubble, a torn banner)
+    nd = C("#060302")
+    beam(near, sc, -80, 1000, 420, 1120, 90, nd, C("#1a0e08"), C("#3a2014"), key=100, broken=False)
+    for (cx0, cy0, rx_, ry_) in ((1790, 1050, 250, 120), (1580, 1095, 160, 60), (1900, 940, 90, 140), (70, 1090, 200, 80)):
+        bm = edge_noise(poly(blob_pts(cx0, cy0, rx_, ry_, rng, 0.3)), sc.noise(10, 2, key=101), 1.0)
+        c, _ = rock_col(sc, bm, C("#040202"), C("#140a08"), C("#3a2218"), key=102, cell=rx_ * 0.5)
+        near.paint(bm, c)
+    near.light(gauss(1760, 950, 260, 40), C("#ff6a20"), 0.12)
+    banner(near, glow, sc, rng, 1830, -60, 150, 330, key=15, light=0.3, rod=False)
+    near.blur_all(4.0)
+
+    # ---------------- rays and glow washes
+    god_rays(rays, sc, (975, -160), [(70, 2.5, 0.12), (78, 3.5, 0.2), (86, 2.2, 0.16), (94, 3.0, 0.18), (102, 2.4, 0.12), (110, 2.0, 0.08)],
+             C("#ffb060"), length=1150, start=260, dust=0.6, key=97)
+    for wx, sill, hw_, spring in wins:
+        a0 = 62 if wx < CX else 118
+        god_rays(rays, sc, (wx, spring + 60), [(a0, 3.0, 0.1), (a0 + (5 if wx < CX else -5), 2.0, 0.07)],
+                 C("#ff9a50"), length=650, start=70, dust=0.6, key=98 + int(wx) % 5)
+    rays.add(gauss(960, 560, 380, 160), C("#ff8a3a"), 0.12)
+    rays.add(gauss(940, 770, 520, 90), C("#ffa060"), 0.08)
+    rays.add(full_mask(dens * sstep(560, 100, YY) * 0.25), C("#ff6a20"), 0.35)
+    for _ in range(40):
+        spark(glow, pick(rng, 200, 1720), pick(rng, 80, 640), pick(rng, 1.5, 3.2), C("#ffb050"), pick(rng, 0.3, 0.8), cross=False)
+
+    fx = {
+        "embers": [[820, 420, 300, 200], [1150, 420, 180, 260], [520, 520, 180, 160], [0, 80, 1920, 600]],
+        "ash": [[0, -40, 1920, 1120]],
+        "smoke": [[760, 0, 440, 560], [1150, 420, 160, 200], [520, 520, 160, 150]],
+        "sparks": [[1180, 600, 80, 60], [560, 610, 90, 50]],
+        "fires": [[905, 590], [1065, 585], [1290, 520], [1215, 650], [600, 660], [430, 668], [640, 26], [1360, 18]],
+        "ground_y": GROUND_Y,
+        "wind": [0.25, -1.0],
+    }
+    return far, mid, near, rays, glow, fx
+
+
+# ============================================================== DRAGON LAIR
+
+def lava(lay, glow, sc, m, key=0, k=1.0, sx=4.0, sy=0.6, hot=0.0, scale=34):
+    """Molten rock: flowing bright channels between dark crust plates; colour + emission."""
+    n1 = m.crop(sc.noise(scale, 4, key=key, sx=sx, sy=sy, gain=0.5))
+    n2 = m.crop(sc.noise(scale * 0.3, 3, key=key + 1, sx=sx * 0.6, sy=sy))
+    flow = n1 + n2 * 0.45
+    t = 0.3 + sstep(0.5, -0.7, flow) * 0.6 + np.exp(-((flow - 0.42) / 0.07) ** 2) * 0.3 + hot
+    t = np.clip(t + n2 * 0.04, 0, 1)
+    lay.paint(m, ramp(t, LAVA_STOPS))
+    glow.add(m.k(sstep(0.5, 1.0, t)), C("#ffb040"), 0.8 * k)
+    glow.add(m.k(t), C("#ff4a10"), 0.15 * k)
+    return t
+
+
+def lava_fall(lay, glow, sc, x, top, bot, w0, w1, key=0, k=1.0):
+    left, right = [], []
+    for i in range(13):
+        u = i / 12
+        cx = x + math.sin(u * 2.4 + key) * w0 * 0.12
+        ww = lerp(w0, w1, u ** 1.5) / 2
+        yy = lerp(top, bot, u)
+        left.append((cx - ww, yy))
+        right.append((cx + ww, yy))
+    m = poly(left + right[::-1], feather=1.0)
+    st = m.crop(sc.noise(12, 3, key=key, sx=0.22, sy=7, gain=0.5))
+    ww = np.interp(m.Y[:, 0], [p[1] for p in left], [(r[0] - l[0]) / 2 for l, r in zip(left, right)])[:, None]
+    u = np.abs(m.X - x) / np.maximum(ww, 1)
+    t = np.clip(0.95 - u ** 2 * 0.55 + st * 0.12 - sstep(0.6, 1.0, st) * 0.25, 0, 1)
+    lay.paint(m, ramp(t, LAVA_STOPS))
+    glow.add(m.k(sstep(0.55, 1.0, t)), C("#ffd070"), 1.0 * k)
+    glow.add(m.k(t), C("#ff5a14"), 0.2 * k)
+    glow.add(gauss(x, (top + bot) / 2, w1 * 1.2, (bot - top) * 0.55), C("#ff5a14"), 0.1 * k)
+    return m
+
+
+def coins(m, cell, key=0):
+    """Pile-of-coins texture: overlapping jittered discs from three offset grids.
+    Returns (coverage of the top disc, its top-left lit term)."""
+    X, Y = m.X, m.Y
+    best = np.zeros_like(X)
+    hl = np.zeros_like(X)
+    cy_ = cell * 0.6
+    for g, (ox, oy) in enumerate(((0, 0), (0.5, 0.5), (0.27, 0.8))):
+        gx = X / cell + ox
+        gy = Y / cy_ + oy
+        ix, iy = np.floor(gx), np.floor(gy)
+        jx = hash2(ix, iy, key + g) * 0.4 - 0.2
+        jy = hash2(iy, ix, key + g + 9) * 0.4 - 0.2
+        dx = gx - ix - 0.5 - jx
+        dy = gy - iy - 0.5 - jy
+        d = np.sqrt(dx * dx + dy * dy)
+        disc = sstep(0.46, 0.38, d)
+        sh = np.clip(0.55 - dx * 1.2 - dy * 1.2, 0, 1) * disc + sstep(0.3, 0.4, d) * disc * 0.35
+        newv = disc * (0.85 + 0.15 * hash2(ix, iy, key + g + 3))
+        take = newv > best * 0.9
+        best = np.where(take, newv, best)
+        hl = np.where(take, sh, hl)
+    return best, hl
+
+
+def hoard(lay, glow, sc, rng, cx, base, rx, ry, cell=8, key=0, light=1.0, glints=24, rim=None):
+    """Mound of gold coins with gems, lit from the upper left and from the lava (rim)."""
+    lay.paint(ellipse(cx + rx * 0.05, base + 2, rx * 1.05, 12, feather=8), C("#080304"), 0.6 * lay.a[int(min(H - 1, base + 4)), int(min(W - 1, max(0, cx)))])
+    m = edge_noise(poly(blob_pts(cx, base + ry * 0.05, rx, ry, rng, 0.08, n=48, flat_bottom=base)), sc.noise(5, 2, key=key), 0.6, s=1.2)
+    X, Y = m.X, m.Y
+    dx = (X - cx) / rx
+    dy = np.minimum((Y - base) / ry, 0)
+    bn = m.crop(sc.noise(28, 3, key=key + 1))
+    nx, ny = dx * 1.2 + bn * 0.12, dy * 1.2 + bn * 0.08
+    nz = np.sqrt(np.clip(1 - dx * dx - dy * dy, 0.03, 1))
+    inv = 1 / np.sqrt(nx * nx + ny * ny + nz * nz)
+    n = (nx * inv, ny * inv, nz * inv)
+    lit = lambert(n)
+    cov, hl = coins(m, cell, key=key)
+    t = np.clip((lit * 1.1 - 0.05) * (0.5 + 0.5 * cov) + hl * 0.3 * lit, 0, 1)
+    t = t * (0.55 + 0.45 * sstep(base + 4, base - ry * 0.4, Y))
+    col = ramp(t, [(0, C("#2a1404")), (0.3, C("#7a4a0e")), (0.55, C("#c88a1e")), (0.78, C("#f2c24a")), (1, C("#fff2b0"))])
+    col = col * (1 - (1 - cov) * 0.45)[..., None]
+    lay.paint(m, col * light)
+    if rim is not None:
+        lay.light(m.k(np.clip(n[2] - 0.2, 0, 1) * sstep(base - ry * 0.5, base, Y) * cov), rim, 0.3)
+    glow.add(m.k(sstep(0.82, 1.0, t) * cov), C("#ffe08a"), 0.35 * light)
+    # gems
+    for i in range(int(rx * ry / 2500)):
+        a = pick(rng, 0.15, 0.85) * math.pi
+        rr = pick(rng, 0.1, 0.9)
+        gx_, gy_ = cx + math.cos(a) * rx * rr, base - math.sin(a) * ry * rr * 0.95
+        gs = pick(rng, 4, 8) * cell / 8
+        gc = [C("#e0203a"), C("#20c060"), C("#3a70ff"), C("#b040ff")][int(rng.integers(0, 4))]
+        gm = poly([(gx_, gy_ - gs), (gx_ + gs * 0.8, gy_), (gx_, gy_ + gs * 0.7), (gx_ - gs * 0.8, gy_)])
+        lay.paint(gm, ramp(np.clip(0.6 - (gm.X - gx_ + gm.Y - gy_) / (gs * 1.5), 0, 1), [(0, gc * 0.3), (0.6, gc), (1, lerp(gc, C("#ffffff"), 0.7))]) * light)
+        glow.add(gauss(gx_ - gs * 0.2, gy_ - gs * 0.3, gs * 0.35), lerp(gc, C("#ffffff"), 0.5), 0.6 * light)
+    for _ in range(glints):
+        a = pick(rng, 0.2, 0.8) * math.pi
+        rr = pick(rng, 0.2, 0.85)
+        spark(glow, cx + math.cos(a) * rx * rr, base - math.sin(a) * ry * rr * 0.9, pick(rng, 1.5, 3.2) * cell / 8,
+              C("#ffe8a0"), pick(rng, 0.4, 0.9) * light, cross=rng.random() < 0.4)
+    return m
+
+
+def dragon_skull(lay, glow, sc, x, y, s, key=0, light=1.0):
+    """Huge horned dragon skull in profile facing right; bone shading, dark sockets, teeth."""
+    def T(pts):
+        return [(x + px * s, y + py * s) for px, py in pts]
+    bone_d, bone_m, bone_l = C("#1c100a"), C("#6e5440"), C("#dcbc92")
+    # horns (behind)
+    for pts, w0 in (([(30, -50), (-40, -120), (-140, -160), (-230, -150), (-290, -110)], 34),
+                    ([(70, -62), (20, -150), (-50, -215), (-130, -240)], 24)):
+        m = stroke(T(pts), 10 * s, taper=(w0 * s, 4 * s))
+        t = np.clip(0.6 - (m.Y - y) / (300 * s) * 0.0 + m.crop(sc.noise(10, 2, key=key + 1)) * 0.1, 0, 1)
+        lay.paint(m, ramp(t, [(0, bone_d), (0.6, bone_m * 0.8), (1, bone_l * 0.8)]) * light)
+        rid = np.abs(np.sin((m.X + m.Y) / (6 * s)))
+        lay.mult(m.k((1 - sstep(0, 0.3, rid)) * 0.18), bone_d)
+    skull_pts = [(0, -40), (30, -70), (80, -80), (130, -66), (170, -46), (240, -38), (310, -30), (345, -20), (355, -4),
+                 (342, 10), (250, 14), (170, 20), (110, 32), (60, 42), (20, 36), (-12, 10)]
+    jaw_pts = [(80, 40), (170, 26), (250, 22), (325, 20), (334, 30), (300, 42), (200, 56), (120, 66), (70, 62)]
+    occ = polys([T(jaw_pts), T(skull_pts)])
+    glow.L[occ.sl] *= (1 - occ.a)[..., None]
+    for pts in (jaw_pts, skull_pts):
+        m = poly(T(pts))
+        col, n = rock_col(sc, m, bone_d, bone_m, bone_l, cell=40 * s, nscale=20 * s, key=key + 3, crack=0.25, tilt=0.15)
+        lay.paint(m, col * light)
+    # sockets and openings
+    for ex, ey, rx, ry in ((125, -30, 28, 19), (52, -18, 20, 26), (330, -12, 9, 6), (210, -10, 40, 9)):
+        om = ellipse(x + ex * s, y + ey * s, rx * s, ry * s, feather=1.5)
+        lay.paint(om, C("#0e0604"))
+        lay.paint(Mask(om.a * (1 - sstep(-0.2, 0.6, (om.Y - (y + ey * s)) / (ry * s))) * 0.0, om.x0, om.y0), bone_d)
+    glow.add(gauss(x + 125 * s, y - 24 * s, 7 * s, 4 * s), C("#ff6a20"), 0.25 * light)
+    # teeth
+    tp = []
+    for i in range(10):
+        tx = 175 + i * 16
+        tl = 18 if i % 3 == 0 else 11
+        tp.append([(tx - 5, 14 - i * 0.4), (tx + 5, 14 - i * 0.4), (tx + 1, 14 + tl)])
+        tp.append([(tx + 3, 26 - i * 0.4), (tx + 12, 26 - i * 0.4), (tx + 8, 26 - tl * 0.8)])
+    m = polys([T(p) for p in tp], feather=0.6)
+    lay.paint(m, ramp(np.clip((m.Y - y) / (40 * s) + 0.5, 0, 1), [(0, bone_l), (1, bone_m)]) * light)
+    # brow spikes
+    for bx_, by_, bh in ((100, -78, 34), (140, -64, 26), (175, -48, 18)):
+        lay.paint(poly(T([(bx_ - 12, by_ + 6), (bx_ - 18, by_ - bh), (bx_ + 10, by_ + 4)])), bone_m * 0.8 * light)
+
+
+def ribcage(lay, sc, rng, x0, y0, x1, y1, n, ground, light=1.0):
+    """Spine arching from (x0, y0) up to (x1, y1) with ribs curving down to the ground."""
+    bone_d, bone_m, bone_l = C("#1a0e08"), C("#5e4434"), C("#c8a47c")
+    spine = []
+    for i in range(25):
+        u = i / 24
+        spine.append((lerp(x0, x1, u), lerp(y0, y1, u) - math.sin(u * math.pi) * 60))
+    for i in range(n):
+        u = 0.12 + 0.8 * i / (n - 1)
+        sx, sy = spine[int(u * 24)]
+        L = ground - sy
+        pts = []
+        for j in range(12):
+            v = j / 11
+            pts.append((sx - 70 * math.sin(v * math.pi * 0.9) - v * 30 + 40 * v * v, sy + L * v * (0.98 + 0.02 * u)))
+        m = stroke(pts, 18, taper=(30 * (1.1 - u * 0.4), 9))
+        t = np.clip(0.8 - (m.X - sx + 70) / 90, 0, 1)
+        lay.paint(m, ramp(t, [(0, bone_d), (0.5, bone_m), (1, bone_l)]) * light)
+    m = stroke(spine, 16, taper=(30, 14))
+    lay.paint(m, ramp(np.clip(0.6 - (m.Y - m.Y.min()) / 40, 0, 1), [(0, bone_d), (0.5, bone_m), (1, bone_l)]) * light)
+    for i in range(0, 25, 2):
+        vx, vy = spine[i]
+        lay.paint(poly([(vx - 6, vy - 6), (vx - 14, vy - 34), (vx + 4, vy - 4)]), bone_m * 0.75 * light)
+
+
+def dragon_lair(seed=53):
+    rng = np.random.default_rng(seed)
+    sc = Noise(seed)
+    far, mid, near, rays, glow = Layer(), Layer(), Layer(), Light(), Light()
+    fall = (1190, 30)
+    haze = C("#3a0e08")
+    basalt = (C("#08040a"), C("#241418"), C("#5a3a34"))
+
+    # ---------------- far: cavern depths, distant walls, the great lava fall, lake
+    far.paint(full_mask(), vgrad([(0, C("#070205")), (0.3, C("#140508")), (0.5, C("#2e0c0a")), (0.57, C("#5a1a0a")),
+                                  (0.62, C("#3a1008")), (1, C("#0e0303"))], 0, H))
+    far.light(gauss(fall[0], 420, 420, 300), C("#ff5a1a"), 0.18)
+    for i, (y0, amp, col, hkk) in enumerate(((380, 160, C("#2a1214"), 0.45), (470, 120, C("#1e0c10"), 0.3), (540, 80, C("#140709"), 0.15))):
+        rp = ridge(rng, -40, 1960, y0, amp, rough=0.6,
+                   peaks=[(pick(rng, 150, 550), y0 - amp * 1.6, 160), (pick(rng, 1500, 1800), y0 - amp * 1.5, 190)])
+        m = poly([(-40, 680)] + rp + [(1960, 680)])
+        c, n = rock_col(sc, m, col * 0.4, col, lerp(col, C("#c86a48"), 0.35), key=800 + i, cell=90 - i * 15, sy=2.2, bulge=60)
+        far.paint(m, c)
+        # rim of lava light on the ridges facing the fall
+        far.light(m.k(np.exp(-((m.X - fall[0]) / 600) ** 2) * sstep(0.0, 0.5, n[0]) * 0.8), C("#ff7a30"), 0.25)
+        far.haze(m, haze, hkk)
+        if i == 0:
+            rp0 = rp
+        if i == 1:
+            # thin side falls spilling from the first ledge, behind the nearer one
+            for lx, w0, w1, kk, ky in ((560, 16, 34, 0.5, 810), (1660, 12, 26, 0.4, 811)):
+                ly = float(np.interp(lx, [p[0] for p in rp0], [p[1] for p in rp0])) + 12
+                lava_fall(far, glow, sc, lx, ly, 612, w0, w1, key=ky, k=kk)
+                far.light(gauss(lx, ly, 40, 14), C("#ff8a3a"), 0.4)
+    # the vault ceiling with stalactites, open crack above the fall
+    ceil = poly([(-20, -20), (1940, -20), (1940, 140)] + [(x, 110 + 55 * math.sin(x / 210) + 25 * math.sin(x / 61)) for x in range(1920, -21, -40)])
+    c, n = rock_col(sc, ceil, C("#040204"), C("#1a0c0e"), C("#4a2a26"), key=820, cell=80, bulge=40)
+    far.paint(ceil, c)
+    far.light(ceil.k(gauss(fall[0], 120, 360, 90).full()[ceil.sl]), C("#ff6a20"), 0.45)
+    for i in range(28):
+        sx0 = pick(rng, 0, 1920)
+        if abs(sx0 - fall[0]) < 110:
+            continue
+        stalactite(far, sc, sx0, 80 + 50 * math.sin(sx0 / 210), pick(rng, 60, 220), pick(rng, 20, 56),
+                   C("#060204"), C("#1e0c0e"), C("#5a2c22"), key=i + 30)
+    # cleft and the great lava fall
+    far.paint(poly([(fall[0] - 70, -10), (fall[0] + 80, -10), (fall[0] + 40, 120), (fall[0] - 30, 130)], feather=3), C("#2a0804"))
+    lava_fall(far, glow, sc, fall[0], 20, 612, 96, 190, key=830, k=1.0)
+    # lava lake at the foot of the fall
+    lake = poly(blob_pts(1080, 618, 600, 26, rng, 0.08, n=48), feather=2)
+    lava(far, glow, sc, lake, key=840, k=0.5, sx=6.0, sy=0.5, hot=0.0, scale=40)
+    # steam and heat haze at the foot of the fall
+    st = np.clip(sc.noise(70, 4, key=845, sx=1.6, sy=0.8) * 0.5 + 0.5, 0, 1)
+    far.paint(full_mask(st * gauss(fall[0], 560, 260, 70).full() * 0.7), C("#ff9a60"))
+    far.haze(full_mask(sstep(480, 600, YY) * (1 - sstep(600, 680, YY)) * 0.35), C("#a03a14"))
+
+    # ---------------- mid: lava river, ground, cave walls, hoards, bones
+    # river behind the fighting ground
+    top_b = [(x, 646 + 8 * math.sin(x / 170 + 1) + 5 * math.sin(x / 53)) for x in range(-40, 1961, 40)]
+    bot_b = [(x, 694 + 10 * math.sin(x / 210) + 6 * math.sin(x / 47 + 2)) for x in range(1960, -41, -40)]
+    rv = poly(top_b + bot_b, feather=1.0)
+    lava(mid, glow, sc, rv, key=850, k=1.0, sx=7.0, sy=0.4, hot=0.08, scale=36)
+    # bank in the distance behind the river (dark rock shelf the lake light skims)
+    bank = edge_noise(poly([(-40, 640)] + [(x, y - 4 + 6 * math.sin(x / 90)) for x, y in top_b] + [(1960, 640), (1960, 628), (-40, 628)]), sc.noise(8, 2, key=851), 1.0)
+    # ground
+    gl = [(x, y - 6) for x, y in bot_b[::-1]]
+    fl = poly(gl + [(1960, H), (-40, H)])
+    X, Y = fl.X, fl.Y
+    dz = np.clip((Y - 680) / 400, 0, 1)
+    hgt = fl.crop(sc.noise(130, 4, key=860, sx=3.0, gain=0.5)) * (3 + dz * 15) + fl.crop(sc.noise(22, 3, key=861, sx=2.5)) * (0.6 + dz * 3)
+    gyh, gxh = np.gradient(hgt)
+    HZ = 560.0
+    Zg = FOCAL / np.maximum(Y - HZ, 1.0)
+    ug = (X - 960) * Zg / FOCAL / 0.55 + fl.crop(sc.noise(60, 2, key=865)) * 0.08
+    vg = Zg / 0.42
+    d1, d2, rid = cells(ug, vg, key=866)
+    fpx = Zg / FOCAL / 0.55 * 1.5                     # cell units per pixel
+    edge = 1 - sstep(0.02, 0.06 + fpx, d2 - d1)
+    tilt = (hash2(rid * 97.0, 1.0) - 0.5) * 0.5
+    lit = np.clip(0.42 - gyh * 0.5 + gxh * 0.15 + tilt * 0.6 + (rid - 0.5) * 0.25, 0, 1)
+    lit = lit * (1 - edge * 0.75)
+    col = ramp(lit, [(0, C("#060204")), (0.4, C("#1a0c0c")), (0.7, C("#342016")), (1, C("#5a3828"))])
+    ashf = sstep(0.2, 1.0, fl.crop(sc.noise(70, 3, key=862, sx=2.4)))
+    col = lerp(col, ramp(lit, [(0, C("#2a201e")), (1, C("#6a5a52"))]), (ashf * 0.4)[..., None])
+    mid.paint(fl, col)
+    # lip of the bank: hot, bright edge where the rock meets the lava
+    lip = Mask(fl.a * np.exp(-np.clip(Y - (np.interp(X[0], [p[0] for p in gl], [p[1] for p in gl]))[None, :], 0, 200) / 14.0), fl.x0, fl.y0)
+    mid.light(lip, C("#ff7a30"), 0.5)
+    # glowing cracks except where the fighters stand
+    cr = np.maximum(ember_cracks(fl, sc, 863, thick=0.99), edge * sstep(0.75, 1.0, rid) * 0.8)
+    cr = cr * sstep(700, 740, Y) * sstep(0.2, 1.0, fl.crop(sc.noise(160, 3, key=864)))
+    cr = cr * (1 - np.exp(-((X - 920) / 560) ** 2) * np.exp(-((Y - 775) / 80) ** 2))
+    mid.paint(Mask(cr * fl.a, fl.x0, fl.y0), C("#ff9a3a"), 0.9)
+    glow.add(Mask(cr * fl.a, fl.x0, fl.y0), C("#ff8a2a"), 0.8)
+    glow.add(Mask(blur(cr, 5) * fl.a, fl.x0, fl.y0), C("#ff4a10"), 0.7)
+    # warm light from the river, darkness toward the viewer
+    mid.light(gauss(940, 715, 900, 60), C("#ff7a30"), 0.3)
+    mid.light(gauss(920, 775, 560, 90), C("#ffa060"), 0.16)
+    mid.mult(full_mask(sstep(830, 1080, YY) * 0.7), C("#080304"))
+    mid.paint(bank, ramp(np.clip((bank.Y - 628) / 20, 0, 1), [(0, C("#0c0406")), (1, C("#3a1810"))]))
+
+    # cave walls left and right, rim-lit by lava
+    for sgn in (-1, 1):
+        xe = 0 if sgn < 0 else W
+        pts = [(xe, -20)]
+        for i in range(12):
+            u = i / 11
+            yy = -20 + u * 760
+            xx = xe - sgn * (150 + 80 * math.sin(u * 5 + sgn * 2) + 40 * pick(rng, -1, 1) + 40 * u)
+            pts.append((xx, yy))
+        pts.append((xe, 760))
+        m = edge_noise(poly(pts), sc.noise(14, 3, key=870 + sgn), 0.7, sharp=4.0)
+        c, n = rock_col(sc, m, basalt[0], basalt[1], basalt[2], key=871 + sgn, cell=60, sy=2.6, bulge=70, tilt=0.3)
+        mid.paint(m, c)
+        mid.light(m.k(np.clip(n[0] * sgn * -1, 0, 1) * sstep(200, 700, m.Y)), C("#ff6a24"), 0.5)
+    # stalagmites
+    for sx0, sb, sl_, sw_ in ((560, 652, 120, 30), (1360, 650, 150, 34), (840, 642, 60, 16)):
+        stalactite(mid, sc, sx0, sb, sl_, sw_, C("#06020a"), C("#2a1416"), C("#7a4030"), key=sx0, up=True)
+
+    # bones: ribcage (right, behind the hoard) and the skull on the left hoard
+    ribcage(mid, sc, rng, 1380, 640, 1980, 330, 8, 702, light=0.85)
+    mid.light(gauss(1650, 600, 300, 160), C("#ff7a30"), 0.18)
+    hoard(mid, glow, sc, rng, 1700, 712, 320, 120, cell=9, key=880, rim=C("#ff7a30"))
+    hoard(mid, glow, sc, rng, 1430, 710, 120, 62, cell=7, key=881, rim=C("#ff7a30"), glints=8)
+    hoard(mid, glow, sc, rng, 220, 712, 340, 150, cell=9, key=882, rim=C("#ff7a30"))
+    hoard(mid, glow, sc, rng, 560, 710, 110, 58, cell=7, key=883, rim=C("#ff7a30"), glints=8)
+    dragon_skull(mid, glow, sc, 110, 585, 1.08, key=890)
+    mid.light(gauss(330, 600, 200, 60), C("#ff8a40"), 0.12)
+    # spilled coins at the edges of the ground
+    for _ in range(46):
+        side = rng.random() < 0.5
+        cx_ = pick(rng, 0, 660) if side else pick(rng, 1300, 1920)
+        cy_ = 708 + abs(rng.normal(0, 18))
+        r = 3.0 + (cy_ - 700) / 200 * 3
+        cm = ellipse(cx_, cy_, r, r * 0.55)
+        mid.paint(cm, ramp(np.clip(0.7 - (cm.X - cx_) / r * 0.4 - (cm.Y - cy_) / r, 0, 1), [(0, C("#6a3a08")), (0.6, C("#d8a030")), (1, C("#fff0a0"))]))
+    # a sword stuck in the left hoard, a goblet on the right one
+    mid.paint(poly([(468, 520), (478, 520), (481, 612), (465, 612)]), ramp(np.clip(np.arange(1) + 0, 0, 1), [(0, C("#b8b8c0")), (1, C("#b8b8c0"))]))
+    blade = poly([(466, 540), (480, 540), (478, 640), (472, 662), (466, 640)])
+    mid.paint(blade, ramp(np.clip((blade.X - 466) / 14, 0, 1), [(0, C("#e8eef8")), (0.5, C("#8a909c")), (1, C("#3a3c44"))]))
+    mid.paint(stroke([(450, 538), (496, 538)], 7), C("#b08a30"))
+    mid.paint(stroke([(473, 500), (473, 534)], 7), C("#3a2014"))
+    mid.paint(ellipse(473, 496, 7, 7), C("#e0b040"))
+    glow.add(gauss(470, 600, 3, 40), C("#ffe0c0"), 0.4)
+    gob = poly([(1580, 560), (1612, 560), (1604, 584), (1598, 590), (1600, 604), (1612, 610), (1580, 610), (1592, 604), (1594, 590), (1588, 584)])
+    mid.paint(gob, ramp(np.clip(0.8 - (gob.X - 1580) / 34, 0, 1), [(0, C("#5a3608")), (0.6, C("#d8a030")), (1, C("#fff0a0"))]))
+    spark(glow, 1590, 566, 4, C("#ffe8a0"), 0.8)
+
+    # ---------------- near: dark rocks and stalactites, lava-rimmed
+    for (cx0, cy0, rx_, ry_) in ((60, 1040, 300, 150), (1860, 1030, 280, 170), (330, 1095, 190, 60), (1610, 1095, 210, 60)):
+        bm = edge_noise(poly(blob_pts(cx0, cy0, rx_, ry_, rng, 0.28)), sc.noise(10, 2, key=900), 1.0)
+        c, n = rock_col(sc, bm, C("#030103"), C("#0e0608"), C("#2a1410"), key=901, cell=rx_ * 0.45)
+        near.paint(bm, c)
+        near.light(bm.k(np.clip(-n[1], 0, 1) * np.exp(-((bm.Y - (cy0 - ry_)) / 25) ** 2)), C("#ff5a1a"), 0.18)
+    for x0, ln, w_ in ((40, 260, 120), (190, 150, 70), (1850, 300, 130), (1700, 140, 60)):
+        stalactite(near, sc, x0, -20, ln, w_, C("#030103"), C("#120608"), C("#3a1a14"), key=x0)
+    near.blur_all(4.0)
+
+    # ---------------- rays and glow washes
+    rays.add(gauss(fall[0], 340, 200, 340), C("#ff6a20"), 0.12)
+    rays.add(gauss(fall[0], 600, 420, 70), C("#ff8a3a"), 0.12)
+    rays.add(gauss(940, 680, 900, 40), C("#ff7a30"), 0.12)
+    rays.add(gauss(940, 770, 600, 90), C("#ffa060"), 0.05)
+    # rising heat columns
+    hc = np.clip(sc.noise(160, 3, key=910, sx=0.5, sy=2.0) * 0.5 + 0.3, 0, 1) * sstep(700, 250, YY) * sstep(0, 300, YY)
+    rays.add(full_mask(hc * (gauss(fall[0], 400, 420, 380).full() + gauss(560, 450, 360, 280).full() * 0.6)), C("#ff5a1a"), 0.12)
+    for _ in range(30):
+        spark(glow, pick(rng, 100, 1820), pick(rng, 120, 640), pick(rng, 1.5, 3.0), C("#ff9a40"), pick(rng, 0.3, 0.7), cross=False)
+
+    fx = {
+        "embers": [[0, 600, 1920, 110], [fall[0] - 140, 480, 280, 160], [0, 100, 1920, 600]],
+        "ash": [[0, -40, 1920, 1120]],
+        "sparks": [[fall[0] - 120, 560, 240, 70], [460, 560, 200, 50]],
+        "smoke": [[fall[0] - 200, 470, 400, 160], [0, 600, 1920, 80]],
+        "bubbles": [[0, 655, 1920, 30], [400, 600, 1300, 25]],
+        "lava_fall": [fall[0] - 60, 20, 120, 590],
+        "glints": [[0, 560, 560, 150], [1380, 580, 540, 130]],
+        "ground_y": GROUND_Y,
+        "wind": [0.0, -1.0],
+    }
+    return far, mid, near, rays, glow, fx
+
+
 SCENES = {
     "rotten_cellar": rotten_cellar,
     "mushroom_cave": mushroom_cave,
     "frozen_pass": frozen_pass,
+    "burnt_keep": burnt_keep,
+    "dragon_lair": dragon_lair,
 }
 
 

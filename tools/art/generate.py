@@ -8,6 +8,16 @@ backgrounds writes every dungeon's battle background plus the map backgrounds of
 (mushroom_cave, frozen_pass, burnt_keep, dragon_lair); the cellar's map stays in the scenes group.
 
 The art is original and generated from code, so there are no third-party licences to track.
+
+The landscape look of 0.8 (docs/16) comes from separate, slower modules, each run on its own:
+
+    python3 tools/art/heroes_v2.py [ids]        # hero rigs (assets/rigs/) + their flat sprites
+    python3 tools/art/monsters_d1.py [ids]      # ... monsters_d2 .. monsters_d5, one per dungeon
+    python3 tools/art/backgrounds_v2.py [ids]   # layered battle backgrounds (assets/backgrounds/v2/)
+    python3 tools/art/town_v2.py                # the painted town (assets/town/v2/)
+    python3 tools/art/ui_v2.py [kit|skills]     # the HUD kit (assets/ui/v2/) and skill icons
+
+Their flat sprites win: `sprites` below skips every id that has a rig in assets/rigs/.
 """
 import os
 import sys
@@ -43,7 +53,9 @@ def sprites():
     out.update({f"player/{k}": fn for k, fn in heroes.HEROES.items()})
     out.update(enemies_a.SPRITES)
     out.update(enemies_b.SPRITES)
-    return out
+    # ids redrawn as rigs keep the flat picture their rig module wrote
+    rigs = os.path.join(ROOT, "assets", "rigs")
+    return {k: fn for k, fn in out.items() if not os.path.isdir(os.path.join(rigs, k.split("/")[-1]))}
 
 
 def main(groups):
@@ -56,8 +68,7 @@ def main(groups):
             save(battle(), f"backgrounds/{k}.png")
             save(dungeon_map(), f"backgrounds/{k}_map.png")
     if "icons" in groups:
-        for k in icons.SKILL_ICONS:
-            save(icons.skill_icon(k), f"icons/skills/{k}.png")
+        # skill icons are painted by ui_v2.py (python3 tools/art/ui_v2.py skills)
         for k in icons.INTENT_ICONS:
             save(icons.small_icon(k), f"icons/intents/{k}.png")
         for k in icons.STATUS_ICONS:

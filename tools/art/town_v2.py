@@ -2449,3 +2449,993 @@ def grade(cv):
     cv.fill(m, C("#2a3050"), np.clip(shade_amt, 0, 0.55), "atop")
     haze = sstep(700, 420, Y) * 0.12
     cv.fill(m, HAZE, haze, "atop")
+
+
+# =================================================================== light shafts
+
+def rays_layer(seed=21):
+    """Additive golden-hour shafts fanning down-right from the low sun, a soft bloom around it and
+    a warm wash on the near meadow. Stored as rgb = hue, alpha = strength (blend ADD)."""
+    rng = np.random.default_rng(seed)
+    ys, xs = np.mgrid[0:H, 0:W].astype(np.float32)
+    dx, dy = xs - SUN[0], ys - SUN[1]
+    r = np.sqrt(dx * dx + dy * dy)
+    ang = np.degrees(np.arctan2(dy, dx))
+    acc = np.zeros((H, W), np.float32)
+    # a fan of shafts between 5 and 75 degrees below the horizontal (pointing into the village)
+    for a, wd, k in [(8, 3.0, 0.45), (15, 2.0, 0.6), (21, 4.5, 0.5), (29, 2.2, 0.7), (36, 5.5, 0.45),
+                     (44, 2.5, 0.65), (52, 4.0, 0.5), (60, 2.0, 0.55), (68, 5.0, 0.35), (-2, 6.0, 0.3)]:
+        d = (ang - a + 180) % 360 - 180
+        acc += np.exp(-(d / wd) ** 2) * k
+    fade = sstep(60, 260, r) * (1 - sstep(500, 1700, r))
+    n = fbm(H, W, 150, 3, seed)
+    acc = acc * fade * np.clip(0.55 + n * 0.9, 0.2, 1.6)
+    # bloom around the sun and a wash over the plaza and the meadow
+    bloom = np.clip(1 - r / 480, 0, 1) ** 2.4 * 0.3
+    wash = np.exp(-(((xs - 760) / 900) ** 2 + ((ys - 760) / 260) ** 2)) * 0.07
+    strength = np.clip(acc * 0.24 + bloom + wash, 0, 1)
+    col = np.empty((H, W, 3), np.float32)
+    warm = np.clip(r / 1500, 0, 1)[..., None]
+    col[:] = lerp(C("#fff2cc"), C("#ffb866"), warm)
+    out = np.concatenate([col, strength[..., None]], axis=-1)
+    return Image.fromarray((out * 255 + 0.5).astype(np.uint8), "RGBA")
+
+
+# =================================================================== foreground framing
+
+NEAR_PAL = (C("#0e1a16"), C("#22402a"), C("#5f7f34"), C("#d9d07a"))
+
+
+def near_layer(seed=31):
+    """Out-of-focus framing leaves: a branch hanging into the top-left corner across the sun (its
+    leaves backlit and glowing at the edges), a smaller one at the top right, and ferns and tall
+    grass in both bottom corners under the button bar. Everything else stays transparent."""
+    cv = Canvas(W, H, 2, seed)
+    rng = random.Random(seed)
+    dark, mid, lt, hi = NEAR_PAL
+    # --- top-left branch across the sun
+    br = trunk(cv, [(-30, 40), (120, 62), (260, 70), (380, 58)], 26, 6, C("#2a2026"))
+    trunk(cv, [(140, 64), (210, 110), (250, 150)], 9, 3, C("#2a2026"))
+    clumps = [(30, 10, 70, -0.4), (110, 40, 60, -0.2), (200, 30, 52, 0.0), (300, 54, 46, 0.2),
+              (240, 130, 40, 0.1), (370, 50, 30, 0.3), (60, 100, 54, -0.3), (-10, 150, 60, -0.5),
+              (170, 90, 44, 0.0)]
+    # smaller clumps filling the gaps, and drooping tips along the twigs
+    for (x0, y0, x1, y1, k) in [(-20, 0, 380, 90, 14), (120, 80, 260, 170, 6), (-30, 120, 80, 230, 5)]:
+        for _ in range(k):
+            clumps.append((rng.uniform(x0, x1), rng.uniform(y0, y1), rng.uniform(18, 32), rng.uniform(-0.4, 0.3)))
+    clumps.sort(key=lambda c: -c[2])
+    for (x, y, R, b) in clumps:
+        leaf_clump(cv, x, y, R, rng, bias=b, pal=NEAR_PAL, leaf=max(4.0, R * 0.2), rim=1.0)
+    # --- top-right: a smaller sprig
+    trunk(cv, [(1960, 30), (1840, 46), (1760, 40)], 18, 5, C("#2a2026"))
+    for (x, y, R, b) in [(1930, 20, 64, -0.5), (1860, 52, 50, -0.3), (1790, 36, 38, -0.1), (1905, 110, 46, -0.5)]:
+        leaf_clump(cv, x, y, R, rng, bias=b, pal=NEAR_PAL, leaf=R * 0.22, rim=0.7)
+    # --- bottom corners: ferns and tall grass
+    def fern(x, y, length, angle, s=1.0):
+        pts = []
+        for i in range(9):
+            t = i / 8
+            a = math.radians(angle) + t * 0.9 * (1 if angle > -90 else -1)
+            pts.append((x + math.cos(math.radians(angle)) * length * t + t * t * length * 0.25 * (1 if angle > -90 else -1),
+                        y + math.sin(math.radians(angle)) * length * t + t * t * length * 0.45))
+        cv.fill(cv.line(pts, 2.5 * s), lit(C("#2a3a22"), 0.3))
+        items = []
+        for i in range(1, len(pts) - 1):
+            t = i / (len(pts) - 1)
+            (xa, ya), (xb, yb) = pts[i - 1], pts[i + 1]
+            ddx, ddy = xb - xa, yb - ya
+            ln = math.hypot(ddx, ddy) or 1
+            nx, ny = -ddy / ln, ddx / ln
+            lw = (1 - t) * 34 * s + 6
+            for sd in (-1, 1):
+                for k in range(3):
+                    u = (k + 0.5) / 3
+                    px = xa + ddx * u * 0.5 + nx * sd * lw * 0.6
+                    py = ya + ddy * u * 0.5 + ny * sd * lw * 0.6 + lw * 0.2
+                    items.append((px, py, lw * 0.55, lw * 0.22))
+        m = cv.dabs(items)
+        lam = m.lambert(10, precise=False)
+        t = np.clip(sstep(-0.3, 0.9, lam) * 0.8 + (m.noise("s") - 0.5) * 0.5, 0, 1)
+        cv.fill(m, np.where((t < 0.5)[..., None], lerp(dark, mid, t * 2), lerp(mid, lt * 0.8, (t - 0.5) * 2)))
+        rim_line(cv, m, C("#e8d080"), 1.6, 0.5, side=(1, 0.3))
+    for (x, y, l, a, s) in [(-20, 1100, 330, -60, 1.1), (40, 1110, 280, -38, 1.0), (120, 1120, 220, -75, 0.9),
+                            (-30, 1000, 260, -20, 1.0)]:
+        fern(x, y, l, a, s)
+    for (x, y, l, a, s) in [(1940, 1100, 320, -120, 1.1), (1880, 1115, 260, -140, 1.0), (1800, 1120, 200, -100, 0.9),
+                            (1950, 1010, 250, -160, 1.0)]:
+        fern(x, y, l, a, s)
+    for (x, y, R, b) in [(-10, 1060, 90, -0.6), (90, 1080, 70, -0.4), (1930, 1060, 90, -0.6), (1830, 1085, 70, -0.5),
+                         (180, 1100, 60, -0.3), (1740, 1100, 60, -0.4)]:
+        leaf_clump(cv, x, y, R, rng, bias=b, pal=NEAR_PAL, leaf=R * 0.2, rim=0.8)
+    for (x0, x1) in ((0, 300), (1640, 1920)):
+        grass_tufts(cv, x0, 1040, x1, 1090, 26, rng, h=70, col=C("#13241a"), lit_col=C("#6f8a3a"))
+    # depth of field: the framing is out of focus
+    px = cv.px
+    for c in range(4):
+        px[..., c] = gblur(px[..., c], 3.0 * cv.ss)
+    # a slight cool-dark grade, they are in shadow against the sunlit village
+    a = px[..., 3:4]
+    px[..., :3] = px[..., :3] * 0.82 + a * C("#0e1420") * 0.06
+    return cv
+
+
+# =================================================================== write the town
+
+def compose(far, town, rays, glow_im, near):
+    def f(im):
+        return np.asarray(im, np.float32) / 255.0
+    base = f(far)[..., :3]
+    a = f(town)
+    base = a[..., :3] * a[..., 3:] + base * (1 - a[..., 3:])
+    for im in (rays, glow_im):
+        a = f(im)
+        base = base + a[..., :3] * a[..., 3:]
+    a = f(near)
+    base = a[..., :3] * a[..., 3:] + base * (1 - a[..., 3:])
+    return Image.fromarray((np.clip(base, 0, 1) * 255 + 0.5).astype(np.uint8), "RGB")
+
+
+def make_town():
+    t0 = time.time()
+    os.makedirs(OUT, exist_ok=True)
+    print("far")
+    cv = far_layer()
+    far = cv.image().convert("RGB")
+    del cv
+    save(far, os.path.join(OUT, "far.png"))
+    print("town (%.0fs)" % (time.time() - t0))
+    HOT.clear()
+    cv, gl, fx = town_layer()
+    town = cv.image()
+    del cv
+    glow_im = gl.image()
+    del gl
+    save(town, os.path.join(OUT, "town.png"))
+    save(glow_im, os.path.join(OUT, "glow.png"))
+    print("rays and near (%.0fs)" % (time.time() - t0))
+    rays = rays_layer()
+    save(rays, os.path.join(OUT, "rays.png"))
+    cv = near_layer()
+    near = cv.image()
+    del cv
+    save(near, os.path.join(OUT, "near.png"))
+    hot = {k: HOT[k] for k in ("gate", "smith", "merchant", "class_master", "inn")}
+    with open(os.path.join(OUT, "hotspots.json"), "w") as f:
+        json.dump(hot, f, indent=1)
+    fx = dict(fx)
+    fx["leaves"] = [[0, 120, 520, 560], [1380, 160, 540, 520], [0, 0, 420, 260]]
+    fx["birds"] = True
+    fx["torches"] = [[834, 380], [1084, 380], [770, 500], [1150, 500]]
+    fx["embers"] = [[814, 300, 40, 70], [1064, 300, 40, 70], [745, 420, 50, 80], [1125, 420, 50, 80]]
+    fx["sun"] = [int(SUN[0]), int(SUN[1])]
+    fx["size"] = [W, H]
+    fx["layers"] = {"far": "far.png", "town": "town.png", "rays": "rays.png (add)",
+                    "glow": "glow.png (add, pulse)", "near": "near.png"}
+    with open(os.path.join(OUT, "fx.json"), "w") as f:
+        json.dump(fx, f, indent=1)
+    print("  wrote hotspots.json, fx.json")
+    flat = compose(far, town, rays, glow_im, near)
+    flat.save(os.path.join(ROOT, "assets", "town", "v2.jpg"), quality=90)
+    print("  wrote assets/town/v2.jpg  (%.0fs)" % (time.time() - t0))
+    return flat
+
+
+# =================================================================== NPC busts
+#
+# The busts reuse the painted-part kit of the hero rigs (tools/art/heroes_v2.py: Part masks at 2x,
+# the skin / cloth / hair / metal materials, anime eyes and hair masses) so the town people match
+# the heroes. One Part covers the whole 768 x 768 canvas. Faces are built in a head frame F(x, y)
+# (the hero head units, scaled by k) turned three quarters to the right.
+
+NPC_IDS = ["nara", "smith", "merchant", "innkeeper", "keeper", "class_master"]
+BUST = 768
+
+
+def _hv():
+    sys.path.insert(0, HERE)
+    import heroes_v2 as hv
+    hv.GRADE = None
+    if not getattr(hv.Part, "_cropped", False):
+        hv.Part.paint = _cropped_paint(hv, hv.Part.paint)
+        hv.Part._cropped = True
+    return hv
+
+
+def _cropped_paint(hv, orig):
+    """Part.paint restricted to the mask's bounding box (plus room for its cast shadow). The
+    result is the same (blurs of a mask that is zero outside the box are exact) but a small
+    part on a full bust canvas paints many times faster."""
+    def paint(self, m, mat_, bump=None, hgt=None, **kw):
+        ys = np.nonzero(m.max(axis=1) > 1e-3)[0]
+        xs = np.nonzero(m.max(axis=0) > 1e-3)[0]
+        if len(xs) == 0:
+            return None
+        md = dict(mat_)
+        md.update(kw)
+        pad = int(hv.SS * (max(abs(md.get("cast_dx", 3)), abs(md.get("cast_dy", 5))) + md.get("cast_soft", 4) * 3.5)) + 8
+        y0, y1 = max(0, ys[0] - pad), min(self.H, ys[-1] + 1 + pad)
+        x0, x1 = max(0, xs[0] - pad), min(self.W, xs[-1] + 1 + pad)
+        q = object.__new__(hv.Part)
+        q.xf, q.seed = self.xf, self.seed
+        q.ox, q.oy = self.ox + x0 / hv.SS, self.oy + y0 / hv.SS
+        q.W, q.H = x1 - x0, y1 - y0
+        q.rgb = self.rgb[y0:y1, x0:x1].copy()
+        q.a = self.a[y0:y1, x0:x1].copy()
+        crop = lambda a: a[y0:y1, x0:x1] if isinstance(a, np.ndarray) and a.ndim >= 2 else a
+        r = orig(q, m[y0:y1, x0:x1], mat_, bump=crop(bump), hgt=crop(hgt), **kw)
+        self.rgb[y0:y1, x0:x1] = q.rgb
+        self.a[y0:y1, x0:x1] = q.a
+        return r
+    return paint
+
+
+def head_frame(hx, hy, k):
+    return lambda x, y: (hx + x * k, hy + y * k)
+
+
+def b_face(hv, p, F, k, skin, female=False, pts=None, age=0.0, blush=None):
+    """Three-quarter face (facing right): soft skull/cheek/brow volume, jaw shade, warm cheeks.
+    age (0..1) adds the sag and lines of an old face."""
+    if pts is None:
+        if female:
+            pts = [(-36, -34), (-44, 4), (-40, 30), (-22, 50), (4, 64), (24, 72), (34, 71), (44, 60), (49, 51),
+                   (51, 46), (54.5, 39), (53, 33), (53, 22), (55, 8), (53, -12), (44, -40), (10, -56), (-22, -52)]
+        else:
+            pts = [(-36, -34), (-44, 4), (-42, 28), (-30, 46), (0, 60), (24, 70), (35, 69), (45, 58), (50, 50),
+                   (52, 46), (56, 38), (54.5, 32), (54, 22), (56, 8), (54, -12), (44, -40), (10, -56), (-22, -52)]
+    m = p.poly([F(x, y) for x, y in pts], smooth=True, n=8)
+    bump = hv.fold(p, [F(50, 24), F(54.5, 35)], 5 * k, 0.9) + hv.fold(p, [F(8, 4), F(50, 3)], 8 * k, 0.4)
+    bump = bump + hv.blur(p.ellipse(F(28, 38), 16 * k, 12 * k), 8 * k * hv.SS) * 0.7
+    bump = bump + hv.blur(p.ellipse(F(33, 66), 9 * k, 6 * k), 4 * k * hv.SS) * 0.5
+    bump = bump - hv.blur(p.ellipse(F(24, 14), 18 * k, 9 * k), 6 * k * hv.SS) * 0.5
+    if age:
+        bump = bump + hv.fold(p, [F(38, 30), F(34, 44), F(30, 52)], 3 * k, 0.5 * age)    # cheek / nasolabial
+        bump = bump - hv.fold(p, [F(40, 31), F(36, 45)], 1.4 * k, 0.7 * age)
+        bump = bump - hv.blur(p.ellipse(F(22, 24), 12 * k, 4 * k), 2.5 * k * hv.SS) * 0.4 * age  # eye bags
+    p.paint(m, hv.mat(skin, "skin", round=30 * k, depth=1.5, line=0.9), bump=bump * k, cast=0.0)
+    jaw = hv.blur(p.poly([F(-44, 20), F(-20, 30), F(10, 50), F(30, 60), F(26, 80), F(-30, 60)]), 7 * k * hv.SS)
+    p.tint(hv.C("#c98a7a"), m * jaw * 0.35)
+    p.tint(hv.C("#f08f84"), m * hv.blur(p.ellipse(F(28, 36), 12 * k, 6 * k), 5 * k * hv.SS) * (blush if blush is not None else (0.35 if female else 0.14)))
+    p.tint(hv.C("#f08f84"), m * hv.blur(p.ellipse(F(51, 34), 4 * k, 4 * k), 3 * k * hv.SS) * 0.22)
+    if age:
+        ln = hv.C("#9a5a4e")
+        for pts_, w in [([F(-2, 16), F(-8, 20)], 1.0), ([F(-2, 21), F(-7, 27)], 0.9), ([F(0, 11), F(-6, 12)], 0.8),
+                        ([F(10, 26), F(26, 29), F(36, 27)], 0.9)]:
+            p.tint(ln, p.tube(pts_, [0.4, w * k, 0.4]) * 0.35 * age)
+        for yy in (-24, -18, -30):
+            p.tint(ln, p.tube([F(16, yy), F(32, yy - 1.5), F(48, yy + 0.5)], [0.4, 0.9 * k, 0.4]) * 0.28 * age)
+    return m
+
+
+def b_nose_mouth(hv, p, F, k, female=False, frown=0.0, smile=0.0, big=0.0, lips="#9a4a48", nose_c="#b9705f"):
+    if big:
+        nm = p.poly([F(48, 12), F(56, 18), F(60 + big * 6, 33), F(58 + big * 4, 39), F(52, 40)], smooth=True)
+        p.paint(nm, hv.mat("#e9b39a", "skin", round=5 * k, depth=1.4, line=0.7), cast=0.25)
+        p.tint(hv.C("#ffe8d8"), hv.blur(p.ellipse(F(56 + big * 3, 31), 2.5 * k, 2 * k), 1.5 * k) * 0.6)
+        p.tint(hv.C(nose_c), p.tube([F(50, 38), F(55, 40.5)], [0.6, 1.6 * k, 0.6]) * 0.6)
+    p.tint(hv.C(nose_c), p.tube([F(51, 31), F(54, 37), F(51, 39.5)], [0.6, 1.9 * k, 0.6]) * 0.75)
+    p.tint(hv.C("#fff1e6"), hv.blur(p.tube([F(54, 18), F(56.5, 32)], [1.0 * k, 2.0 * k]), 1.0 * k * hv.SS) * 0.5)
+    y = 52 - smile * 1.5
+    pts = [F(39, y + frown - smile * 2.5), F(45, y + smile * 1.0), F(50, y - frown * 0.4 - smile * 2.0)]
+    if female:
+        p.over(hv.C(lips), p.tube(pts, [0.6, 1.8 * k, 0.6]) * 0.85)
+        p.tint(hv.C("#f2a39a"), hv.blur(p.ellipse(F(45, 56), 4 * k, 1.6 * k), 1.2 * k * hv.SS) * 0.55)
+    else:
+        p.over(hv.C("#7d3c34"), p.tube(pts, [0.6, 1.6 * k, 0.6]) * 0.8)
+        p.tint(hv.C("#d98d7e"), hv.blur(p.ellipse(F(45, 56.5), 3.5 * k, 1.4 * k), 1.2 * k * hv.SS) * 0.45)
+
+
+def b_ear(hv, p, F, k, skin, big=1.0):
+    pts = [(-36, 8), (-26, 6), (-22, 20), (-26, 36), (-34, 34), (-38, 20)]
+    c = F(-30, 21)
+    m = p.poly([(c[0] + (F(x, y)[0] - c[0]) * big, c[1] + (F(x, y)[1] - c[1]) * big) for x, y in pts], smooth=True)
+    p.paint(m, hv.mat(skin, "skin", round=6 * k), cast=0.3, line=0.9,
+            bump=hv.fold(p, [F(-31, 14), F(-29, 26)], 3 * k, -0.8) * k)
+    return m
+
+
+def b_brow(hv, p, a, b, col, w, arch=-2.0, bushy=0):
+    m = p.tube([a, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + arch), b], [w * 0.6, w, w * 0.35])
+    if bushy:
+        p.paint(m, hv.mat(col, "hair", round=w * 0.5, line=0.6), cast=0.3)
+        p.tint(hv.C("#ffffff"), hv.blur(p.tube([a, b], [w * 0.1, w * 0.3]), 1.5) * 0.25)
+    else:
+        p.over(hv.C(col), m * 0.95)
+
+
+def b_closed_eye(hv, p, c, w, h, col="#3a2318", happy=False, lash=3.0):
+    """A closed eye: a downward arc (sleeping) or an upward one (laughing)."""
+    x, y = c
+    if happy:
+        pts = [(x - w * 0.5, y + h * 0.15), (x, y - h * 0.35), (x + w * 0.45, y + h * 0.1)]
+    else:
+        pts = [(x - w * 0.5, y - h * 0.05), (x, y + h * 0.3), (x + w * 0.45, y)]
+    p.over(hv.C(col), p.tube(pts, [lash * 0.4, lash, lash * 0.3]))
+
+
+def b_skin_tube(hv, p, pts, widths, skin, round_=10, cast=0.35, bump=None):
+    m = p.tube(pts, widths)
+    p.paint(m, hv.mat(skin, "skin", round=round_, depth=1.8), cast=cast, bump=bump)
+    return m
+
+
+def b_hand(hv, p, c, s, skin, ang=0.0, fingers_over=True):
+    """A hand gripping something at c (size s): back of the hand plus four curled fingers stacked
+    across the grip and a thumb; ang turns it (degrees, 0 = fingers pointing right)."""
+    def R(pts):
+        return hv.rot(pts, c, ang)
+    palm = p.poly(R([(c[0] - s * 0.55, c[1] - s * 0.45), (c[0] + s * 0.25, c[1] - s * 0.55), (c[0] + s * 0.4, c[1] + s * 0.45),
+                     (c[0] - s * 0.5, c[1] + s * 0.55)]), smooth=True, n=6)
+    p.paint(palm, hv.mat(skin, "skin", round=s * 0.45, depth=1.6), cast=0.35)
+    for i in range(4):
+        yy = c[1] - s * 0.42 + i * s * 0.29
+        f = R([(c[0] + s * 0.1, yy), (c[0] + s * 0.55, yy + s * 0.02), (c[0] + s * 0.62, yy + s * 0.16)])
+        m = p.tube(f, [s * 0.3, s * 0.3, s * 0.24])
+        p.paint(m, hv.mat(skin, "skin", round=s * 0.14, depth=1.6), cast=0.3, line=0.8)
+    th = R([(c[0] - s * 0.35, c[1] - s * 0.3), (c[0] + s * 0.05, c[1] - s * 0.62), (c[0] + s * 0.32, c[1] - s * 0.66)])
+    m = p.tube(th, [s * 0.36, s * 0.3, s * 0.24])
+    p.paint(m, hv.mat(skin, "skin", round=s * 0.15, depth=1.6), cast=0.3, line=0.8)
+    p.tint(hv.C("#fff4ea"), m * hv.blur(p.ellipse(R([(c[0] + s * 0.28, c[1] - s * 0.68)])[0], s * 0.08, s * 0.05), 2) * 0.6)
+
+
+def b_glow(p, c, r, col, strength=0.6):
+    """Additive light (brightens what is painted, adds a faint halo coverage)."""
+    X, Y = p.grid()
+    d = np.sqrt((X - c[0]) ** 2 + (Y - c[1]) ** 2) / r
+    f = np.exp(-d * d * 2.2) * strength
+    col = np.asarray(col, np.float32)
+    p.rgb = p.rgb + col * f[..., None] * p.a[..., None]
+    halo = f * 0.55
+    p.rgb = (p.rgb * p.a[..., None] + col * halo[..., None] * (1 - p.a[..., None])) / np.maximum(p.a + halo * (1 - p.a), 1e-4)[..., None]
+    p.a = p.a + halo * (1 - p.a)
+
+
+def bust_finish(hv, p):
+    img, _ = p.finish(line=1.5)
+    return img
+
+
+def dragon_scale(hv, p, c, s=1.0):
+    """A big dragon scale, point down: crimson to ember, a raised keel, glowing gold veins and a
+    hot heart, like the scale of the companion's fire dragon."""
+    x, y = c
+    pts = [(x + 4 * s, y - 80 * s), (x + 30 * s, y - 40 * s), (x + 48 * s, y + 6 * s), (x + 40 * s, y + 40 * s),
+           (x, y + 60 * s), (x - 38 * s, y + 42 * s), (x - 48 * s, y + 4 * s), (x - 26 * s, y - 40 * s)]
+    m = p.poly(pts, smooth=True, n=6)
+    keel = hv.fold(p, [(x + 3 * s, y - 72 * s), (x, y + 10 * s), (x - 1 * s, y + 52 * s)], 16 * s, 1.0)
+    ribs = sum(hv.fold(p, [(x, y - 10 * s + i * 18 * s), (x + sd * 40 * s, y - 34 * s + i * 22 * s)], 5 * s, 0.35)
+               for i in range(3) for sd in (-1, 1))
+    p.paint(m, hv.mat("#b8341c", "scale", round=12 * s, spec=0.8, shin=46), cast=0.35, line=0.9, bump=keel + ribs)
+    X, Y = p.grid()
+    d = np.sqrt(((X - x) / (40 * s)) ** 2 + ((Y - y) / (56 * s)) ** 2)
+    p.tint(hv.C("#ff8a2a"), m * np.clip(1 - d, 0, 1) ** 0.7 * 0.7)
+    p.tint(hv.C("#ffd060"), m * np.clip(1 - d * 1.6, 0, 1) * 0.8)
+    p.tint(hv.C("#fff6d8"), m * np.clip(1 - d * 3.2, 0, 1) * 0.9)
+    rng = random.Random(5)
+    for i in range(7):
+        a = -math.pi / 2 + (i - 3) * 0.5
+        pts_ = [(x, y)]
+        px, py = x, y
+        for j in range(4):
+            px += math.cos(a) * 12 * s + rng.uniform(-4, 4) * s
+            py += math.sin(a) * 14 * s + rng.uniform(-4, 4) * s + 6 * s
+            pts_.append((px, py))
+        v = p.tube(pts_, [2.6 * s, 1.8 * s, 0.6]) * m
+        p.over(hv.C("#ffe27a"), v * 0.85)
+    # dark rim and a hot edge light
+    p.tint(hv.C("#4a0e0c"), m * hv.smoothstep(0.75, 0.35, hv.blur(m, 4 * s * hv.SS)) * 0.6)
+    p.tint(hv.C("#ffd9a0"), p.tube([(x - 44 * s, y + 4 * s), (x - 26 * s, y - 38 * s), (x + 2 * s, y - 76 * s)], [0.6, 2.4 * s, 0.6]) * m * 0.8)
+    return m
+
+
+# ------------------------------------------------------------------ Nara, the young scholar
+
+def npc_nara(hv):
+    p = hv.Part((0, 0, BUST, BUST), seed=101)
+    k = 2.15
+    F = head_frame(352, 268, k)
+    SKIN_N = "#f3c8ac"
+    HAIR, HAIR_L = "#a8461f", "#ffb36a"
+    # --- hair behind the head: back mass and the bun
+    back = p.poly([F(-30, -50), F(-62, -20), F(-66, 30), F(-50, 64), F(-26, 56), F(-20, -10)], smooth=True)
+    hv.hair_mass(p, [back], [([F(-40, 0), F(-58, 30), F(-50, 62)], 22 * k), ([F(-30, 10), F(-44, 40), F(-38, 66)], 16 * k)],
+                 HAIR, HAIR_L, round_=14 * k, cast_onto=False)
+    bun = p.ellipse(F(-34, -62), 30 * k, 26 * k)
+    locks = [([F(-60, -60), F(-46, -84), F(-20, -80)], 16 * k), ([F(-58, -48), F(-30, -40), F(-8, -58)], 14 * k),
+             ([F(-50, -82), F(-22, -88), F(-8, -66)], 14 * k)]
+    hv.hair_mass(p, [bun], locks, HAIR, HAIR_L, round_=14 * k, sheen=(F(-34, -62)[0], F(-34, -62)[1], 24 * k, 20 * k), cast_onto=False)
+    # a pencil through the bun
+    pc = p.tube([F(-72, -40), F(-2, -96)], [4.5 * k, 4.5 * k])
+    p.paint(pc, hv.mat("#e3b23c", "matte", round=2 * k), cast=0.4)
+    tip = p.poly([F(-2, -96) , F(5, -104), F(1, -94)], smooth=False)
+    p.paint(p.tube([F(-2, -96), F(6, -104)], [4.5 * k, 0.8]), hv.mat("#e8c9a0", "matte", round=2), cast=0)
+    # --- body: green scholar's coat, white blouse and collar
+    def B(pts, dy=-56):
+        return [(x, y + dy) for x, y in pts]
+    coat = p.poly(B([(30, 826), (60, 680), (130, 590), (250, 532), (330, 520), (420, 528), (520, 562), (610, 630), (680, 740), (700, 826)]),
+                  smooth=True, n=6)
+    hv.cloth(p, coat, "#2f6b52", folds=[(B([(170, 640), (210, 740), (220, 826)]), 12, -0.8), (B([(510, 640), (530, 760)]), 10, -0.7),
+                                         (B([(110, 680), (90, 826)]), 8, -0.6)], round_=30)
+    neck = b_skin_tube(hv, p, [F(12, 48), (362, 490)], [62 * k * 0.55, 80], SKIN_N, round_=22, cast=0.0)
+    blouse = p.poly(B([(285, 522), (432, 522), (402, 640), (362, 690), (322, 640)]), smooth=True, n=4)
+    hv.cloth(p, blouse, "#f3eee4", round_=12)
+    for pts in (B([(282, 514), (340, 562), (300, 602), (240, 550)]), B([(438, 514), (382, 562), (430, 598), (478, 550)])):
+        hv.cloth(p, p.poly(pts, smooth=True, n=4), "#fbf8f0", round_=8)
+    for pts in (B([(250, 532), (320, 640), (330, 826), (220, 826), (200, 600)]), B([(470, 532), (400, 640), (395, 826), (520, 826), (540, 610)])):
+        hv.cloth(p, p.poly(pts, smooth=True, n=4), "#2a5d47", round_=16)
+    hv.trim(p, B([(250, 534), (318, 640), (328, 826)]), 4.0)
+    hv.trim(p, B([(470, 534), (402, 640), (396, 826)]), 4.0)
+    hv.gem(p, (362, 506), 9, "#3fb88a")
+    strap = p.tube(B([(150, 600), (330, 730), (470, 830)]), [26, 26])
+    p.paint(strap, hv.mat("#7a4a2a", "leather", round=6), cast=0.5)
+    hv.trim(p, B([(158, 592), (340, 722), (480, 822)]), 1.6, c="#d9a743")
+    p.paint(p.poly(B([(246, 654), (282, 682), (262, 708), (226, 680)])), hv.mat("#d4a64a", "gold", round=3), cast=0.3)
+    # the chin's shadow on the neck
+    p.tint(hv.C("#9a5a5a"), neck * hv.blur(p.poly([F(-30, 40), F(10, 62), F(40, 74), F(44, 86), F(-10, 92)], smooth=True), 8 * hv.SS) * 0.6)
+    # --- head
+    b_ear(hv, p, F, k, SKIN_N)
+    b_face(hv, p, F, k, SKIN_N, female=True)
+    # freckles
+    rng = random.Random(7)
+    fr = np.zeros((p.H, p.W), np.float32)
+    for _ in range(26):
+        x, y = rng.uniform(14, 50), rng.uniform(26, 38)
+        if 46 < x and y > 34:
+            continue
+        fr = np.maximum(fr, p.ellipse(F(x, y), rng.uniform(0.5, 0.9) * k, rng.uniform(0.45, 0.8) * k) * rng.uniform(0.5, 1))
+    p.tint(hv.C("#b8603e"), fr * 0.45)
+    hv.anime_eye(p, F(20, 15), 27 * k, 15.5 * k, ("#1d4a2a", "#6cc46a"), look=0.22, lash=1.8, female=True)
+    hv.anime_eye(p, F(48.5, 13.5), 11.5 * k, 14.5 * k, ("#1d4a2a", "#6cc46a"), look=0.2, far=True, lash=1.6, female=True)
+    b_brow(hv, p, F(34, -5), F(4, -5), "#8a3a1c", 2.4 * k, arch=-2.6 * k)
+    b_brow(hv, p, F(42, -5), F(55, -7), "#8a3a1c", 1.9 * k, arch=-0.8 * k)
+    b_nose_mouth(hv, p, F, k, female=True, smile=0.6, lips="#a8504a")
+    # --- round glasses
+    for (cx, cy, rx, ry, w) in [(20, 16, 19, 15, 2.2), (49, 15, 8.5, 14, 1.8)]:
+        X, Y = p.grid()
+        c = F(cx, cy)
+        d = np.sqrt(((X - c[0]) / (rx * k)) ** 2 + ((Y - c[1]) / (ry * k)) ** 2)
+        lens = np.clip((1 - d) * 40, 0, 1)
+        p.tint(hv.C("#dff3ff"), lens * 0.08)
+        g = lens * np.exp(-(((X - c[0] + rx * k * 0.3) * 0.8 + (Y - c[1] + ry * k * 0.3)) / (rx * k * 0.25)) ** 2)
+        p.tint(hv.C("#ffffff"), g * 0.35)
+        ring = np.clip(1 - np.abs(d - 1) * (rx * k) / (w * k * 0.5), 0, 1)
+        p.paint(ring, hv.mat("#b8862e", "gold", round=1.5 * k), cast=0.35, line=0.4)
+    hv.trim(p, [F(37, 14), F(42, 11.5), F(41, 14)], 1.8 * k, c="#b8862e")
+    hv.trim(p, [F(1, 13), F(-18, 12), F(-28, 14)], 1.8 * k, c="#b8862e")
+    # --- front hair: bangs and the locks framing the face
+    cap = p.poly([F(58, -20), F(50, -50), F(20, -64), F(-20, -62), F(-50, -40), F(-56, -4), F(-46, 30), F(-36, 34),
+                  F(-30, 10), F(-22, -6), F(-12, -16), F(16, -26), F(40, -28)], smooth=True)
+    fr_locks = [([F(40, -50), F(52, -26), F(56, -8)], 18 * k), ([F(20, -58), F(32, -30), F(36, -6)], 20 * k),
+                ([F(4, -58), F(12, -32), F(8, -12)], 18 * k), ([F(-14, -58), F(-14, -30), F(-20, -4)], 18 * k),
+                ([F(-36, -46), F(-44, -10), F(-40, 30)], 16 * k), ([F(-6, -64), F(26, -66), F(52, -46)], 18 * k),
+                ([F(52, -36), F(62, -6), F(58, 30), F(54, 54)], 9 * k), ([F(-26, -10), F(-32, 30), F(-24, 66)], 12 * k)]
+    hv.hair_mass(p, [cap], fr_locks, HAIR, HAIR_L, sheen=(F(0, -20)[0], F(0, -20)[1], 54 * k, 44 * k), round_=12 * k)
+    # --- the raised hand with the glowing dragon scale
+    sleeve = p.poly([(468, 770), (492, 690), (548, 628), (622, 640), (652, 770)], smooth=True, n=5)
+    hv.cloth(p, sleeve, "#2f6b52", folds=[([(540, 690), (560, 770)], 8, -0.6)], round_=20)
+    cuff = p.poly([(536, 640), (594, 600), (634, 640), (574, 676)], smooth=True, n=4)
+    hv.cloth(p, cuff, "#f3eee4", round_=8)
+    b_skin_tube(hv, p, [(588, 630), (590, 590), (588, 560)], [48, 44, 42], SKIN_N, round_=12)
+    hv.cloth(p, cuff, "#f3eee4", round_=8)
+    dragon_scale(hv, p, (596, 470), 1.0)
+    b_hand(hv, p, (590, 548), 54, SKIN_N, ang=-78)
+    b_glow(p, (596, 456), 130, hv.C("#ff9a30"), 0.45)
+    b_glow(p, (596, 456), 40, hv.C("#fff0c0"), 0.35)
+    for (x, y, r) in [(660, 380, 10), (532, 404, 6), (676, 500, 6), (560, 340, 5)]:
+        st = np.maximum(p.tube([(x - r, y), (x + r, y)], [0.5, 2.4, 0.5]), p.tube([(x, y - r), (x, y + r)], [0.5, 2.4, 0.5]))
+        p.over(hv.C("#fff2c0"), st)
+    return bust_finish(hv, p)
+
+
+# ------------------------------------------------------------------ shared pieces for the old men
+
+BALD = [(-36, 40), (-50, 20), (-60, -6), (-56, -40), (-30, -64), (8, -69), (40, -55), (54, -24), (56, 8), (54, 22),
+        (54.5, 32), (56, 38), (52, 46), (50, 50), (45, 58), (35, 69), (24, 70), (0, 60), (-30, 46)]
+ROUND = [(-36, 40), (-50, 20), (-60, -6), (-56, -40), (-30, -64), (8, -69), (40, -55), (54, -24), (57, 8), (57, 22),
+         (58, 34), (60, 40), (58, 50), (56, 58), (48, 68), (34, 77), (16, 78), (-10, 70), (-30, 54)]
+
+
+def b_torso(hv, p, pts, col, folds=(), round_=30, dy=0):
+    m = p.poly([(x, y + dy) for x, y in pts], smooth=True, n=6)
+    hv.cloth(p, m, col, folds=[([(x, y + dy) for x, y in f[0]], f[1], f[2]) for f in folds], round_=round_)
+    return m
+
+
+def b_beard(hv, p, F, k, outline, locks, col, light, sheen=None, line_a=0.6):
+    """A beard as a hair mass: outline polygon (head units) and its locks [(pts, width)]."""
+    base = p.poly([F(x, y) for x, y in outline], smooth=True, n=8)
+    lk = [([F(x, y) for x, y in pts], w * k) for pts, w in locks]
+    sh = None
+    if sheen:
+        c = F(sheen[0], sheen[1])
+        sh = (c[0], c[1], sheen[2] * k, sheen[3] * k)
+    return hv.hair_mass(p, [base], lk, col, light, sheen=sh, round_=10 * k, streaks=3, line_a=line_a, cast=0.55)
+
+
+def beard_locks(x0, x1, y0, y1, n, sway=0.0, w=14, rng=None, curl=6.0):
+    """n downward locks spread from x0..x1 starting near y0 and ending near y1 (head units)."""
+    rng = rng or random.Random(3)
+    out = []
+    for i in range(n):
+        t = (i + 0.5) / n
+        x = x0 + (x1 - x0) * t
+        ya = y0 + rng.uniform(-4, 4) + abs(t - 0.5) * 10
+        yb = y1 - abs(t - 0.5) ** 1.6 * (y1 - y0) * 0.9 + rng.uniform(-6, 6)
+        xm = x + sway * 0.5 + rng.uniform(-curl, curl)
+        xb = x + sway + (t - 0.5) * 10 + rng.uniform(-curl, curl)
+        out.append(([(x, ya), (xm, (ya + yb) / 2), (xb, yb)], w * rng.uniform(0.8, 1.15)))
+    return out
+
+
+def b_moustache(hv, p, F, k, col, light, curl=0.0, size=1.0):
+    near = [(46, 43), (36, 46), (24, 50 + 2 * size), (12, 50 + 2 * size)]
+    far = [(49, 43), (55, 46), (60, 50)]
+    if curl:
+        near += [(4 - 4 * curl, 46), (2 - 2 * curl, 38 - 4 * curl), (8, 36 - 2 * curl)]
+        far += [(63, 46 - 2 * curl), (62, 42 - 3 * curl)]
+    m1 = p.tube([F(x, y) for x, y in near], [6 * k * size, 9 * k * size, 7 * k * size, 4 * k, 2.5 * k, 1.5 * k])
+    m2 = p.tube([F(x, y) for x, y in far], [6 * k * size, 5 * k * size, 2.5 * k, 1.5 * k])
+    hv.hair_mass(p, [m1, m2], [([F(x, y) for x, y in near], 7 * k * size)], col, light, round_=4 * k, streaks=3, cast=0.5)
+
+
+def b_old_eye(hv, p, F, k, iris, near=(20, 16), far=(48.5, 14), h=10.5, lid_skin="#d9a586", lash=1.3, look=0.22):
+    """Smaller, deeper-set old eyes with a heavy upper lid."""
+    hv.anime_eye(p, F(*near), 24 * k, h * k, iris, look=look, lash=lash)
+    hv.anime_eye(p, F(*far), 10 * k, h * 0.95 * k, iris, look=look, far=True, lash=lash * 0.9)
+    for (cx, cy, w) in ((near[0], near[1], 24), (far[0], far[1], 10)):
+        lid = p.poly([F(cx - w * 0.6, cy - h * 0.55), F(cx + w * 0.55, cy - h * 0.6), F(cx + w * 0.5, cy - h * 0.9),
+                      F(cx - w * 0.55, cy - h * 1.1)], smooth=True)
+        p.paint(lid, hv.mat(lid_skin, "skin", round=3 * k), cast=0.35, line=0.5)
+
+
+def b_open_mouth(hv, p, F, k, w=1.0, h=1.0):
+    """A laughing open mouth with teeth and tongue."""
+    pts = [F(36, 52), F(44, 50 - 1 * h), F(52, 51), F(50, 56 + 4 * h), F(43, 60 + 5 * h), F(37, 57 + 3 * h)]
+    m = p.poly(pts, smooth=True, n=6)
+    p.over(hv.C("#5a1a1e"), m)
+    p.over(hv.C("#d8606a"), p.ellipse(F(44, 58 + 3 * h), 6 * k * w, 3 * k * h) * m)
+    p.over(hv.C("#fbf4ec"), p.poly([F(37, 52), F(44, 50.5 - h), F(51, 51.5), F(49, 54), F(38, 54.5)], smooth=True) * m * 0.95)
+    return m
+
+
+def b_lantern(hv, p, c, s, gl=True):
+    x, y = c
+    iron = "#2d2830"
+    p.paint(p.tube([(x - 14 * s, y - 52 * s), (x, y - 72 * s), (x + 14 * s, y - 52 * s)], [3 * s, 3 * s, 3 * s]),
+            hv.mat(iron, "metal", round=2), cast=0.3, line=0.5)
+    p.paint(p.poly([(x - 26 * s, y - 34 * s), (x + 26 * s, y - 34 * s), (x + 14 * s, y - 52 * s), (x - 14 * s, y - 52 * s)]),
+            hv.mat(iron, "metal", round=6 * s), cast=0.3)
+    pane = p.poly([(x - 20 * s, y - 34 * s), (x + 20 * s, y - 34 * s), (x + 18 * s, y + 30 * s), (x - 18 * s, y + 30 * s)])
+    X, Y = p.grid()
+    d = np.sqrt(((X - x) / (20 * s)) ** 2 + ((Y - y) / (34 * s)) ** 2)
+    p.over(hv.mixc(hv.C("#fff6d0"), hv.C("#e07a20"), np.clip(d, 0, 1)[..., None]), pane)
+    fl = p.poly(flame_pts(x, y + 14 * s, 14 * s, 34 * s, 0.05, 0.5))
+    p.over(hv.C("#fffbe8"), hv.blur(fl, 2 * s) * 0.9)
+    for xx in (x - 20 * s, x, x + 20 * s):
+        p.paint(p.tube([(xx, y - 34 * s), (xx * 0.98 + x * 0.02, y + 30 * s)], [4 * s, 4 * s]), hv.mat(iron, "metal", round=2), cast=0.2, line=0.4)
+    p.paint(p.poly([(x - 26 * s, y + 30 * s), (x + 26 * s, y + 30 * s), (x + 22 * s, y + 42 * s), (x - 22 * s, y + 42 * s)]),
+            hv.mat(iron, "metal", round=5 * s), cast=0.3)
+    if gl:
+        b_glow(p, (x, y), 170 * s, hv.C("#ffa040"), 0.5)
+        b_glow(p, (x, y), 50 * s, hv.C("#fff2c8"), 0.45)
+
+
+# ------------------------------------------------------------------ Usta Örs, the smith
+
+def npc_smith(hv):
+    p = hv.Part((0, 0, BUST, BUST), seed=202)
+    k = 2.2
+    F = head_frame(360, 250, k)
+    SK = "#d99a76"
+    GREY, GREY_L = "#8d8a8c", "#f4f0ea"
+    # body: broad shoulders, a dark red work shirt, leather apron with straps
+    b_torso(hv, p, [(0, 770), (10, 600), (90, 500), (230, 450), (360, 438), (480, 450), (600, 500), (690, 600), (730, 770)],
+            "#7a2a22", folds=[([(140, 520), (170, 640), (160, 770)], 14, -0.8), ([(560, 540), (590, 680)], 12, -0.7)])
+    apron = p.poly([(170, 770), (190, 560), (260, 520), (480, 520), (560, 560), (580, 770)], smooth=True, n=5)
+    hv.cloth(p, apron, "#6a4126", folds=[([(300, 600), (290, 770)], 10, -0.6), ([(450, 600), (470, 770)], 10, -0.6)], round_=26)
+    p.paint(p.tube([(130, 470), (220, 600)], [30, 30]), hv.mat("#4e2e1a", "leather", round=6), cast=0.4)
+    p.paint(p.tube([(560, 470), (510, 600)], [26, 26]), hv.mat("#4e2e1a", "leather", round=6), cast=0.4)
+    for c in ((214, 590), (514, 590)):
+        p.paint(p.ellipse(c, 12, 12), hv.mat("#b8862e", "gold", round=4), cast=0.3)
+    # soot smudges on the apron
+    p.tint(hv.C("#2a1a14"), apron * hv.blur(p.ellipse((380, 700), 60, 30), 20) * 0.35)
+    # neck
+    b_skin_tube(hv, p, [F(10, 50), (360, 470)], [70 * k * 0.6, 120], SK, round_=26, cast=0.0)
+    # head: bald dome
+    b_face(hv, p, F, k, SK, pts=BALD, age=1.0, blush=0.25)
+    p.tint(hv.C("#fff3e0"), p.poly([F(x, y) for x, y in BALD], smooth=True) * hv.blur(p.ellipse(F(4, -46), 20 * k, 12 * k), 10 * hv.SS) * 0.55)
+    # grey fringe around the back of the head
+    fringe = p.poly([F(-28, -10), F(-50, -24), F(-62, -2), F(-56, 30), F(-38, 44), F(-30, 26)], smooth=True)
+    hv.hair_mass(p, [fringe], [([F(-46, -20), F(-60, 4), F(-50, 36)], 14 * k), ([F(-34, -12), F(-46, 14), F(-40, 40)], 12 * k)],
+                 GREY, GREY_L, round_=8 * k, cast=0.4)
+    b_ear(hv, p, F, k, SK, big=1.2)
+    b_old_eye(hv, p, F, k, ("#26384a", "#7aa6c8"), lid_skin=SK, look=0.18)
+    b_brow(hv, p, F(36, -2), F(0, -6), "#cfcac4", 5.4 * k, arch=-3 * k, bushy=1)
+    b_brow(hv, p, F(42, -2), F(57, -6), "#cfcac4", 3.8 * k, arch=-1 * k, bushy=1)
+    b_nose_mouth(hv, p, F, k, big=1.0, frown=0.5)
+    # the huge beard, over the chest
+    outline = [(-34, 10), (-38, 40), (-30, 76), (-14, 116), (8, 150), (36, 166), (66, 150), (84, 112), (82, 74), (70, 52),
+               (58, 44), (50, 50), (40, 54), (24, 56), (6, 48), (-10, 34), (-20, 14), (-26, 6)]
+    lk = beard_locks(-30, 78, 40, 160, 12, sway=4, w=20, rng=random.Random(11), curl=8)
+    lk += [([(-30, 12), (-34, 40), (-24, 70)], 14), ([(70, 50), (80, 80), (74, 112)], 14), ([(-20, 30), (-20, 70), (-6, 110)], 16)]
+    b_beard(hv, p, F, k, outline, lk, GREY, GREY_L, sheen=(24, 70, 40, 46))
+    b_moustache(hv, p, F, k, GREY, GREY_L, size=1.25)
+    # the forge hammer, held up beside him
+    hw = (616, 600)
+    b_skin_tube(hv, p, [(680, 790), (650, 700), (620, 620)], [120, 104, 80], SK, round_=30)
+    hd = (650, 268)
+    p.paint(p.tube([(hw[0] - 4, hw[1] + 60), hd], [26, 24]), hv.mat("#6a4428", "leather", round=6, spec=0.1), cast=0.45)
+    hh = hv.rot([(hd[0] - 92, hd[1] - 44), (hd[0] + 80, hd[1] - 44), (hd[0] + 92, hd[1] - 32), (hd[0] + 92, hd[1] + 32),
+                 (hd[0] + 80, hd[1] + 44), (hd[0] - 92, hd[1] + 44)], hd, 8)
+    p.paint(p.poly(hh), hv.mat("#8a8e98", "metal", round=14), cast=0.5)
+    hv.trim(p, hv.rot([(hd[0] - 40, hd[1] - 44), (hd[0] - 40, hd[1] + 44)], hd, 8), 8, c="#5a5e68")
+    hv.trim(p, hv.rot([(hd[0] + 40, hd[1] - 44), (hd[0] + 40, hd[1] + 44)], hd, 8), 8, c="#5a5e68")
+    p.tint(hv.C("#ff9a50"), p.poly(hh) * hv.blur(p.ellipse((hd[0] - 70, hd[1] + 40), 40, 20), 14) * 0.5)
+    b_hand(hv, p, hw, 78, SK, ang=-8)
+    # forge glow from below right
+    b_glow(p, (700, 760), 360, hv.C("#ff7a2a"), 0.22)
+    return bust_finish(hv, p)
+
+
+# ------------------------------------------------------------------ Madam Pırıl, the merchant
+
+def potion(hv, p, c, s, liquid="#3fcf5a", glow_c="#7dff7a"):
+    """A round-bellied flask with a cork and a glowing liquid."""
+    x, y = c
+    body = p.ellipse((x, y + 10 * s), 42 * s, 44 * s)
+    neck = p.poly([(x - 13 * s, y - 30 * s), (x + 13 * s, y - 30 * s), (x + 13 * s, y - 68 * s), (x - 13 * s, y - 68 * s)])
+    glass = np.maximum(body, neck)
+    p.cast(glass, strength=0.35)
+    p.over(hv.C("#2a5a40"), glass * 0.35)
+    liq = body * (p.grid()[1] > y - 8 * s)
+    X, Y = p.grid()
+    d = np.sqrt(((X - x) / (42 * s)) ** 2 + ((Y - y - 20 * s) / (36 * s)) ** 2)
+    p.over(hv.mixc(hv.C(glow_c) * 1.0 + 0.15, hv.C(liquid) * 0.55, np.clip(d, 0, 1)[..., None]), liq)
+    p.tint(hv.C("#eaffd8"), liq * np.exp(-(((Y - (y - 8 * s)) / (3 * s)) ** 2)) * 0.8)
+    for (bx, by, r) in [(x - 10 * s, y + 20 * s, 4), (x + 14 * s, y + 2 * s, 3), (x + 2 * s, y + 34 * s, 2.5)]:
+        p.over(hv.C("#eaffe0"), p.ellipse((bx, by), r * s, r * s) * 0.7)
+    p.tint(hv.C("#ffffff"), glass * hv.blur(p.tube([(x - 30 * s, y - 4 * s), (x - 24 * s, y - 22 * s), (x - 10 * s, y - 32 * s)], [2, 6 * s, 2]), 2) * 0.8)
+    p.tint(hv.C("#ffffff"), p.ellipse((x + 24 * s, y + 30 * s), 4 * s, 7 * s) * 0.5)
+    p.edge_line(glass, {"c": hv.C("#2a6a48")}, 1.0)
+    rim = p.tube([(x - 16 * s, y - 66 * s), (x + 16 * s, y - 66 * s)], [6 * s, 6 * s])
+    p.paint(rim, hv.mat("#c8e0d0", "metal", round=2), cast=0.2, line=0.4)
+    cork = p.poly([(x - 11 * s, y - 68 * s), (x + 11 * s, y - 68 * s), (x + 13 * s, y - 88 * s), (x - 13 * s, y - 88 * s)])
+    p.paint(cork, hv.mat("#b07a48", "matte", round=5 * s), cast=0.3)
+    b_glow(p, (x, y + 16 * s), 150 * s, hv.C(glow_c), 0.45)
+    b_glow(p, (x, y + 16 * s), 40 * s, hv.C("#eaffd0"), 0.3)
+
+
+def npc_merchant(hv):
+    p = hv.Part((0, 0, BUST, BUST), seed=303)
+    k = 2.1
+    F = head_frame(356, 300, k)
+    SK = "#f2c4a6"
+    HAIR, HAIR_L = "#7a2a1c", "#e2804e"
+    # long auburn waves behind
+    back = p.poly([F(-30, -44), F(-70, -10), F(-80, 60), F(-70, 120), F(-30, 130), F(-10, 60), F(-16, -10)], smooth=True)
+    lk = [([F(-50, -10), F(-74, 40), F(-62, 90), F(-74, 128)], 22), ([F(-36, 0), F(-52, 50), F(-38, 96), F(-46, 132)], 20),
+          ([F(-60, -20), F(-82, 20), F(-80, 70), F(-90, 110)], 16)]
+    hv.hair_mass(p, [back], [(l, w * k) for l, w in lk], HAIR, HAIR_L, round_=14 * k, cast_onto=False,
+                 sheen=(F(-50, 40)[0], F(-50, 40)[1], 30 * k, 60 * k))
+    # body: purple gown with a gold-trimmed bodice and a lace collar
+    b_torso(hv, p, [(20, 770), (50, 640), (130, 560), (250, 520), (340, 512), (440, 520), (560, 560), (660, 650), (700, 770)],
+            "#5a2a7a", folds=[([(150, 600), (190, 700), (180, 770)], 12, -0.8), ([(540, 600), (560, 720)], 10, -0.6)])
+    b_skin_tube(hv, p, [F(10, 50), (350, 520)], [60 * k * 0.5, 74], SK, round_=20, cast=0.0)
+    dec = p.poly([(270, 520), (430, 520), (400, 600), (350, 630), (300, 600)], smooth=True, n=4)
+    p.paint(dec, hv.mat(SK, "skin", round=22), cast=0.0)
+    lace = p.poly([(250, 512), (300, 600), (350, 636), (400, 600), (450, 512), (470, 530), (410, 640), (350, 670), (290, 640), (230, 530)], smooth=True, n=4)
+    hv.cloth(p, lace, "#efe6f2", round_=6)
+    hv.trim(p, [(240, 530), (296, 640), (350, 668), (408, 640), (466, 530)], 4.5)
+    # necklace with an emerald
+    hv.trim(p, [(296, 540), (350, 590), (404, 540)], 2.6)
+    hv.gem(p, (350, 596), 10, "#2fbf7a")
+    bod = p.poly([(280, 680), (350, 690), (420, 680), (430, 770), (270, 770)], smooth=True, n=4)
+    hv.cloth(p, bod, "#4a1e66", round_=12)
+    for yy in (700, 730, 760):
+        hv.trim(p, [(322, yy - 8), (378, yy + 8)], 2.4)
+        hv.trim(p, [(322, yy + 8), (378, yy - 8)], 2.4)
+    p.tint(hv.C("#c8862e"), p.tube([(150, 560), (110, 770)], [6, 6]) * 0.0)
+    # head
+    b_face(hv, p, F, k, SK, female=True, blush=0.3)
+    hv.anime_eye(p, F(20, 16), 26 * k, 12 * k, ("#2a1438", "#a070d8"), look=0.3, lash=2.0, female=True)
+    hv.anime_eye(p, F(48.5, 14.5), 11 * k, 11.5 * k, ("#2a1438", "#a070d8"), look=0.3, far=True, lash=1.7, female=True)
+    # half-lowered lids: the sly look
+    for (cx, cy, w, h) in ((20, 16, 26, 12), (48.5, 14.5, 11, 11.5)):
+        lid = p.poly([F(cx - w * 0.62, cy - h * 0.1), F(cx + w * 0.58, cy - h * 0.25), F(cx + w * 0.5, cy - h * 0.9),
+                      F(cx - w * 0.6, cy - h * 0.9)], smooth=True)
+        p.paint(lid, hv.mat("#c88aa8", "skin", round=3 * k), cast=0.4, line=0.4)
+        p.over(hv.C("#2a1020"), p.tube([F(cx - w * 0.66, cy - h * 0.02), F(cx, cy - h * 0.22), F(cx + w * 0.56, cy - h * 0.2)],
+                                       [3.0 * k, 2.4 * k, 1.0 * k]))
+    b_brow(hv, p, F(34, -6), F(4, -11), "#5a1a14", 2.2 * k, arch=-3.4 * k)
+    b_brow(hv, p, F(42, -6), F(56, -12), "#5a1a14", 1.8 * k, arch=-1.2 * k)
+    b_nose_mouth(hv, p, F, k, female=True, smile=0.0, lips="#a83048")
+    # a sly smirk: the far corner lifted
+    p.over(hv.C("#8a2038"), p.tube([F(39, 52.5), F(45, 52), F(51, 49)], [0.6, 2.2 * k, 0.8]) * 0.9)
+    p.over(hv.C("#c84a60"), hv.blur(p.ellipse(F(45, 55.5), 4 * k, 1.8 * k), 2) * 0.6)
+    # beauty mark
+    p.over(hv.C("#4a1a1a"), p.ellipse(F(52, 44), 1.1 * k, 1.1 * k))
+    # front hair: side-parted waves
+    cap = p.poly([F(58, -22), F(48, -50), F(18, -62), F(-22, -60), F(-50, -38), F(-56, 0), F(-44, 40), F(-30, 30),
+                  F(-26, 4), F(-10, -16), F(20, -28), F(44, -30)], smooth=True)
+    fr = [([F(-10, -58), F(26, -50), F(54, -24), F(60, 0)], 18), ([F(-20, -50), F(10, -36), F(30, -20)], 16),
+          ([F(-36, -40), F(-40, -6), F(-30, 30), F(-38, 60)], 16), ([F(56, -20), F(66, 20), F(60, 60), F(68, 96)], 12),
+          ([F(-50, -30), F(-56, 10), F(-50, 50), F(-56, 90)], 14)]
+    hv.hair_mass(p, [cap], [(l, w * k) for l, w in fr], HAIR, HAIR_L, sheen=(F(4, -24)[0], F(4, -24)[1], 50 * k, 40 * k), round_=12 * k)
+    # gold hoop earring (near ear sits under the hair; the hoop hangs below it)
+    X, Y = p.grid()
+    hc = F(-28, 50)
+    d = np.sqrt(((X - hc[0]) / (11 * k)) ** 2 + ((Y - hc[1]) / (13 * k)) ** 2)
+    hoop = np.clip(1 - np.abs(d - 1) * 11 * k / (1.6 * k), 0, 1)
+    p.paint(hoop, hv.mat("#e0b050", "gold", round=1.5 * k), cast=0.4, line=0.4)
+    # the big purple hat with feathers
+    brim_c = F(2, -50)
+    for (pts, col, w) in [([F(-40, -64), F(-90, -96), F(-150, -110), F(-180, -100)], "#2fa8a0", 30),
+                          ([F(-30, -70), F(-70, -116), F(-120, -150), F(-150, -150)], "#e070a8", 26),
+                          ([F(-20, -74), F(-50, -126), F(-80, -168), F(-104, -176)], "#f2d36a", 20)]:
+        fm = p.tube(pts, [w * k * 0.6, w * k, w * k * 0.7, 2])
+        p.paint(fm, hv.mat(col, "cloth", round=6 * k, rim=0.8), cast=0.4, line=0.6)
+        for j in range(14):
+            t = j / 13
+            a = pts[0]
+            b = pts[-1]
+            px, py = a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t
+            p.tint(hv.C("#ffffff") if j % 2 else hv.C(col) * 0.6, p.tube([(px, py), (px + 8 * k, py + 10 * k)], [0.6, 1.2 * k, 0.4]) * fm * 0.4)
+    brim = p.poly(hv.rot(hv.ell_pts(brim_c, 120 * k * 0.95, 26 * k), brim_c, -8), smooth=False)
+    p.paint(brim, hv.mat("#5c2a86", "cloth", round=10 * k), cast=0.55, line=1.0)
+    crown = p.poly([F(-46, -60), F(-40, -104), F(-6, -124), F(36, -114), F(52, -76), F(48, -58)], smooth=True)
+    p.paint(crown, hv.mat("#6a3296", "cloth", round=14 * k), cast=0.4)
+    band = p.tube([F(-46, -66), F(0, -62), F(50, -68)], [10 * k, 11 * k, 10 * k], caps=False) * crown
+    p.paint(band, hv.mat("#d9a743", "gold", round=3 * k), cast=0.3)
+    hv.gem(p, F(14, -64), 6 * k, "#2fbf7a")
+    # the potion, raised
+    b_torso(hv, p, [(480, 770), (500, 690), (560, 640), (626, 650), (660, 770)], "#5a2a7a", round_=20)
+    cuff = p.poly([(540, 652), (600, 612), (640, 652), (580, 688)], smooth=True, n=4)
+    b_skin_tube(hv, p, [(592, 640), (596, 580)], [44, 40], SK, round_=12)
+    hv.cloth(p, cuff, "#efe6f2", round_=6)
+    potion(hv, p, (604, 470), 1.05)
+    b_hand(hv, p, (598, 560), 50, SK, ang=-80)
+    for (x, y, r) in [(680, 400, 8), (530, 420, 5), (690, 520, 5)]:
+        st = np.maximum(p.tube([(x - r, y), (x + r, y)], [0.5, 2.2, 0.5]), p.tube([(x, y - r), (x, y + r)], [0.5, 2.2, 0.5]))
+        p.over(hv.C("#e8ffd8"), st)
+    return bust_finish(hv, p)
+
+
+# ------------------------------------------------------------------ Hancı Bulut, the innkeeper
+
+def tankard(hv, p, c, s):
+    x, y = c
+    body = p.poly([(x - 46 * s, y - 50 * s), (x + 46 * s, y - 50 * s), (x + 42 * s, y + 60 * s), (x - 42 * s, y + 60 * s)])
+    staves = sum(hv.fold(p, [(x + d * s, y - 48 * s), (x + d * 0.92 * s, y + 58 * s)], 3 * s, -0.5) for d in (-30, -12, 6, 24))
+    p.paint(body, hv.mat("#8a5a30", "matte", round=16 * s), bump=staves, cast=0.45)
+    handle = p.tube([(x + 44 * s, y - 30 * s), (x + 80 * s, y - 20 * s), (x + 82 * s, y + 24 * s), (x + 42 * s, y + 36 * s)], [16 * s, 16 * s, 16 * s, 16 * s])
+    p.paint(handle * (1 - body), hv.mat("#7a4e2a", "matte", round=6 * s), cast=0.3)
+    for yy in (-36, 44):
+        band = p.poly([(x - 47 * s, y + (yy - 7) * s), (x + 47 * s, y + (yy - 7) * s), (x + 46 * s, y + (yy + 7) * s), (x - 46 * s, y + (yy + 7) * s)])
+        p.paint(band, hv.mat("#9aa0a8", "metal", round=4 * s), cast=0.3)
+    foam = p.dabs if False else None
+    items = [(x - 40 * s, y - 56 * s, 20 * s), (x - 14 * s, y - 64 * s, 24 * s), (x + 16 * s, y - 62 * s, 22 * s), (x + 40 * s, y - 54 * s, 18 * s),
+             (x + 2 * s, y - 78 * s, 20 * s), (x - 26 * s, y - 74 * s, 14 * s), (x + 50 * s, y - 40 * s, 10 * s)]
+    fm = np.zeros((p.H, p.W), np.float32)
+    for (fx_, fy, r) in items:
+        fm = np.maximum(fm, p.ellipse((fx_, fy), r, r * 0.85))
+    drip = p.tube([(x + 30 * s, y - 50 * s), (x + 34 * s, y - 20 * s)], [14 * s, 9 * s])
+    fm = np.maximum(fm, drip)
+    p.paint(fm, hv.mat("#fbf5e6", "cloth", round=8 * s, rim=0.8), cast=0.4, line=0.5)
+
+
+def npc_innkeeper(hv):
+    p = hv.Part((0, 0, BUST, BUST), seed=404)
+    k = 2.2
+    F = head_frame(352, 268, k)
+    SK = "#f0b894"
+    HAIR, HAIR_L = "#5a3420", "#c88a5a"
+    # round body: white shirt, green vest, a striped apron bib
+    b_torso(hv, p, [(0, 770), (10, 620), (80, 520), (220, 470), (350, 460), (480, 470), (610, 520), (690, 620), (720, 770)],
+            "#f1ebe0", folds=[([(120, 560), (140, 680)], 12, -0.7), ([(590, 560), (600, 700)], 12, -0.7)], round_=40)
+    for pts in ([(100, 770), (110, 560), (220, 490), (300, 500), (290, 770)], [(410, 770), (400, 500), (480, 490), (600, 560), (630, 770)]):
+        b_torso(hv, p, pts, "#2f6a3a", round_=26)
+    for yy in (580, 640, 700):
+        hv.gem(p, (420, yy), 8, "#d9a743")
+    b_skin_tube(hv, p, [F(10, 56), (350, 480)], [64 * k * 0.6, 110], SK, round_=26, cast=0.0)
+    collar = p.poly([(250, 470), (350, 540), (450, 470), (470, 500), (350, 570), (230, 500)], smooth=True, n=3)
+    hv.cloth(p, collar, "#fbf8f2", round_=8)
+    # head: round, bald on top with brown sides
+    b_face(hv, p, F, k, SK, pts=ROUND, age=0.4, blush=0.55)
+    p.tint(hv.C("#fff2e6"), p.poly([F(x, y) for x, y in ROUND], smooth=True) * hv.blur(p.ellipse(F(4, -48), 20 * k, 10 * k), 10 * hv.SS) * 0.55)
+    sides = p.poly([F(-24, -20), F(-52, -34), F(-64, -2), F(-58, 36), F(-40, 52), F(-30, 30)], smooth=True)
+    hv.hair_mass(p, [sides], [([F(-44, -28), F(-62, 6), F(-50, 44)], 14 * k), ([F(-30, -20), F(-44, 10), F(-38, 46)], 12 * k)],
+                 HAIR, HAIR_L, round_=8 * k, cast=0.4)
+    b_ear(hv, p, F, k, SK, big=1.1)
+    b_closed_eye(hv, p, F(21, 17), 22 * k, 10 * k, "#3a1e14", happy=True, lash=3.6 * k)
+    b_closed_eye(hv, p, F(49, 15.5), 9 * k, 9 * k, "#3a1e14", happy=True, lash=3.0 * k)
+    b_brow(hv, p, F(34, 0), F(4, -6), HAIR, 3.6 * k, arch=-3.2 * k, bushy=1)
+    b_brow(hv, p, F(42, 0), F(57, -5), HAIR, 2.8 * k, arch=-1.2 * k, bushy=1)
+    b_nose_mouth(hv, p, F, k, big=1.4, nose_c="#c0605a")
+    p.tint(hv.C("#ff7a6a"), p.poly([F(x, y) for x, y in ROUND], smooth=True) * hv.blur(p.ellipse(F(58, 30), 5 * k, 5 * k), 6) * 0.35)
+    b_open_mouth(hv, p, F, k, w=1.1, h=1.3)
+    b_moustache(hv, p, F, k, HAIR, HAIR_L, curl=1.0, size=1.15)
+    # the foaming tankard
+    b_torso(hv, p, [(470, 770), (500, 680), (560, 630), (630, 640), (670, 770)], "#f1ebe0", round_=24)
+    b_skin_tube(hv, p, [(590, 650), (590, 590)], [62, 56], SK, round_=14)
+    tankard(hv, p, (580, 470), 1.15)
+    b_hand(hv, p, (548, 540), 62, SK, ang=-4)
+    return bust_finish(hv, p)
+
+
+# ------------------------------------------------------------------ Bekçi Tozlu, the gate keeper
+
+def npc_keeper(hv):
+    p = hv.Part((0, 0, BUST, BUST), seed=505)
+    k = 2.15
+    F = head_frame(350, 300, k)
+    SK = "#e8b294"
+    GREY, GREY_L = "#8f8c8a", "#efeae2"
+    # body: patched brown coat, a thick mustard scarf
+    b_torso(hv, p, [(10, 770), (30, 640), (110, 550), (240, 510), (350, 500), (460, 510), (590, 550), (680, 640), (710, 770)],
+            "#6a5440", folds=[([(140, 580), (170, 700)], 12, -0.8), ([(560, 580), (580, 720)], 12, -0.7), ([(330, 640), (340, 770)], 10, -0.5)])
+    for (x, y, c) in [(170, 680, "#5a3a6a"), (520, 700, "#a07a3a")]:
+        pm = p.poly([(x - 30, y - 26), (x + 30, y - 28), (x + 32, y + 26), (x - 28, y + 28)], smooth=True, n=2)
+        hv.cloth(p, pm, c, round_=8)
+        for t in range(10):
+            a = t / 10 * 2 * math.pi
+            p.over(hv.C("#e8d8b0"), p.ellipse((x + math.cos(a) * 30, y + math.sin(a) * 27), 1.6, 3.4) * 0.8)
+    b_skin_tube(hv, p, [F(10, 50), (350, 500)], [60 * k * 0.6, 90], SK, round_=22, cast=0.0)
+    scarf = p.poly([(220, 500), (300, 470), (420, 476), (490, 510), (470, 560), (350, 580), (240, 556)], smooth=True, n=5)
+    hv.cloth(p, scarf, "#c89a2a", folds=[([(260, 520), (460, 530)], 10, -0.7), ([(250, 540), (450, 554)], 8, -0.5)], round_=14)
+    tail = p.poly([(420, 540), (470, 540), (480, 700), (430, 706)], smooth=True, n=3)
+    hv.cloth(p, tail, "#c89a2a", round_=10)
+    for yy in (640, 670):
+        p.tint(hv.C("#a8401c"), p.tube([(424, yy), (478, yy - 2)], [6, 6]) * tail * 0.8)
+    # the key ring on a cord
+    hv.trim(p, [(300, 570), (290, 640), (300, 690)], 2.5, c="#6a5a3a")
+    X, Y = p.grid()
+    rc = (300, 708)
+    d = np.sqrt(((X - rc[0]) / 20) ** 2 + ((Y - rc[1]) / 20) ** 2)
+    p.paint(np.clip(1 - np.abs(d - 1) * 20 / 3.0, 0, 1), hv.mat("#9a8a6a", "metal", round=2), cast=0.4, line=0.4)
+    for (ang, ln) in ((-20, 70), (10, 60), (40, 52)):
+        a = math.radians(90 + ang)
+        b0 = (rc[0] + math.cos(a) * 20, rc[1] + math.sin(a) * 20)
+        b1 = (b0[0] + math.cos(a) * ln, b0[1] + math.sin(a) * ln)
+        key = np.maximum(p.ellipse(b0, 9, 9), p.tube([b0, b1], [5, 5]))
+        key = np.maximum(key, p.tube([b1, (b1[0] + math.cos(a + 1.57) * 12, b1[1] + math.sin(a + 1.57) * 12)], [5, 5]))
+        p.paint(key, hv.mat("#c9a24a", "gold", round=2), cast=0.4, line=0.5)
+    # head
+    b_face(hv, p, F, k, SK, age=1.0, blush=0.3)
+    side = p.poly([F(-26, -6), F(-48, -14), F(-56, 14), F(-46, 46), F(-30, 40)], smooth=True)
+    hv.hair_mass(p, [side], [([F(-40, -10), F(-54, 20), F(-44, 46)], 12 * k)], GREY, GREY_L, round_=8 * k, cast=0.4)
+    b_ear(hv, p, F, k, SK, big=1.15)
+    b_closed_eye(hv, p, F(21, 18), 22 * k, 10 * k, "#4a2a20", lash=3.2 * k)
+    b_closed_eye(hv, p, F(49, 16.5), 9 * k, 9 * k, "#4a2a20", lash=2.6 * k)
+    for (cx, cy, w) in ((21, 18, 22), (49, 16.5, 9)):
+        p.tint(hv.C("#b07a6a"), p.tube([F(cx - w * 0.45, cy + 4), F(cx, cy + 6.5), F(cx + w * 0.4, cy + 4)], [0.5, 1.6 * k, 0.5]) * 0.5)
+    b_brow(hv, p, F(34, 2), F(4, 4), "#d8d2ca", 4.4 * k, arch=-2.2 * k, bushy=1)
+    b_brow(hv, p, F(42, 2), F(56, 4), "#d8d2ca", 3.2 * k, arch=-1.0 * k, bushy=1)
+    b_nose_mouth(hv, p, F, k, big=1.2, nose_c="#c0505a")
+    p.tint(hv.C("#ff6a5a"), hv.blur(p.ellipse(F(57, 32), 6 * k, 5 * k), 6) * 0.55)
+    b_moustache(hv, p, F, k, GREY, GREY_L, size=1.05)
+    # a soft open mouth (snoring) under the moustache
+    p.over(hv.C("#5a2028"), p.ellipse(F(44, 58), 3.2 * k, 2.6 * k) * 0.9)
+    # stubble
+    rng = random.Random(9)
+    st = np.zeros((p.H, p.W), np.float32)
+    for _ in range(160):
+        x, y = rng.uniform(-10, 52), rng.uniform(44, 70)
+        st = np.maximum(st, p.ellipse(F(x, y), 0.5 * k, 0.5 * k))
+    face_m = p.poly([F(x, y) for x, y in [(-36, -34), (-44, 4), (-42, 28), (-30, 46), (0, 60), (24, 70), (35, 69), (45, 58),
+                                           (50, 50), (52, 46), (56, 38), (54.5, 32), (54, 22), (56, 8), (54, -12)]], smooth=True)
+    p.tint(hv.C("#8a7a74"), st * face_m * 0.5)
+    # the long green nightcap, flopping over to the back with a pompom
+    cap = p.poly([F(56, -20), F(52, -52), F(24, -70), F(-20, -70), F(-50, -50), F(-58, -14), F(-40, -6), F(-10, -26), F(30, -30)], smooth=True)
+    hv.cloth(p, cap, "#3a7a3a", folds=[([F(-30, -50), F(20, -40)], 6 * k, -0.5)], round_=14 * k)
+    tip = p.tube([F(-20, -66), F(-60, -80), F(-96, -60), F(-112, -20), F(-108, 14)], [60 * k * 0.9, 40 * k, 28 * k, 18 * k, 10 * k])
+    hv.cloth(p, tip, "#3a7a3a", folds=[([F(-50, -70), F(-96, -40)], 4 * k, -0.6)], round_=10 * k)
+    cuffm = p.tube([F(-56, -12), F(-30, -20), F(10, -30), F(58, -22)], [12 * k, 14 * k, 14 * k, 12 * k])
+    hv.cloth(p, cuffm, "#f2ece0", round_=5 * k)
+    pom = p.ellipse(F(-108, 22), 14 * k, 14 * k)
+    p.paint(pom, hv.mat("#f6f2ea", "cloth", round=7 * k), cast=0.4)
+    # the lantern, held up
+    b_torso(hv, p, [(470, 770), (500, 690), (556, 640), (620, 650), (650, 770)], "#6a5440", round_=20)
+    b_skin_tube(hv, p, [(586, 650), (588, 590)], [54, 48], SK, round_=14)
+    b_lantern(hv, p, (596, 430), 1.25)
+    b_hand(hv, p, (586, 538), 52, SK, ang=-86)
+    # snore bubble
+    bub = p.ellipse(F(70, 46), 9 * k, 8 * k)
+    p.over(hv.C("#d8f0ff"), bub * 0.35)
+    p.tint(hv.C("#ffffff"), p.ellipse(F(67, 43), 2.5 * k, 2 * k) * 0.8)
+    p.edge_line(bub, {"c": hv.C("#7ab0d0")}, 0.8)
+    return bust_finish(hv, p)
+
+
+# ------------------------------------------------------------------ Yaşlı Kaan, the class master
+
+def npc_class_master(hv):
+    p = hv.Part((0, 0, BUST, BUST), seed=606)
+    k = 2.15
+    F = head_frame(352, 262, k)
+    SK = "#d8a080"
+    GREY, GREY_L = "#8c8a8e", "#f2eee8"
+    # crimson tunic, a leather baldric, and plate pauldrons
+    b_torso(hv, p, [(0, 770), (10, 610), (90, 510), (230, 466), (352, 456), (470, 466), (600, 510), (690, 610), (720, 770)],
+            "#7e1f22", folds=[([(330, 560), (340, 770)], 12, -0.7), ([(240, 560), (230, 770)], 10, -0.6)])
+    b_skin_tube(hv, p, [F(10, 50), (352, 470)], [66 * k * 0.6, 100], SK, round_=24, cast=0.0)
+    # breastplate
+    bp = p.poly([(200, 560), (352, 520), (500, 560), (520, 770), (190, 770)], smooth=True, n=4)
+    hv.plate(p, [(200, 560), (352, 520), (500, 560), (520, 770), (190, 770)], c="#b8bec8", round_=40,
+             bump=hv.fold(p, [(352, 530), (352, 770)], 26, 0.8))
+    hv.trim(p, [(200, 562), (352, 522), (500, 562)], 6)
+    hv.gem(p, (352, 600), 12, "#c03030")
+    # pauldrons
+    for (c, sx, sy, deg) in [((150, 540), 130, 90, -18), ((560, 545), 100, 76, 16)]:
+        for j, (dy, sc) in enumerate(((44, 0.86), (22, 0.93), (0, 1.0))):
+            pts = hv.ell_pts((c[0], c[1] + dy), sx * sc, sy * sc, deg, n=40, a0=180, a1=360)
+            pts += [(c[0] + sx * sc * 0.9, c[1] + dy + 26), (c[0] - sx * sc * 0.9, c[1] + dy + 26)]
+            hv.plate(p, pts, c="#aeb5c0", round_=22)
+            hv.trim(p, hv.ell_pts((c[0], c[1] + dy + 6), sx * sc * 0.97, sy * sc * 0.97, deg, n=30, a0=196, a1=344), 4)
+    strap = p.tube([(120, 470), (360, 640), (560, 770)], [34, 34])
+    p.paint(strap * (1 - 0), hv.mat("#4e2e1a", "leather", round=8), cast=0.5)
+    hv.trim(p, [(126, 462), (366, 630), (568, 760)], 1.8, c="#d9a743")
+    p.paint(p.ellipse((330, 618), 18, 18), hv.mat("#d9a743", "gold", round=5), cast=0.4)
+    # sword hilt over the shoulder
+    hv.plate(p, [(600, 330), (620, 316), (700, 430), (684, 444)], c="#b8bec8", round_=4)
+    p.paint(p.tube([(614, 300), (575, 240)], [16, 16]), hv.mat("#3b2517", "leather", round=4), cast=0.4)
+    p.paint(p.tube([(560, 350), (680, 290)], [12, 12]), hv.mat("#d6a84c", "gold", round=4), cast=0.4)
+    p.paint(p.ellipse((570, 232), 13, 13), hv.mat("#d6a84c", "gold", round=6), cast=0.4)
+    # head
+    b_face(hv, p, F, k, SK, age=1.0, blush=0.15)
+    b_ear(hv, p, F, k, SK, big=1.1)
+    # grey hair pulled back into the topknot
+    hair = p.poly([F(58, -24), F(52, -50), F(22, -66), F(-22, -64), F(-54, -40), F(-60, 0), F(-48, 30), F(-36, 26),
+                   F(-30, 4), F(-24, -14), F(10, -30), F(44, -32)], smooth=True)
+    hv.hair_mass(p, [hair], [([F(50, -30), F(20, -56), F(-20, -62)], 14 * k), ([F(40, -24), F(0, -46), F(-40, -50)], 14 * k),
+                             ([F(-10, -24), F(-40, -30), F(-56, -4)], 12 * k), ([F(54, -18), F(10, -34), F(-30, -10)], 10 * k)],
+                 GREY, GREY_L, sheen=(F(0, -30)[0], F(0, -30)[1], 50 * k, 30 * k), round_=12 * k)
+    knot = p.ellipse(F(-16, -82), 18 * k, 16 * k)
+    hv.hair_mass(p, [knot], [([F(-30, -80), F(-16, -98), F(2, -84)], 12 * k)], GREY, GREY_L, round_=8 * k)
+    p.paint(p.tube([F(-26, -66), F(-6, -68)], [7 * k, 7 * k]), hv.mat("#7e1f22", "cloth", round=3 * k), cast=0.3)
+    # the good (far) eye, stern
+    hv.anime_eye(p, F(48.5, 14.5), 10 * k, 10 * k, ("#3a2a18", "#a08050"), look=0.2, far=True, lash=1.3)
+    lid = p.poly([F(43, 7), F(54, 5), F(54, 9), F(43, 10)], smooth=True)
+    p.paint(lid, hv.mat(SK, "skin", round=3 * k), cast=0.3, line=0.4)
+    # eyepatch over the near eye and its strap
+    hv.trim(p, [F(56, -8), F(30, 2), F(-10, 4), F(-36, 14)], 3 * k, c="#2a2224")
+    patch = p.poly([F(6, 4), F(34, 2), F(36, 18), F(22, 30), F(8, 24)], smooth=True)
+    p.paint(patch, hv.mat("#2a2224", "leather", round=6 * k, spec=0.35), cast=0.5, line=0.8)
+    # scar across the brow and cheek
+    p.tint(hv.C("#a85a50"), p.tube([F(26, -16), F(20, -4)], [0.6, 2.2 * k, 0.6]) * 0.7)
+    p.tint(hv.C("#a85a50"), p.tube([F(18, 32), F(12, 42)], [0.6, 2.0 * k, 0.6]) * 0.7)
+    b_brow(hv, p, F(34, -4), F(4, -6), "#d0cac2", 4.6 * k, arch=-1.0 * k, bushy=1)
+    b_brow(hv, p, F(42, -2), F(57, -10), "#d0cac2", 3.6 * k, arch=-0.2 * k, bushy=1)
+    b_nose_mouth(hv, p, F, k, big=0.6, frown=1.2)
+    # braided beard
+    outline = [(-30, 26), (-22, 54), (0, 72), (26, 86), (52, 80), (62, 60), (58, 46), (48, 52), (30, 58), (6, 50), (-14, 30)]
+    lk = beard_locks(-20, 60, 44, 84, 8, sway=2, w=12, rng=random.Random(4), curl=4)
+    b_beard(hv, p, F, k, outline, lk, GREY, GREY_L)
+    b_moustache(hv, p, F, k, GREY, GREY_L, size=1.0)
+    for i in range(6):
+        y = 84 + i * 15
+        x = 30 + (i % 2) * 2 - i * 1.2
+        seg = p.ellipse(F(x, y), 9 * k * (1 - i * 0.07), 9 * k * 0.95)
+        p.paint(seg, hv.mat(GREY, "hair", round=4 * k), cast=0.4, line=0.8)
+        p.tint(hv.C(GREY_L), p.tube([F(x - 6, y - 4), F(x + 4, y + 3)], [0.5, 1.6 * k, 0.5]) * seg * 0.6)
+    p.paint(p.tube([F(22, 168), F(36, 168)], [6 * k, 6 * k]), hv.mat("#d6a84c", "gold", round=2 * k), cast=0.4)
+    p.paint(p.tube([F(24, 106), F(36, 106)], [5 * k, 5 * k]), hv.mat("#d6a84c", "gold", round=2 * k), cast=0.4)
+    return bust_finish(hv, p)
+
+
+NPCS = {"nara": npc_nara, "smith": npc_smith, "merchant": npc_merchant, "innkeeper": npc_innkeeper,
+        "keeper": npc_keeper, "class_master": npc_class_master}
+
+
+def make_npcs(ids=None):
+    hv = _hv()
+    for nid in ids or NPC_IDS:
+        t = time.time()
+        img = NPCS[nid](hv)
+        save(img, os.path.join(ROOT, "assets", "town", "npc_%s.png" % nid))
+        print("  %s %.1fs" % (nid, time.time() - t))
+
+
+if __name__ == "__main__":
+    # python3 tools/art/town_v2.py   -> the painted town layers in assets/town/v2/
+    # (make_npcs() holds unfinished bust drafts; the game keeps the npcs.py portraits)
+    make_town()

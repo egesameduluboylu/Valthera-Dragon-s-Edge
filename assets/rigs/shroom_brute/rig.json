@@ -1,0 +1,357 @@
+{
+ "id": "shroom_brute",
+ "canvas": [
+  1024,
+  1024
+ ],
+ "feet": [
+  512,
+  972
+ ],
+ "facing": "left",
+ "kind": "humanoid",
+ "parts": [
+  {
+   "name": "hips",
+   "png": "hips.png",
+   "parent": "",
+   "role": "root",
+   "pivot": [
+    520,
+    855
+   ],
+   "rect": [
+    337,
+    792,
+    369,
+    127
+   ],
+   "z": 8,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back_upper",
+   "png": "leg_back_upper.png",
+   "parent": "hips",
+   "role": "leg_back_upper",
+   "pivot": [
+    600,
+    855
+   ],
+   "rect": [
+    547,
+    801,
+    116,
+    152
+   ],
+   "z": 5,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back_lower",
+   "png": "leg_back_lower.png",
+   "parent": "leg_back_upper",
+   "role": "leg_back_lower",
+   "pivot": [
+    617,
+    907
+   ],
+   "rect": [
+    551,
+    863,
+    125,
+    125
+   ],
+   "z": 6,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_front_upper",
+   "png": "leg_front_upper.png",
+   "parent": "hips",
+   "role": "leg_front_upper",
+   "pivot": [
+    451,
+    855
+   ],
+   "rect": [
+    385,
+    801,
+    120,
+    152
+   ],
+   "z": 9,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_front_lower",
+   "png": "leg_front_lower.png",
+   "parent": "leg_front_upper",
+   "role": "leg_front_lower",
+   "pivot": [
+    431,
+    907
+   ],
+   "rect": [
+    344,
+    863,
+    131,
+    125
+   ],
+   "z": 10,
+   "blend": "normal"
+  },
+  {
+   "name": "torso",
+   "png": "torso.png",
+   "parent": "hips",
+   "role": "torso",
+   "pivot": [
+    520,
+    831
+   ],
+   "rect": [
+    344,
+    492,
+    415,
+    375
+   ],
+   "z": 12,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_back_upper",
+   "png": "arm_back_upper.png",
+   "parent": "torso",
+   "role": "arm_back_upper",
+   "pivot": [
+    632,
+    589
+   ],
+   "rect": [
+    565,
+    522,
+    202,
+    223
+   ],
+   "z": 3,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_back_lower",
+   "png": "arm_back_lower.png",
+   "parent": "arm_back_upper",
+   "role": "arm_back_lower",
+   "pivot": [
+    713,
+    691
+   ],
+   "rect": [
+    659,
+    638,
+    121,
+    294
+   ],
+   "z": 4,
+   "blend": "normal"
+  },
+  {
+   "name": "head",
+   "png": "head.png",
+   "parent": "torso",
+   "role": "head",
+   "pivot": [
+    520,
+    570
+   ],
+   "rect": [
+    216,
+    163,
+    594,
+    516
+   ],
+   "z": 16,
+   "blend": "normal"
+  },
+  {
+   "name": "cap_sprouts",
+   "png": "cap_sprouts.png",
+   "parent": "head",
+   "role": "hair",
+   "pivot": [
+    520,
+    217
+   ],
+   "rect": [
+    387,
+    122,
+    399,
+    183
+   ],
+   "z": 17,
+   "blend": "normal"
+  },
+  {
+   "name": "ring",
+   "png": "ring.png",
+   "parent": "torso",
+   "role": "extra",
+   "pivot": [
+    520,
+    589
+   ],
+   "rect": [
+    362,
+    570,
+    325,
+    100
+   ],
+   "z": 18,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_front_upper",
+   "png": "arm_front_upper.png",
+   "parent": "torso",
+   "role": "arm_front_upper",
+   "pivot": [
+    433,
+    630
+   ],
+   "rect": [
+    299,
+    567,
+    196,
+    205
+   ],
+   "z": 20,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_front_lower",
+   "png": "arm_front_lower.png",
+   "parent": "arm_front_upper",
+   "role": "arm_front_lower",
+   "pivot": [
+    354,
+    717
+   ],
+   "rect": [
+    231,
+    662,
+    179,
+    195
+   ],
+   "z": 22,
+   "blend": "normal"
+  },
+  {
+   "name": "club",
+   "png": "club.png",
+   "parent": "arm_front_lower",
+   "role": "weapon",
+   "pivot": [
+    280,
+    803
+   ],
+   "rect": [
+    80,
+    329,
+    259,
+    592
+   ],
+   "z": 21,
+   "blend": "normal"
+  },
+  {
+   "name": "glow",
+   "png": "glow.png",
+   "parent": "head",
+   "role": "fx",
+   "pivot": [
+    520,
+    459
+   ],
+   "rect": [
+    266,
+    174,
+    504,
+    537
+   ],
+   "z": 26,
+   "blend": "add"
+  },
+  {
+   "name": "lichen_glow",
+   "png": "lichen_glow.png",
+   "parent": "torso",
+   "role": "fx",
+   "pivot": [
+    501,
+    589
+   ],
+   "rect": [
+    315,
+    440,
+    327,
+    271
+   ],
+   "z": 25,
+   "blend": "add"
+  },
+  {
+   "name": "spore_1",
+   "png": "spore_1.png",
+   "parent": "head",
+   "role": "float",
+   "pivot": [
+    269,
+    198
+   ],
+   "rect": [
+    216,
+    145,
+    116,
+    122
+   ],
+   "z": 28,
+   "blend": "normal"
+  },
+  {
+   "name": "spore_2",
+   "png": "spore_2.png",
+   "parent": "head",
+   "role": "float",
+   "pivot": [
+    819,
+    263
+   ],
+   "rect": [
+    782,
+    190,
+    93,
+    158
+   ],
+   "z": 29,
+   "blend": "normal"
+  },
+  {
+   "name": "spore_3",
+   "png": "spore_3.png",
+   "parent": "head",
+   "role": "float",
+   "pivot": [
+    139,
+    310
+   ],
+   "rect": [
+    86,
+    288,
+    75,
+    103
+   ],
+   "z": 30,
+   "blend": "normal"
+  }
+ ]
+}

@@ -40,7 +40,7 @@ def radial(size, inner, outer, center=(0.5, 0.45)):
 def dragon(px):
     """Ashwing's head and wings, cropped from the boss sprite."""
     sp = Image.open(A("sprites", "enemies", "ashwing.png")).convert("RGBA")
-    crop = sp.crop((40, 40, 560, 560)).resize((px, px), Image.LANCZOS)
+    crop = sp.crop((80, 40, 480, 440)).resize((px, px), Image.LANCZOS)
     # the body runs on past the right and bottom edges of the crop: fade it out there
     fade = Image.new("L", (px, px), 255)
     band = px // 6

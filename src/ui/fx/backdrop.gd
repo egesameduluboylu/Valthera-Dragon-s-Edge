@@ -47,6 +47,8 @@ func setup(dir: String, fallback: String, p_view: Vector2, p_ground_line: float)
 	if has_layers:
 		for name in LAYERS:
 			var path := dir.path_join(name + ".png")
+			if name == "mid" and not ResourceLoader.exists(path):
+				path = dir.path_join("town.png")  # the town's main layer
 			if not ResourceLoader.exists(path):
 				continue
 			var s := Sprite2D.new()

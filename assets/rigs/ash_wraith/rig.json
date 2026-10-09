@@ -1,0 +1,267 @@
+{
+ "id": "ash_wraith",
+ "canvas": [
+  1024,
+  1024
+ ],
+ "feet": [
+  512,
+  968
+ ],
+ "facing": "left",
+ "kind": "floater",
+ "parts": [
+  {
+   "name": "robe",
+   "png": "robe.png",
+   "parent": "",
+   "role": "root",
+   "pivot": [
+    530,
+    620
+   ],
+   "rect": [
+    374,
+    555,
+    535,
+    416
+   ],
+   "z": 10,
+   "blend": "normal"
+  },
+  {
+   "name": "torso",
+   "png": "torso.png",
+   "parent": "robe",
+   "role": "torso",
+   "pivot": [
+    530,
+    600
+   ],
+   "rect": [
+    417,
+    361,
+    216,
+    275
+   ],
+   "z": 14,
+   "blend": "normal"
+  },
+  {
+   "name": "wisp_1",
+   "png": "wisp_1.png",
+   "parent": "robe",
+   "role": "float",
+   "pivot": [
+    250,
+    690
+   ],
+   "rect": [
+    172,
+    627,
+    147,
+    107
+   ],
+   "z": 60,
+   "blend": "normal"
+  },
+  {
+   "name": "wisp_2",
+   "png": "wisp_2.png",
+   "parent": "robe",
+   "role": "float",
+   "pivot": [
+    800,
+    330
+   ],
+   "rect": [
+    741,
+    275,
+    114,
+    98
+   ],
+   "z": 61,
+   "blend": "normal"
+  },
+  {
+   "name": "wisp_3",
+   "png": "wisp_3.png",
+   "parent": "robe",
+   "role": "float",
+   "pivot": [
+    820,
+    600
+   ],
+   "rect": [
+    759,
+    555,
+    126,
+    85
+   ],
+   "z": 62,
+   "blend": "normal"
+  },
+  {
+   "name": "cape",
+   "png": "cape.png",
+   "parent": "torso",
+   "role": "cape",
+   "pivot": [
+    600,
+    420
+   ],
+   "rect": [
+    566,
+    396,
+    343,
+    426
+   ],
+   "z": 2,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_back_upper",
+   "png": "arm_back_upper.png",
+   "parent": "torso",
+   "role": "arm_back_upper",
+   "pivot": [
+    594,
+    424
+   ],
+   "rect": [
+    554,
+    384,
+    170,
+    136
+   ],
+   "z": 4,
+   "blend": "normal"
+  },
+  {
+   "name": "head",
+   "png": "head.png",
+   "parent": "torso",
+   "role": "head",
+   "pivot": [
+    520,
+    380
+   ],
+   "rect": [
+    388,
+    153,
+    216,
+    250
+   ],
+   "z": 20,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_front_upper",
+   "png": "arm_front_upper.png",
+   "parent": "torso",
+   "role": "arm_front_upper",
+   "pivot": [
+    452,
+    420
+   ],
+   "rect": [
+    336,
+    377,
+    159,
+    159
+   ],
+   "z": 28,
+   "blend": "normal"
+  },
+  {
+   "name": "rib_glow",
+   "png": "rib_glow.png",
+   "parent": "torso",
+   "role": "fx",
+   "pivot": [
+    508,
+    490
+   ],
+   "rect": [
+    407,
+    385,
+    204,
+    210
+   ],
+   "z": 41,
+   "blend": "add"
+  },
+  {
+   "name": "arm_back_lower",
+   "png": "arm_back_lower.png",
+   "parent": "arm_back_upper",
+   "role": "arm_back_lower",
+   "pivot": [
+    690,
+    486
+   ],
+   "rect": [
+    657,
+    336,
+    268,
+    183
+   ],
+   "z": 3,
+   "blend": "normal"
+  },
+  {
+   "name": "hood_tip",
+   "png": "hood_tip.png",
+   "parent": "head",
+   "role": "hair",
+   "pivot": [
+    575,
+    220
+   ],
+   "rect": [
+    536,
+    154,
+    221,
+    121
+   ],
+   "z": 18,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_front_lower",
+   "png": "arm_front_lower.png",
+   "parent": "arm_front_upper",
+   "role": "arm_front_lower",
+   "pivot": [
+    372,
+    500
+   ],
+   "rect": [
+    88,
+    379,
+    329,
+    187
+   ],
+   "z": 30,
+   "blend": "normal"
+  },
+  {
+   "name": "eye_glow",
+   "png": "eye_glow.png",
+   "parent": "head",
+   "role": "fx",
+   "pivot": [
+    455,
+    282
+   ],
+   "rect": [
+    377,
+    207,
+    156,
+    153
+   ],
+   "z": 40,
+   "blend": "add"
+  }
+ ]
+}

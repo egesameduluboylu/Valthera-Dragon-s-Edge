@@ -1,0 +1,303 @@
+{
+ "id": "dragon_guard",
+ "canvas": [
+  1024,
+  1024
+ ],
+ "feet": [
+  530,
+  968
+ ],
+ "facing": "left",
+ "kind": "humanoid",
+ "parts": [
+  {
+   "name": "hips",
+   "png": "hips.png",
+   "parent": "",
+   "role": "root",
+   "pivot": [
+    535,
+    554
+   ],
+   "rect": [
+    433,
+    492,
+    212,
+    276
+   ],
+   "z": 10,
+   "blend": "normal"
+  },
+  {
+   "name": "torso",
+   "png": "torso.png",
+   "parent": "hips",
+   "role": "torso",
+   "pivot": [
+    535,
+    527
+   ],
+   "rect": [
+    440,
+    284,
+    201,
+    290
+   ],
+   "z": 14,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back_upper",
+   "png": "leg_back_upper.png",
+   "parent": "hips",
+   "role": "leg_back_upper",
+   "pivot": [
+    579,
+    554
+   ],
+   "rect": [
+    517,
+    493,
+    165,
+    300
+   ],
+   "z": 6,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_front_upper",
+   "png": "leg_front_upper.png",
+   "parent": "hips",
+   "role": "leg_front_upper",
+   "pivot": [
+    498,
+    554
+   ],
+   "rect": [
+    358,
+    493,
+    201,
+    289
+   ],
+   "z": 9,
+   "blend": "normal"
+  },
+  {
+   "name": "cape",
+   "png": "cape.png",
+   "parent": "torso",
+   "role": "cape",
+   "pivot": [
+    595,
+    333
+   ],
+   "rect": [
+    557,
+    309,
+    283,
+    558
+   ],
+   "z": 1,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_back_upper",
+   "png": "arm_back_upper.png",
+   "parent": "torso",
+   "role": "arm_back_upper",
+   "pivot": [
+    589,
+    355
+   ],
+   "rect": [
+    470,
+    305,
+    183,
+    185
+   ],
+   "z": 4,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back_lower",
+   "png": "leg_back_lower.png",
+   "parent": "leg_back_upper",
+   "role": "leg_back_lower",
+   "pivot": [
+    638,
+    749
+   ],
+   "rect": [
+    592,
+    706,
+    152,
+    274
+   ],
+   "z": 5,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_front_lower",
+   "png": "leg_front_lower.png",
+   "parent": "leg_front_upper",
+   "role": "leg_front_lower",
+   "pivot": [
+    426,
+    738
+   ],
+   "rect": [
+    296,
+    695,
+    174,
+    285
+   ],
+   "z": 8,
+   "blend": "normal"
+  },
+  {
+   "name": "head",
+   "png": "head.png",
+   "parent": "torso",
+   "role": "head",
+   "pivot": [
+    528,
+    295
+   ],
+   "rect": [
+    385,
+    116,
+    325,
+    235
+   ],
+   "z": 20,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_front_upper",
+   "png": "arm_front_upper.png",
+   "parent": "torso",
+   "role": "arm_front_upper",
+   "pivot": [
+    485,
+    352
+   ],
+   "rect": [
+    407,
+    261,
+    160,
+    252
+   ],
+   "z": 28,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_back_lower",
+   "png": "arm_back_lower.png",
+   "parent": "arm_back_upper",
+   "role": "arm_back_lower",
+   "pivot": [
+    508,
+    452
+   ],
+   "rect": [
+    361,
+    414,
+    185,
+    136
+   ],
+   "z": 3,
+   "blend": "normal"
+  },
+  {
+   "name": "crest",
+   "png": "crest.png",
+   "parent": "head",
+   "role": "hair",
+   "pivot": [
+    555,
+    189
+   ],
+   "rect": [
+    487,
+    99,
+    185,
+    155
+   ],
+   "z": 19,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_front_lower",
+   "png": "arm_front_lower.png",
+   "parent": "arm_front_upper",
+   "role": "arm_front_lower",
+   "pivot": [
+    502,
+    476
+   ],
+   "rect": [
+    385,
+    399,
+    156,
+    114
+   ],
+   "z": 30,
+   "blend": "normal"
+  },
+  {
+   "name": "eye_glow",
+   "png": "eye_glow.png",
+   "parent": "head",
+   "role": "fx",
+   "pivot": [
+    471,
+    268
+   ],
+   "rect": [
+    413,
+    218,
+    117,
+    106
+   ],
+   "z": 40,
+   "blend": "add"
+  },
+  {
+   "name": "shield",
+   "png": "shield.png",
+   "parent": "arm_back_lower",
+   "role": "offhand",
+   "pivot": [
+    398,
+    514
+   ],
+   "rect": [
+    175,
+    276,
+    228,
+    598
+   ],
+   "z": 24,
+   "blend": "normal"
+  },
+  {
+   "name": "spear",
+   "png": "spear.png",
+   "parent": "arm_front_lower",
+   "role": "weapon",
+   "pivot": [
+    424,
+    439
+   ],
+   "rect": [
+    53,
+    274,
+    751,
+    338
+   ],
+   "z": 26,
+   "blend": "normal"
+  }
+ ]
+}
