@@ -251,7 +251,7 @@ func _show_summary() -> void:
 			EVENT_ART % art, hint)
 	_modal_layer.get_meta("title").add_theme_color_override("font_color", colors[run.outcome])
 	var grid := GridContainer.new()
-	grid.columns = 2
+	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 24)
 	grid.add_theme_constant_override("v_separation", 6)
 	body.add_child(grid)
@@ -267,10 +267,10 @@ func _show_summary() -> void:
 	if run.scales_earned > 0:
 		rows.append(["ui.scales", "+%d" % run.scales_earned])
 	for row in rows:
-		var k := _label(DataDB.t(row[0]), 26, UITheme.TEXT_MUTED)
+		var k := _label(DataDB.t(row[0]), 22, UITheme.TEXT_MUTED)
 		k.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(k)
-		var v := _label(row[1], 28, UITheme.TEXT)
+		var v := _label(row[1], 24, UITheme.TEXT)
 		v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		grid.add_child(v)
 	if run.outcome == "cleared":
@@ -284,7 +284,7 @@ func _show_summary() -> void:
 		tiles.add_theme_constant_override("v_separation", 10)
 		body.add_child(tiles)
 		for item in run.loot.slice(0, 10):
-			tiles.add_child(ItemUI.tile(item, 88))
+			tiles.add_child(ItemUI.tile(item, 72))
 	var salvaged: Dictionary = banked.get("salvaged", {})
 	if salvaged.get("count", 0) > 0:
 		var note := UIKit.wrapped(DataDB.tf("run.bag_full", {"n": salvaged["count"], "gold": salvaged["gold"]}), 21, UITheme.TEXT_MUTED)
@@ -330,14 +330,14 @@ func _draw_trail() -> void:
 		var n := i + 1
 		if i > 0:
 			var link := ColorRect.new()
-			link.custom_minimum_size = Vector2(28, 6)
+			link.custom_minimum_size = Vector2(18, 5)
 			link.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			link.color = UITheme.GOLD if n <= run.room_number else Color("4a3a30")
 			_trail.add_child(link)
 		var pip := PanelContainer.new()
 		var st := StyleBoxFlat.new()
 		st.set_corner_radius_all(40)
-		st.set_border_width_all(4)
+		st.set_border_width_all(3)
 		st.bg_color = Color("1b120e")
 		st.border_color = UITheme.GOLD if n == run.room_number else Color("5a4636")
 		if n == run.room_number:
@@ -345,7 +345,7 @@ func _draw_trail() -> void:
 			st.shadow_size = 8
 		pip.add_theme_stylebox_override("panel", st)
 		var icon := TextureRect.new()
-		icon.custom_minimum_size = Vector2(62, 62)
+		icon.custom_minimum_size = Vector2(40, 40)
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		if i < run.history.size():
@@ -354,10 +354,10 @@ func _draw_trail() -> void:
 			icon.texture = load(ROOM_ICON % "boss")
 			icon.modulate = Color(1, 1, 1, 0.45)
 		else:
-			var q := _label("?", 34, Color("7a6a5a"))
+			var q := _label("?", 24, Color("7a6a5a"))
 			q.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			q.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			q.custom_minimum_size = Vector2(62, 62)
+			q.custom_minimum_size = Vector2(40, 40)
 			pip.add_child(q)
 			_trail.add_child(pip)
 			continue
@@ -384,7 +384,7 @@ func _door_card(room: Dictionary, index: int) -> Control:
 	var boss := type == "boss"
 	var card := Button.new()
 	card.flat = true
-	card.custom_minimum_size = Vector2(420 if boss else 320, 560)
+	card.custom_minimum_size = Vector2(340 if boss else 280, 450)
 	card.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
 	card.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
 	card.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
@@ -398,7 +398,7 @@ func _door_card(room: Dictionary, index: int) -> Control:
 	card.add_child(v)
 
 	var door_holder := Control.new()
-	var door_size := Vector2(300, 400) if boss else Vector2(255, 340)
+	var door_size := Vector2(250, 320) if boss else Vector2(200, 270)
 	door_holder.custom_minimum_size = door_size
 	door_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(door_holder)
@@ -413,8 +413,8 @@ func _door_card(room: Dictionary, index: int) -> Control:
 		var medal := TextureRect.new()
 		medal.texture = load(ROOM_ICON % type)
 		medal.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		medal.size = Vector2(112, 112)
-		medal.position = Vector2(door_size.x * 0.5 - 56, door_size.y * 0.36)
+		medal.size = Vector2(92, 92)
+		medal.position = Vector2(door_size.x * 0.5 - 46, door_size.y * 0.36)
 		medal.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		door_holder.add_child(medal)
 		var tw := medal.create_tween().set_loops()
@@ -422,13 +422,15 @@ func _door_card(room: Dictionary, index: int) -> Control:
 		tw.tween_property(medal, "position:y", medal.position.y, 0.8).set_trans(Tween.TRANS_SINE)
 
 	var name_key: String = "enemy." + String(run.def.get("boss", [""])[0]) if boss else "room." + type
-	var title := _label(UITheme.caps(DataDB.t(name_key)), 34 if boss else 30, Color("ff8070") if boss else UITheme.GOLD)
+	var title := _label(UITheme.caps(DataDB.t(name_key)), 30 if boss else 27, Color("ff8070") if boss else UITheme.GOLD)
 	title.add_theme_font_override("font", UITheme.title_font())
 	title.add_theme_color_override("font_outline_color", UITheme.INK)
 	title.add_theme_constant_override("outline_size", 8)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(title)
-	var hint := _label(DataDB.t("room.boss.hint." + run.dungeon_id) if boss else DataDB.t("room.%s.hint" % type), 21, UITheme.TEXT)
+	var hint := _label(DataDB.t("room.boss.hint." + run.dungeon_id) if boss else DataDB.t("room.%s.hint" % type), 19, UITheme.TEXT)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size.x = card.custom_minimum_size.x - 10
 	hint.add_theme_color_override("font_outline_color", UITheme.INK)
 	hint.add_theme_constant_override("outline_size", 6)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -439,18 +441,19 @@ func _door_card(room: Dictionary, index: int) -> Control:
 		badge.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		badge.add_child(_label("%s  ·  %s" % [DataDB.t("ui.level") % room["level"],
-				DataDB.t("map.enemies") % room["enemies"].size()], 20, UITheme.TEXT_MUTED))
+				DataDB.t("map.enemies") % room["enemies"].size()], 18, UITheme.TEXT_MUTED))
 		v.add_child(badge)
 	return card
 
 
 # ---------------------------------------------------------------- modal panels
 
-## Opens a centered panel with a title, optional art and text. Returns the body box
-## where buttons go.
+## Opens a centered panel: art on the left, title, text and the body box on the right
+## (landscape, docs/16). Returns the body box where buttons go.
 func _modal(title: String, art_path: String, text: String) -> VBoxContainer:
 	_close_modal()
 	_modal_layer.visible = true
+	var view := get_viewport_rect().size
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.65)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -461,38 +464,54 @@ func _modal(title: String, art_path: String, text: String) -> VBoxContainer:
 	var panel := PanelContainer.new()
 	var style := UITheme.skin_panel("wood")
 	panel.add_theme_stylebox_override("panel", style)
-	panel.custom_minimum_size = Vector2(640, 0)
+	var width := minf(980.0 if art_path != "" else 720.0, view.x - 40.0)
+	panel.custom_minimum_size = Vector2(width, 0)
 	center.add_child(panel)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 22)
+	panel.add_child(h)
+	if art_path != "":
+		var art := TextureRect.new()
+		art.texture = load(art_path)
+		art.custom_minimum_size = Vector2(300, 300)
+		art.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		h.add_child(art)
+	# the right side scrolls when a long summary does not fit the landscape height
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(scroll)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 16)
-	panel.add_child(v)
-	var t := _label(UITheme.caps(title), 42, UITheme.GOLD)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 12)
+	scroll.add_child(v)
+	var t := _label(UITheme.caps(title), 36, UITheme.GOLD)
 	t.add_theme_font_override("font", UITheme.title_font())
 	t.add_theme_color_override("font_outline_color", UITheme.INK)
 	t.add_theme_constant_override("outline_size", 8)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(t)
-	if art_path != "":
-		var art := TextureRect.new()
-		art.texture = load(art_path)
-		art.custom_minimum_size = Vector2(0, 300)
-		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		v.add_child(art)
-	var body_text := _label(text, 27, UITheme.TEXT)
+	var body_text := _label(text, 24, UITheme.TEXT)
 	body_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	body_text.custom_minimum_size.x = 580
 	v.add_child(body_text)
 	var body := VBoxContainer.new()
-	body.add_theme_constant_override("separation", 12)
+	body.add_theme_constant_override("separation", 10)
 	v.add_child(body)
+	# keep the scroll box as tall as its content, up to the screen
+	var fit := func() -> void:
+		scroll.custom_minimum_size.y = minf(v.get_combined_minimum_size().y, view.y - 90.0)
+	v.minimum_size_changed.connect(fit)
+	fit.call()
 	_modal_layer.set_meta("title", t)
 	_modal_layer.set_meta("text", body_text)
 	_modal_layer.set_meta("body", body)
 	_modal_layer.set_meta("panel", panel)
-	panel.pivot_offset = Vector2(320, 300)
+	panel.resized.connect(func() -> void: panel.pivot_offset = panel.size * 0.5)
 	panel.scale = Vector2(0.85, 0.85)
 	panel.modulate.a = 0.0
 	var tw := create_tween().set_parallel()
@@ -603,7 +622,7 @@ func _modal_items(items: Array) -> void:
 	for item in items:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 14)
-		row.add_child(ItemUI.tile(item, 84))
+		row.add_child(ItemUI.tile(item, 72))
 		var d := ItemUI.details(item)
 		d.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(d)
@@ -622,92 +641,136 @@ func _fade_to(alpha: float) -> void:
 
 func _build_ui() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
-	var bg := TextureRect.new()
-	bg.texture = load(run.def.get("map_background", "res://assets/backgrounds/rotten_cellar_map.png"))
-	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
+	var view := get_viewport_rect().size
+	var sky := ColorRect.new()
+	sky.color = Color("120c10")
+	sky.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(sky)
+	# the dungeon's living backdrop (docs/16), dimmed so the doors stand out
+	var backdrop := Backdrop.new()
+	backdrop.density = 0.8 if Settings.effects else 0.3
+	var map_bg: String = run.def.get("map_background", "res://assets/backgrounds/rotten_cellar_map.png")
+	var dir := ""
+	var battle_bg: String = run.def.get("background", "")
+	if battle_bg != "":
+		dir = battle_bg.get_base_dir().path_join("v2").path_join(battle_bg.get_file().get_basename())
+	backdrop.setup(dir, map_bg, view, view.y * 0.86)
+	if backdrop.has_layers():
+		backdrop.modulate = Color(0.62, 0.58, 0.62)
+	add_child(backdrop)
+	var vignette := TextureRect.new()
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
+	g.colors = PackedColorArray([Color(0, 0, 0, 0), Color(0, 0, 0, 0.15), Color(0, 0, 0, 0.7)])
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill = GradientTexture2D.FILL_RADIAL
+	gt.fill_from = Vector2(0.5, 0.5)
+	gt.fill_to = Vector2(1.1, 0.5)
+	vignette.texture = gt
+	vignette.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	vignette.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(vignette)
 
 	_root = VBoxContainer.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.add_theme_constant_override("separation", 0)
 	add_child(_root)
 
-	# ---- header: dungeon name, room counter and the room trail
+	# ---- header: dungeon name, the room trail, room counter
 	var header := PanelContainer.new()
 	var hs := UITheme.skin_panel("header")
-	hs.content_margin_top = 18
-	hs.content_margin_bottom = 16
+	hs.content_margin_top = 8
+	hs.content_margin_bottom = 8
+	hs.content_margin_left = 22
+	hs.content_margin_right = 22
 	header.add_theme_stylebox_override("panel", hs)
 	_root.add_child(header)
-	var hv := VBoxContainer.new()
-	hv.add_theme_constant_override("separation", 8)
-	header.add_child(hv)
 	var title_row := HBoxContainer.new()
-	hv.add_child(title_row)
-	_title = _label(UITheme.caps(DataDB.t(run_def_name())), 36, UITheme.GOLD)
+	title_row.add_theme_constant_override("separation", 18)
+	header.add_child(title_row)
+	_title = _label(UITheme.caps(DataDB.t(run_def_name())), 30, UITheme.GOLD)
 	_title.add_theme_font_override("font", UITheme.title_font())
-	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_title.custom_minimum_size.x = 300
 	title_row.add_child(_title)
-	_room_label = _label("", 24, UITheme.TEXT_MUTED)
-	title_row.add_child(_room_label)
 	_trail = HBoxContainer.new()
 	_trail.alignment = BoxContainer.ALIGNMENT_CENTER
+	_trail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_trail.add_theme_constant_override("separation", 0)
-	hv.add_child(_trail)
+	title_row.add_child(_trail)
+	_room_label = _label("", 22, UITheme.TEXT_MUTED)
+	_room_label.custom_minimum_size.x = 140
+	_room_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	title_row.add_child(_room_label)
 
-	# ---- player card
-	var pc_margin := MarginContainer.new()
-	for side in ["left", "right", "top"]:
-		pc_margin.add_theme_constant_override("margin_" + side, 18)
-	_root.add_child(pc_margin)
+	# ---- body: the hero card on the left, the doors in the middle
+	var body := HBoxContainer.new()
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_theme_constant_override("separation", 0)
+	_root.add_child(body)
+
+	var left := MarginContainer.new()
+	left.add_theme_constant_override("margin_left", 18)
+	left.add_theme_constant_override("margin_bottom", 18)
+	left.custom_minimum_size.x = 318
+	body.add_child(left)
+	var lv := VBoxContainer.new()
+	lv.alignment = BoxContainer.ALIGNMENT_END
+	lv.add_theme_constant_override("separation", 12)
+	left.add_child(lv)
 	var pc := PanelContainer.new()
 	pc.add_theme_stylebox_override("panel", UITheme.skin_panel("dark"))
-	pc_margin.add_child(pc)
+	lv.add_child(pc)
+	var pv := VBoxContainer.new()
+	pv.add_theme_constant_override("separation", 6)
+	pc.add_child(pv)
 	var ph := HBoxContainer.new()
-	ph.add_theme_constant_override("separation", 14)
-	pc.add_child(ph)
+	ph.add_theme_constant_override("separation", 10)
+	pv.add_child(ph)
 	var portrait := TextureRect.new()
 	portrait.texture = load(DataDB.data["classes"][GameState.active_class].get("sprite", ""))
-	portrait.custom_minimum_size = Vector2(110, 110)
+	portrait.custom_minimum_size = Vector2(84, 84)
 	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	ph.add_child(portrait)
-	var pv := VBoxContainer.new()
-	pv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	pv.add_theme_constant_override("separation", 6)
-	ph.add_child(pv)
-	var name_row := HBoxContainer.new()
-	pv.add_child(name_row)
-	_level_label = _label("", 26, UITheme.TEXT)
-	_level_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_row.add_child(_level_label)
-	name_row.add_child(_icon(ITEM_ICON % "potion", 36))
-	_potion_label = _label("", 26, UITheme.TEXT)
-	name_row.add_child(_potion_label)
+	var info := VBoxContainer.new()
+	info.alignment = BoxContainer.ALIGNMENT_CENTER
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ph.add_child(info)
+	_level_label = _label("", 22, UITheme.TEXT)
+	_level_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.add_child(_level_label)
+	var purse := HBoxContainer.new()
+	purse.add_theme_constant_override("separation", 4)
+	info.add_child(purse)
+	purse.add_child(_icon(ITEM_ICON % "potion", 30))
+	_potion_label = _label("", 22, UITheme.TEXT)
+	purse.add_child(_potion_label)
 	var gap := Control.new()
-	gap.custom_minimum_size.x = 14
-	name_row.add_child(gap)
-	name_row.add_child(_icon(ITEM_ICON % "gold", 36))
-	_gold_label = _label("", 26, UITheme.GOLD)
-	name_row.add_child(_gold_label)
-	var hp := _bar(UITheme.HP_PLAYER, 30)
+	gap.custom_minimum_size.x = 12
+	purse.add_child(gap)
+	purse.add_child(_icon(ITEM_ICON % "gold", 30))
+	_gold_label = _label("", 22, UITheme.GOLD)
+	purse.add_child(_gold_label)
+	var hp := _bar(UITheme.HP_PLAYER, 28)
 	pv.add_child(hp[0])
 	_hp_bar = hp[1]
 	_hp_label = hp[2]
-	var xp := _bar(Color("7fd4ff"), 14)
+	var xp := _bar(Color("7fd4ff"), 12)
 	pv.add_child(xp[0])
 	_xp_bar = xp[1]
 	xp[2].visible = false
+	_escape_button = _button(DataDB.t("map.escape"), ITEM_ICON % "flee", _on_escape_pressed)
+	_escape_button.custom_minimum_size = Vector2(0, 64)
+	lv.add_child(_escape_button)
 
-	# ---- doors
 	var mid := VBoxContainer.new()
-	mid.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mid.alignment = BoxContainer.ALIGNMENT_CENTER
-	mid.add_theme_constant_override("separation", 10)
-	_root.add_child(mid)
-	_prompt = _label("", 34, UITheme.TEXT)
+	mid.add_theme_constant_override("separation", 6)
+	body.add_child(mid)
+	_prompt = _label("", 32, UITheme.TEXT)
 	_prompt.add_theme_font_override("font", UITheme.title_font())
 	_prompt.add_theme_color_override("font_outline_color", UITheme.INK)
 	_prompt.add_theme_constant_override("outline_size", 10)
@@ -715,24 +778,18 @@ func _build_ui() -> void:
 	mid.add_child(_prompt)
 	_doors = HBoxContainer.new()
 	_doors.alignment = BoxContainer.ALIGNMENT_CENTER
-	_doors.add_theme_constant_override("separation", 30)
+	_doors.add_theme_constant_override("separation", 26)
 	mid.add_child(_doors)
-
-	# ---- bottom bar
-	var bottom := MarginContainer.new()
-	for side in ["left", "right"]:
-		bottom.add_theme_constant_override("margin_" + side, 24)
-	bottom.add_theme_constant_override("margin_bottom", 34)
-	_root.add_child(bottom)
-	_escape_button = _button(DataDB.t("map.escape"), ITEM_ICON % "flee", _on_escape_pressed)
-	_escape_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_escape_button.custom_minimum_size = Vector2(220, 80)
-	bottom.add_child(_escape_button)
+	# balances the hero card, so the doors sit in the middle of the screen
+	var right := Control.new()
+	right.custom_minimum_size.x = 318 if view.x >= 1200 else 0
+	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body.add_child(right)
 
 	_toast_box = VBoxContainer.new()
 	_toast_box.add_theme_constant_override("separation", 8)
 	_toast_box.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_toast_box.position.y = 380
+	_toast_box.position.y = 90
 	_toast_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_toast_box)
 
@@ -756,11 +813,11 @@ func run_def_name() -> String:
 func _button(text: String, icon_path: String, on_press: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size.y = 84
-	b.add_theme_font_size_override("font_size", UITheme.fs(28))
+	b.custom_minimum_size.y = 64
+	b.add_theme_font_size_override("font_size", UITheme.fs(25))
 	if icon_path != "":
 		b.icon = load(icon_path)
-		b.add_theme_constant_override("icon_max_width", 44)
+		b.add_theme_constant_override("icon_max_width", 38)
 	b.pressed.connect(on_press)
 	return b
 

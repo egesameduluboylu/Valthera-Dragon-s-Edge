@@ -1,0 +1,249 @@
+{
+ "id": "toxic_toad",
+ "canvas": [
+  1024,
+  1024
+ ],
+ "feet": [
+  540,
+  966
+ ],
+ "facing": "left",
+ "kind": "beast",
+ "parts": [
+  {
+   "name": "body",
+   "png": "body.png",
+   "parent": "",
+   "role": "root",
+   "pivot": [
+    672,
+    805
+   ],
+   "rect": [
+    377,
+    323,
+    615,
+    634
+   ],
+   "z": 10,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back_far",
+   "png": "leg_back_far.png",
+   "parent": "body",
+   "role": "leg_back",
+   "pivot": [
+    899,
+    893
+   ],
+   "rect": [
+    849,
+    840,
+    175,
+    135
+   ],
+   "z": 2,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_front_far",
+   "png": "leg_front_far.png",
+   "parent": "body",
+   "role": "leg_front",
+   "pivot": [
+    408,
+    750
+   ],
+   "rect": [
+    248,
+    690,
+    220,
+    278
+   ],
+   "z": 3,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back_upper",
+   "png": "leg_back_upper.png",
+   "parent": "body",
+   "role": "leg_back_upper",
+   "pivot": [
+    738,
+    717
+   ],
+   "rect": [
+    646,
+    608,
+    325,
+    299
+   ],
+   "z": 14,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back_lower",
+   "png": "leg_back_lower.png",
+   "parent": "leg_back_upper",
+   "role": "leg_back_lower",
+   "pivot": [
+    890,
+    867
+   ],
+   "rect": [
+    537,
+    809,
+    413,
+    178
+   ],
+   "z": 13,
+   "blend": "normal"
+  },
+  {
+   "name": "head",
+   "png": "head.png",
+   "parent": "body",
+   "role": "head",
+   "pivot": [
+    562,
+    541
+   ],
+   "rect": [
+    95,
+    242,
+    573,
+    457
+   ],
+   "z": 16,
+   "blend": "normal"
+  },
+  {
+   "name": "jaw",
+   "png": "jaw.png",
+   "parent": "head",
+   "role": "jaw",
+   "pivot": [
+    540,
+    596
+   ],
+   "rect": [
+    97,
+    534,
+    464,
+    158
+   ],
+   "z": 18,
+   "blend": "normal"
+  },
+  {
+   "name": "venom_sac",
+   "png": "venom_sac.png",
+   "parent": "jaw",
+   "role": "extra",
+   "pivot": [
+    342,
+    651
+   ],
+   "rect": [
+    142,
+    620,
+    290,
+    204
+   ],
+   "z": 15,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_front",
+   "png": "leg_front.png",
+   "parent": "body",
+   "role": "leg_front",
+   "pivot": [
+    540,
+    717
+   ],
+   "rect": [
+    369,
+    642,
+    246,
+    334
+   ],
+   "z": 20,
+   "blend": "normal"
+  },
+  {
+   "name": "drip_gland",
+   "png": "drip_gland.png",
+   "parent": "head",
+   "role": "float",
+   "pivot": [
+    630,
+    451
+   ],
+   "rect": [
+    615,
+    436,
+    34,
+    137
+   ],
+   "z": 17,
+   "blend": "normal"
+  },
+  {
+   "name": "drip_lip",
+   "png": "drip_lip.png",
+   "parent": "jaw",
+   "role": "float",
+   "pivot": [
+    133,
+    607
+   ],
+   "rect": [
+    109,
+    593,
+    39,
+    147
+   ],
+   "z": 19,
+   "blend": "normal"
+  },
+  {
+   "name": "sac_glow",
+   "png": "sac_glow.png",
+   "parent": "venom_sac",
+   "role": "fx",
+   "pivot": [
+    287,
+    728
+   ],
+   "rect": [
+    0,
+    424,
+    592,
+    600
+   ],
+   "z": 21,
+   "blend": "add"
+  },
+  {
+   "name": "gland_glow",
+   "png": "gland_glow.png",
+   "parent": "head",
+   "role": "fx",
+   "pivot": [
+    569,
+    398
+   ],
+   "rect": [
+    307,
+    197,
+    651,
+    520
+   ],
+   "z": 22,
+   "blend": "add"
+  }
+ ]
+}

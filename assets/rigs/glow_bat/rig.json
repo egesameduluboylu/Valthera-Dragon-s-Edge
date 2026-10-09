@@ -1,0 +1,303 @@
+{
+ "id": "glow_bat",
+ "canvas": [
+  1024,
+  1024
+ ],
+ "feet": [
+  512,
+  972
+ ],
+ "facing": "left",
+ "kind": "flyer",
+ "parts": [
+  {
+   "name": "body",
+   "png": "body.png",
+   "parent": "",
+   "role": "root",
+   "pivot": [
+    530,
+    520
+   ],
+   "rect": [
+    412,
+    366,
+    239,
+    316
+   ],
+   "z": 10,
+   "blend": "normal"
+  },
+  {
+   "name": "wing_back",
+   "png": "wing_back.png",
+   "parent": "body",
+   "role": "wing_back",
+   "pivot": [
+    470,
+    430
+   ],
+   "rect": [
+    59,
+    87,
+    462,
+    444
+   ],
+   "z": 2,
+   "blend": "normal"
+  },
+  {
+   "name": "wing_back_glow",
+   "png": "wing_back_glow.png",
+   "parent": "wing_back",
+   "role": "fx",
+   "pivot": [
+    470,
+    430
+   ],
+   "rect": [
+    80,
+    111,
+    392,
+    403
+   ],
+   "z": 3,
+   "blend": "add"
+  },
+  {
+   "name": "tail",
+   "png": "tail.png",
+   "parent": "body",
+   "role": "tail",
+   "pivot": [
+    590,
+    620
+   ],
+   "rect": [
+    547,
+    589,
+    138,
+    181
+   ],
+   "z": 5,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back",
+   "png": "leg_back.png",
+   "parent": "body",
+   "role": "leg_back",
+   "pivot": [
+    604,
+    618
+   ],
+   "rect": [
+    577,
+    591,
+    59,
+    207
+   ],
+   "z": 6,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_front",
+   "png": "leg_front.png",
+   "parent": "body",
+   "role": "leg_front",
+   "pivot": [
+    560,
+    630
+   ],
+   "rect": [
+    515,
+    603,
+    72,
+    207
+   ],
+   "z": 8,
+   "blend": "normal"
+  },
+  {
+   "name": "head",
+   "png": "head.png",
+   "parent": "body",
+   "role": "head",
+   "pivot": [
+    486,
+    440
+   ],
+   "rect": [
+    285,
+    274,
+    276,
+    221
+   ],
+   "z": 20,
+   "blend": "normal"
+  },
+  {
+   "name": "ear_back",
+   "png": "ear_back.png",
+   "parent": "head",
+   "role": "hair",
+   "pivot": [
+    395,
+    300
+   ],
+   "rect": [
+    290,
+    114,
+    154,
+    262
+   ],
+   "z": 4,
+   "blend": "normal"
+  },
+  {
+   "name": "jaw",
+   "png": "jaw.png",
+   "parent": "head",
+   "role": "jaw",
+   "pivot": [
+    440,
+    446
+   ],
+   "rect": [
+    292,
+    425,
+    175,
+    80
+   ],
+   "z": 21,
+   "blend": "normal"
+  },
+  {
+   "name": "ear_front",
+   "png": "ear_front.png",
+   "parent": "head",
+   "role": "hair",
+   "pivot": [
+    470,
+    310
+   ],
+   "rect": [
+    430,
+    99,
+    183,
+    290
+   ],
+   "z": 19,
+   "blend": "normal"
+  },
+  {
+   "name": "wing_front",
+   "png": "wing_front.png",
+   "parent": "body",
+   "role": "wing_front",
+   "pivot": [
+    586,
+    440
+   ],
+   "rect": [
+    535,
+    85,
+    432,
+    533
+   ],
+   "z": 16,
+   "blend": "normal"
+  },
+  {
+   "name": "wing_front_glow",
+   "png": "wing_front_glow.png",
+   "parent": "wing_front",
+   "role": "fx",
+   "pivot": [
+    586,
+    440
+   ],
+   "rect": [
+    589,
+    103,
+    367,
+    491
+   ],
+   "z": 17,
+   "blend": "add"
+  },
+  {
+   "name": "eye_glow",
+   "png": "eye_glow.png",
+   "parent": "head",
+   "role": "fx",
+   "pivot": [
+    420,
+    340
+   ],
+   "rect": [
+    299,
+    245,
+    228,
+    178
+   ],
+   "z": 24,
+   "blend": "add"
+  },
+  {
+   "name": "mote_1",
+   "png": "mote_1.png",
+   "parent": "body",
+   "role": "float",
+   "pivot": [
+    236,
+    560
+   ],
+   "rect": [
+    182,
+    533,
+    102,
+    123
+   ],
+   "z": 26,
+   "blend": "normal"
+  },
+  {
+   "name": "mote_2",
+   "png": "mote_2.png",
+   "parent": "body",
+   "role": "float",
+   "pivot": [
+    820,
+    640
+   ],
+   "rect": [
+    752,
+    616,
+    145,
+    123
+   ],
+   "z": 27,
+   "blend": "normal"
+  },
+  {
+   "name": "mote_3",
+   "png": "mote_3.png",
+   "parent": "body",
+   "role": "float",
+   "pivot": [
+    130,
+    480
+   ],
+   "rect": [
+    76,
+    459,
+    75,
+    96
+   ],
+   "z": 28,
+   "blend": "normal"
+  }
+ ]
+}

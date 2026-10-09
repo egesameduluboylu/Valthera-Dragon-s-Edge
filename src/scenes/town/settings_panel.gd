@@ -1,7 +1,7 @@
 class_name SettingsPanel
 extends Control
-## Settings (docs/08): music and sound volume, vibration, battle speed, language, text size,
-## replaying the tutorial and wiping the save. Values live in the Settings autoload.
+## Settings (docs/08): music and sound volume, vibration, effects, animations, battle speed,
+## language, text size, replaying the tutorial and wiping the save. Values live in the Settings autoload.
 
 signal closed
 ## Emitted after the save was wiped or the language or text size changed; the town rebuilds itself.
@@ -9,7 +9,7 @@ signal reload
 
 ## Language names are shown in their own language.
 const LANGUAGE_NAMES := {"tr": "Türkçe", "en": "English"}
-const VERSION := "0.7"
+const VERSION := "0.8"
 
 
 func _ready() -> void:
@@ -17,49 +17,76 @@ func _ready() -> void:
 	var parts := UIKit.sheet(DataDB.t("settings.title"), func() -> void: closed.emit())
 	add_child(parts[0])
 	var content: VBoxContainer = parts[1]
-	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", UITheme.skin_panel("dark"))
-	content.add_child(card)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 18)
-	card.add_child(v)
-	v.add_child(_slider_row("settings.music", Settings.music, func(x: float) -> void: Settings.set_value("music", x)))
-	v.add_child(_slider_row("settings.sfx", Settings.sfx, func(x: float) -> void:
+	# landscape: sound and switches on the left, choices and the save tools on the right
+	var cols := UIKit.split(content, 0.5)
+	var left := _card(cols[0])
+	left.add_child(_slider_row("settings.music", Settings.music, func(x: float) -> void: Settings.set_value("music", x)))
+	left.add_child(_slider_row("settings.sfx", Settings.sfx, func(x: float) -> void:
 		Settings.set_value("sfx", x)
 		Audio.play("ui_click", 0.0)))
-	v.add_child(_toggle_row())
+	var gap := Control.new()
+	gap.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	left.add_child(gap)
+	left.add_child(UITheme.divider())
+	left.add_child(_toggle_row("settings.vibration", "", Settings.vibration, func(on: bool) -> void:
+		Settings.set_value("vibration", on)
+		Audio.vibrate(60)))
+	left.add_child(_toggle_row("settings.effects", "settings.effects_hint", Settings.effects, func(on: bool) -> void:
+		Settings.set_value("effects", on)))
+	left.add_child(_toggle_row("settings.animations", "settings.animations_hint", Settings.animations,
+			func(on: bool) -> void: Settings.set_value("animations", on)))
+	var right := _card(cols[1])
 	var speeds: Array = []
 	for sp in Settings.SPEEDS:
 		speeds.append([sp, ("%.1fx" % sp).replace(".0x", "x")])
-	v.add_child(_choice_row("settings.speed", speeds, Settings.battle_speed, func(x: Variant) -> void:
+	right.add_child(_choice_row("settings.speed", speeds, Settings.battle_speed, func(x: Variant) -> void:
 		Settings.set_value("battle_speed", x)))
 	var sizes: Array = []
 	for i in Settings.TEXT_SCALES.size():
 		sizes.append([Settings.TEXT_SCALES[i], DataDB.t("settings.text_size.%d" % i)])
-	v.add_child(_choice_row("settings.text_size", sizes, Settings.text_scale, func(x: Variant) -> void:
+	right.add_child(_choice_row("settings.text_size", sizes, Settings.text_scale, func(x: Variant) -> void:
 		if x != Settings.text_scale:
 			Settings.set_value("text_scale", x)
 			reload.emit()))
 	var langs: Array = []
 	for id in Settings.LANGUAGES:
 		langs.append([id, LANGUAGE_NAMES.get(id, id)])
-	v.add_child(_choice_row("settings.language", langs, Settings.language, func(x: Variant) -> void:
+	right.add_child(_choice_row("settings.language", langs, Settings.language, func(x: Variant) -> void:
 		if x != Settings.language:
 			Settings.set_value("language", x)
 			DataDB.load_text(x)
 			reload.emit()))
-	content.add_child(UITheme.divider())
-	var tut := UIKit.button(DataDB.t("settings.tutorial"), "", _replay_tutorial, 24)
-	content.add_child(tut)
-	var reset := UIKit.button(DataDB.t("settings.reset"), "", _confirm_reset, 24)
-	reset.add_theme_color_override("font_color", Color("ff9a8a"))
-	content.add_child(reset)
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content.add_child(spacer)
+	right.add_child(spacer)
+	right.add_child(UITheme.divider())
+	var tools := HBoxContainer.new()
+	tools.add_theme_constant_override("separation", 12)
+	right.add_child(tools)
+	var tut := UIKit.button(DataDB.t("settings.tutorial"), "", _replay_tutorial, 22)
+	tut.custom_minimum_size.y = 68
+	tut.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tools.add_child(tut)
+	var reset := UIKit.button(DataDB.t("settings.reset"), "", _confirm_reset, 22)
+	reset.custom_minimum_size.y = 68
+	reset.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reset.add_theme_color_override("font_color", Color("ff9a8a"))
+	tools.add_child(reset)
 	var ver := UIKit.label(DataDB.tf("settings.version", {"v": VERSION}), 18, UITheme.TEXT_MUTED)
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	content.add_child(ver)
+	right.add_child(ver)
+
+
+## A dark card in `column`; returns the VBox to fill.
+func _card(column: VBoxContainer) -> VBoxContainer:
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", UITheme.skin_panel("dark"))
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(card)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 12)
+	card.add_child(v)
+	return v
 
 
 func _slider_row(key: String, value: float, on_change: Callable) -> VBoxContainer:
@@ -98,15 +125,23 @@ func _slider_row(key: String, value: float, on_change: Callable) -> VBoxContaine
 	return v
 
 
-func _toggle_row() -> HBoxContainer:
+## A name (with an optional muted hint under it) and an on/off button.
+func _toggle_row(key: String, hint_key: String, value: bool, on_toggle: Callable) -> HBoxContainer:
 	var h := HBoxContainer.new()
-	var name_ := UIKit.label(DataDB.t("settings.vibration"), 26)
-	name_.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	h.add_child(name_)
+	h.add_theme_constant_override("separation", 12)
+	var names := VBoxContainer.new()
+	names.add_theme_constant_override("separation", 0)
+	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	names.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(names)
+	names.add_child(UIKit.label(DataDB.t(key), 26))
+	if hint_key != "":
+		names.add_child(UIKit.label(DataDB.t(hint_key), 18, UITheme.TEXT_MUTED))
 	var b := UIKit.button("", "", func() -> void: pass, 22)
 	b.toggle_mode = true
-	b.button_pressed = Settings.vibration
-	b.custom_minimum_size = Vector2(150, 60)
+	b.button_pressed = value
+	b.custom_minimum_size = Vector2(150, 64)
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var paint := func() -> void:
 		b.text = DataDB.t("settings.on" if b.button_pressed else "settings.off")
 		if b.button_pressed:
@@ -115,9 +150,8 @@ func _toggle_row() -> HBoxContainer:
 			UITheme.plain_button(b)
 	paint.call()
 	b.toggled.connect(func(on: bool) -> void:
-		Settings.set_value("vibration", on)
-		paint.call()
-		Audio.vibrate(60))
+		on_toggle.call(on)
+		paint.call())
 	h.add_child(b)
 	return h
 
@@ -133,7 +167,7 @@ func _choice_row(key: String, options: Array, current: Variant, on_pick: Callabl
 	var buttons: Array[Button] = []
 	for opt in options:
 		var b := UIKit.button(opt[1], "", func() -> void: pass, 22)
-		b.custom_minimum_size.y = 58
+		b.custom_minimum_size.y = 64
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(b)
 		buttons.append(b)

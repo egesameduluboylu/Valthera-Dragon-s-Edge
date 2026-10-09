@@ -1,0 +1,375 @@
+{
+ "id": "flame_knight",
+ "canvas": [
+  1024,
+  1024
+ ],
+ "feet": [
+  512,
+  972
+ ],
+ "facing": "left",
+ "kind": "humanoid",
+ "parts": [
+  {
+   "name": "hips",
+   "png": "hips.png",
+   "parent": "",
+   "role": "root",
+   "pivot": [
+    512,
+    560
+   ],
+   "rect": [
+    386,
+    486,
+    255,
+    318
+   ],
+   "z": 26,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back_upper",
+   "png": "leg_back_upper.png",
+   "parent": "hips",
+   "role": "leg_back_upper",
+   "pivot": [
+    560,
+    600
+   ],
+   "rect": [
+    499,
+    523,
+    146,
+    264
+   ],
+   "z": 10,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_front_upper",
+   "png": "leg_front_upper.png",
+   "parent": "hips",
+   "role": "leg_front_upper",
+   "pivot": [
+    474,
+    600
+   ],
+   "rect": [
+    380,
+    521,
+    155,
+    265
+   ],
+   "z": 24,
+   "blend": "normal"
+  },
+  {
+   "name": "torso",
+   "png": "torso.png",
+   "parent": "hips",
+   "role": "torso",
+   "pivot": [
+    512,
+    512
+   ],
+   "rect": [
+    389,
+    270,
+    251,
+    261
+   ],
+   "z": 30,
+   "blend": "normal"
+  },
+  {
+   "name": "cape",
+   "png": "cape.png",
+   "parent": "torso",
+   "role": "cape",
+   "pivot": [
+    528,
+    318
+   ],
+   "rect": [
+    415,
+    287,
+    436,
+    662
+   ],
+   "z": 2,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_back_lower",
+   "png": "leg_back_lower.png",
+   "parent": "leg_back_upper",
+   "role": "leg_back_lower",
+   "pivot": [
+    604,
+    748
+   ],
+   "rect": [
+    539,
+    701,
+    150,
+    275
+   ],
+   "z": 9,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_back_upper",
+   "png": "arm_back_upper.png",
+   "parent": "torso",
+   "role": "arm_back_upper",
+   "pivot": [
+    596,
+    346
+   ],
+   "rect": [
+    549,
+    243,
+    132,
+    256
+   ],
+   "z": 12,
+   "blend": "normal"
+  },
+  {
+   "name": "leg_front_lower",
+   "png": "leg_front_lower.png",
+   "parent": "leg_front_upper",
+   "role": "leg_front_lower",
+   "pivot": [
+    424,
+    748
+   ],
+   "rect": [
+    311,
+    699,
+    160,
+    277
+   ],
+   "z": 23,
+   "blend": "normal"
+  },
+  {
+   "name": "head",
+   "png": "head.png",
+   "parent": "torso",
+   "role": "head",
+   "pivot": [
+    486,
+    300
+   ],
+   "rect": [
+    389,
+    77,
+    194,
+    236
+   ],
+   "z": 36,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_front_upper",
+   "png": "arm_front_upper.png",
+   "parent": "torso",
+   "role": "arm_front_upper",
+   "pivot": [
+    436,
+    352
+   ],
+   "rect": [
+    356,
+    249,
+    143,
+    249
+   ],
+   "z": 44,
+   "blend": "normal"
+  },
+  {
+   "name": "heart_fx",
+   "png": "heart_fx.png",
+   "parent": "torso",
+   "role": "fx",
+   "pivot": [
+    484,
+    390
+   ],
+   "rect": [
+    424,
+    330,
+    120,
+    120
+   ],
+   "z": 94,
+   "blend": "add"
+  },
+  {
+   "name": "arm_back_lower",
+   "png": "arm_back_lower.png",
+   "parent": "arm_back_upper",
+   "role": "arm_back_lower",
+   "pivot": [
+    626,
+    462
+   ],
+   "rect": [
+    573,
+    423,
+    104,
+    200
+   ],
+   "z": 13,
+   "blend": "normal"
+  },
+  {
+   "name": "plume",
+   "png": "plume.png",
+   "parent": "head",
+   "role": "hair",
+   "pivot": [
+    494,
+    164
+   ],
+   "rect": [
+    457,
+    76,
+    186,
+    158
+   ],
+   "z": 34,
+   "blend": "normal"
+  },
+  {
+   "name": "arm_front_lower",
+   "png": "arm_front_lower.png",
+   "parent": "arm_front_upper",
+   "role": "arm_front_lower",
+   "pivot": [
+    396,
+    460
+   ],
+   "rect": [
+    318,
+    415,
+    119,
+    179
+   ],
+   "z": 46,
+   "blend": "normal"
+  },
+  {
+   "name": "visor_fx",
+   "png": "visor_fx.png",
+   "parent": "head",
+   "role": "fx",
+   "pivot": [
+    454,
+    228
+   ],
+   "rect": [
+    398,
+    172,
+    112,
+    112
+   ],
+   "z": 95,
+   "blend": "add"
+  },
+  {
+   "name": "plume_fx",
+   "png": "plume_fx.png",
+   "parent": "head",
+   "role": "fx",
+   "pivot": [
+    494,
+    164
+   ],
+   "rect": [
+    430,
+    57,
+    247,
+    191
+   ],
+   "z": 93,
+   "blend": "add"
+  },
+  {
+   "name": "greatsword",
+   "png": "greatsword.png",
+   "parent": "arm_front_lower",
+   "role": "weapon",
+   "pivot": [
+    352,
+    556
+   ],
+   "rect": [
+    159,
+    65,
+    269,
+    611
+   ],
+   "z": 40,
+   "blend": "normal"
+  },
+  {
+   "name": "blade_flame_1",
+   "png": "blade_flame_1.png",
+   "parent": "greatsword",
+   "role": "hair",
+   "pivot": [
+    267,
+    336
+   ],
+   "rect": [
+    184,
+    31,
+    229,
+    455
+   ],
+   "z": 41,
+   "blend": "normal"
+  },
+  {
+   "name": "blade_flame_2",
+   "png": "blade_flame_2.png",
+   "parent": "greatsword",
+   "role": "hair",
+   "pivot": [
+    267,
+    336
+   ],
+   "rect": [
+    202,
+    82,
+    197,
+    351
+   ],
+   "z": 42,
+   "blend": "normal"
+  },
+  {
+   "name": "sword_fx",
+   "png": "sword_fx.png",
+   "parent": "greatsword",
+   "role": "fx",
+   "pivot": [
+    352,
+    556
+   ],
+   "rect": [
+    47,
+    0,
+    501,
+    557
+   ],
+   "z": 96,
+   "blend": "add"
+  }
+ ]
+}

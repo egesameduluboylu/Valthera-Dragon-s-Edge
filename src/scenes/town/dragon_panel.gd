@@ -10,6 +10,9 @@ const NEST_CRACKED := "res://assets/sprites/companion/egg_nest_cracked.png"
 const NARA := "res://assets/town/npc_nara.png"
 
 var _content: VBoxContainer
+## Left column under Nara: the nest, the egg or the dragon, as large as fits.
+var _stage: VBoxContainer
+## Right column card: the words and the buttons.
 var _body: VBoxContainer
 
 
@@ -31,12 +34,15 @@ func refresh() -> void:
 		line_key = "dragon.nara.ready" if p.egg_ready() else "dragon.nara.egg"
 	elif Companion.is_hatched(state):
 		line_key = "dragon.nara.hatched"
-	_content.add_child(UIKit.npc_row(NARA, DataDB.t("npc.nara"),
+	# landscape: Nara and the nest on the left, the details and actions on the right
+	var cols := UIKit.split(_content, 0.44)
+	_stage = cols[0]
+	_stage.add_child(UIKit.npc_row(NARA, DataDB.t("npc.nara"),
 			DataDB.tf(line_key, {"name": DataDB.dragon_name(state)})))
 	var card := PanelContainer.new()
 	card.add_theme_stylebox_override("panel", UITheme.skin_panel("dark"))
 	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_content.add_child(card)
+	cols[1].add_child(card)
 	_body = VBoxContainer.new()
 	_body.add_theme_constant_override("separation", 12)
 	card.add_child(_body)
@@ -48,9 +54,17 @@ func refresh() -> void:
 		_show_nest_offer()
 
 
+## Art in the left column: it takes the height left under Nara's line.
 func _art(path: String, height: int) -> TextureRect:
+	# a plain holder, so the bob and wobble tweens are not undone by the column's layout
+	var holder := Control.new()
+	holder.custom_minimum_size = Vector2(0, height)
+	holder.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stage.add_child(holder)
 	var art := UIKit.icon(path, 0)
-	art.custom_minimum_size = Vector2(0, height)
+	art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	holder.add_child(art)
 	return art
 
 
@@ -63,8 +77,10 @@ func _centered(text: String, font_size: int, color: Color = UITheme.TEXT) -> Lab
 # ---------------------------------------------------------------- egg
 
 func _show_nest_offer() -> void:
-	_body.add_child(_art(NEST, 380))
-	_body.add_child(_centered(DataDB.t("item.dragon_egg.desc"), 22, UITheme.TEXT_MUTED))
+	_art(NEST, 260)
+	_body.alignment = BoxContainer.ALIGNMENT_CENTER
+	_body.add_child(_centered(DataDB.t("item.dragon_egg.desc"), 24, UITheme.TEXT_MUTED))
+	_body.add_child(UIKit.spacer(12))
 	var b := UIKit.primary(UIKit.button(DataDB.t("dragon.nest.button"), "", _confirm_nest, 28))
 	_body.add_child(b)
 
@@ -91,17 +107,18 @@ func _confirm_nest() -> void:
 
 func _show_egg(p: Profile) -> void:
 	var ready := p.egg_ready()
-	var art := _art(NEST_CRACKED if ready else NEST, 380)
-	_body.add_child(art)
+	var art := _art(NEST_CRACKED if ready else NEST, 260)
+	_body.alignment = BoxContainer.ALIGNMENT_CENTER
 	var need := int(DataDB.data["companion"]["hatch_runs"])
 	var warmth := int(p.companion["warmth"])
 	_body.add_child(_warmth_row(warmth, need))
 	_body.add_child(_centered(DataDB.tf("dragon.warmth", {"n": warmth, "max": need}), 26, UITheme.GOLD))
 	if not ready:
-		_body.add_child(_centered(DataDB.t("dragon.warmth_hint"), 21, UITheme.TEXT_MUTED))
+		_body.add_child(_centered(DataDB.t("dragon.warmth_hint"), 22, UITheme.TEXT_MUTED))
 		return
+	_body.add_child(UIKit.spacer(12))
 	# the egg wobbles while it waits
-	art.pivot_offset = Vector2(360, 380)
+	art.resized.connect(func() -> void: art.pivot_offset = Vector2(art.size.x * 0.5, art.size.y))
 	var tw := art.create_tween().set_loops()
 	tw.tween_property(art, "rotation", 0.04, 0.12)
 	tw.tween_property(art, "rotation", -0.04, 0.12)
@@ -142,17 +159,11 @@ func _hatch_scene() -> void:
 func _choose_element() -> void:
 	for c in _body.get_children():
 		c.queue_free()
+	_body.alignment = BoxContainer.ALIGNMENT_BEGIN
 	var defs: Dictionary = DataDB.data["companion"]
-	_body.add_child(UIKit.title(DataDB.t("dragon.choose.title"), 32))
-	_body.add_child(UIKit.wrapped(DataDB.t("dragon.choose.text"), 21, UITheme.TEXT_MUTED))
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_body.add_child(scroll)
-	var list := VBoxContainer.new()
-	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	list.add_theme_constant_override("separation", 10)
-	scroll.add_child(list)
+	_body.add_child(UIKit.title(DataDB.t("dragon.choose.title"), 30))
+	_body.add_child(UIKit.wrapped(DataDB.t("dragon.choose.text"), 20, UITheme.TEXT_MUTED))
+	var list := UIKit.scroll_list(_body)
 	for id in defs["elements"]:
 		var el: Dictionary = defs["elements"][id]
 		var row := PanelContainer.new()
@@ -161,15 +172,22 @@ func _choose_element() -> void:
 		var h := HBoxContainer.new()
 		h.add_theme_constant_override("separation", 12)
 		row.add_child(h)
-		h.add_child(UIKit.icon(Companion.SPRITE % [id, "hatchling"], 130))
+		h.add_child(UIKit.icon(Companion.SPRITE % [id, "hatchling"], 88))
 		var v := VBoxContainer.new()
 		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		v.alignment = BoxContainer.ALIGNMENT_CENTER
 		h.add_child(v)
-		v.add_child(UIKit.label(DataDB.t(el["name_key"]), 28, Color(el["color"]).darkened(0.45)))
-		v.add_child(UIKit.label(DataDB.t(el["default_name_key"]), 22, Color("7a3a1a")))
+		# the blood with the dragon's name beside it, the breath effect under them
+		var top := HBoxContainer.new()
+		top.add_theme_constant_override("separation", 10)
+		v.add_child(top)
+		top.add_child(UIKit.label(DataDB.t(el["name_key"]), 26, Color(el["color"]).darkened(0.45)))
+		var dname := UIKit.label("·  " + DataDB.t(el["default_name_key"]), 22, Color("7a3a1a"))
+		dname.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		top.add_child(dname)
 		v.add_child(UIKit.wrapped(DataDB.t("dragon.effect." + id), 20, UITheme.INK))
 		var pick := UIKit.primary(UIKit.button(DataDB.t("dragon.choose.pick"), "", func() -> void: _hatch(id), 22))
+		pick.custom_minimum_size = Vector2(150, 64)
 		pick.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		h.add_child(pick)
 
@@ -188,7 +206,7 @@ func _toast(text: String) -> void:
 	var l := UITheme.stage_label(UIKit.label(text, 40, UITheme.COMBO), 40, UITheme.COMBO)
 	add_child(l)
 	l.reset_size()
-	l.position = Vector2((720 - l.size.x) * 0.5, 180)
+	l.position = Vector2((size.x - l.size.x) * 0.5, 180)
 	var tw := l.create_tween()
 	tw.tween_property(l, "position:y", 140.0, 1.4)
 	tw.parallel().tween_property(l, "modulate:a", 0.0, 0.5).set_delay(1.2)
@@ -203,8 +221,8 @@ func _show_dragon(state: Dictionary) -> void:
 	var element: String = state["element"]
 	var el: Dictionary = defs["elements"][element]
 	var stage := Companion.stage(defs, level)
-	var art := _art(Companion.sprite(element, level, defs), 340)
-	_body.add_child(art)
+	var art := _art(Companion.sprite(element, level, defs), 260)
+	_body.alignment = BoxContainer.ALIGNMENT_CENTER
 	var bob := art.create_tween().set_loops()
 	bob.tween_property(art, "position:y", -8.0, 1.0).as_relative().set_trans(Tween.TRANS_SINE)
 	bob.tween_property(art, "position:y", 8.0, 1.0).as_relative().set_trans(Tween.TRANS_SINE)

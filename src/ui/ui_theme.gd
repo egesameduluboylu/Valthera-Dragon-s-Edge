@@ -290,6 +290,78 @@ static func _skin(file: String, key: String) -> StyleBoxTexture:
 	return s
 
 
+## The ornate landscape kit (docs/16): assets/ui/v2/<name>.png, or null while it is missing.
+static func v2(name: String) -> Texture2D:
+	var path := "res://assets/ui/v2/%s.png" % name
+	return load(path) if ResourceLoader.exists(path) else null
+
+
+## 9-slice margins [l, t, r, b] of the landscape kit, in texture pixels (tools/art/ui_v2.py).
+const V2_MARGINS := {
+	"hud_bar": [104, 72, 104, 24], "panel": [72, 72, 72, 72], "panel_parchment": [72, 72, 72, 72],
+	"nameplate": [112, 44, 52, 44], "bar_frame": [20, 16, 20, 16], "bar_back": [10, 10, 10, 10],
+	"bar_fill_hp": [6, 0, 6, 0], "bar_fill_mana": [6, 0, 6, 0], "bar_fill_rage": [6, 0, 6, 0],
+	"bar_fill_energy": [6, 0, 6, 0], "bar_fill_enemy": [6, 0, 6, 0], "bar_fill_xp": [6, 0, 6, 0],
+	"ribbon_button": [150, 50, 150, 50], "ribbon_button_pressed": [150, 50, 150, 50],
+	"ribbon_button_disabled": [150, 50, 150, 50],
+	"button": [36, 36, 36, 36], "button_pressed": [36, 36, 36, 36], "button_disabled": [36, 36, 36, 36],
+	"button_gold": [36, 36, 36, 36], "button_gold_pressed": [36, 36, 36, 36],
+	"tab": [30, 30, 30, 14], "tab_active": [30, 30, 30, 14], "turn_badge": [60, 30, 60, 30],
+}
+## The kit is painted at 1.5x the design size (sharp on 2400 x 1080 phones). StyleBoxTexture draws
+## corners at texture size, so 9-slice pieces are shrunk to design size once and cached.
+const V2_SCALE := 1.0 / 1.5
+static var _v2_scaled := {}
+
+
+## The kit texture `name` shrunk by `scale` (cached).
+static func v2_scaled(name: String, scale: float = V2_SCALE) -> Texture2D:
+	var key := "%s@%.3f" % [name, scale]
+	if _v2_scaled.has(key):
+		return _v2_scaled[key]
+	var tex := v2(name)
+	if tex == null or is_equal_approx(scale, 1.0):
+		return tex
+	var img := tex.get_image()
+	if img == null:
+		return tex
+	if img.is_compressed():
+		img.decompress()
+	img.resize(maxi(1, roundi(img.get_width() * scale)), maxi(1, roundi(img.get_height() * scale)),
+			Image.INTERPOLATE_LANCZOS)
+	var out := ImageTexture.create_from_image(img)
+	_v2_scaled[key] = out
+	return out
+
+
+## A 9-slice style from the landscape kit with content margins [l, t, r, b] (design pixels);
+## `fallback` when the texture is missing. `scale` shrinks the painted frame (smaller = thinner).
+static func v2_box(name: String, content: Array, fallback: StyleBox, scale: float = V2_SCALE) -> StyleBox:
+	var tex := v2_scaled(name, scale)
+	if tex == null:
+		return fallback
+	var s := StyleBoxTexture.new()
+	s.texture = tex
+	var m: Array = V2_MARGINS.get(name, [0, 0, 0, 0])
+	for i in 4:
+		s.set_texture_margin(i as Side, roundf(m[i] * scale))
+		s.set_content_margin(i as Side, content[i])
+	return s
+
+
+## Dark slate with a gold rim, the landscape kit's look without its textures.
+static func slate(radius: int = 12, border: int = 3, bg: Color = Color(0.08, 0.08, 0.1, 0.94)) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.border_color = GOLD
+	s.set_border_width_all(border)
+	s.set_corner_radius_all(radius)
+	s.set_content_margin_all(10)
+	s.shadow_color = Color(0, 0, 0, 0.5)
+	s.shadow_size = 8
+	return s
+
+
 ## A font size scaled by the player's text size setting (docs/08, Erişilebilirlik).
 static func fs(size: int) -> int:
 	return roundi(size * Settings.text_scale)
